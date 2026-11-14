@@ -7,18 +7,10 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
+use board::{exit, print};
 
 fn reason() -> *const [u8] {
-    print(&raw const b"x is too large\n");
+    print(&b"x is too large\n");
     &raw const b"x is too large"
 }
 
@@ -28,12 +20,12 @@ fn checked(x: u32) {
 
 entry fn main() -> ! {
     checked(3);
-    print(&raw const b"passed\n");
+    print(&b"passed\n");
     checked(12);
     exit(0)
 }
 
 panic fn on_panic() -> ! {
-    print(&raw const b"panic\n");
+    print(&b"panic\n");
     exit(1)
 }

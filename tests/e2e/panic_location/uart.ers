@@ -1,7 +1,0 @@
-pub fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        crate::board::putc((*s)[i]);
-        i += 1;
-    }
-}

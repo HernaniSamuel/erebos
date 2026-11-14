@@ -17,7 +17,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 // Size 4: one register.
 enum One: u8 { A = 0, B(u8, u16) = 1 }
@@ -89,14 +89,6 @@ fn erebos_big(x: Big) -> Big {
     }
 }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -111,7 +103,7 @@ fn field(n: u64) {
 
 fn show_one(x: One) {
     let p: *const u8 = &raw const x as *const u8;
-    puts(&raw const b"one");
+    print(&b"one");
     field(byte(p, 0));
     field(byte(p, 1));
     field(half(p, 2));
@@ -120,7 +112,7 @@ fn show_one(x: One) {
 
 fn show_pair(x: Pair) {
     let p: *const u8 = &raw const x as *const u8;
-    puts(&raw const b"pair");
+    print(&b"pair");
     field(byte(p, 0));
     if p[0] == 1 {
         field(word(p, 4));
@@ -133,14 +125,14 @@ fn show_pair(x: Pair) {
 
 fn show_long(x: Long) {
     let p: *const u8 = &raw const x as *const u8;
-    puts(&raw const b"long");
+    print(&b"long");
     field(word(p, 0) | word(p, 4) << 32);
     putc(b'\n');
 }
 
 fn show_big(x: Big) {
     let p: *const u8 = &raw const x as *const u8;
-    puts(&raw const b"big");
+    print(&b"big");
     field(half(p, 0));
     if half(p, 0) == 1 {
         field(word(p, 4));
@@ -160,7 +152,7 @@ entry fn main() -> ! {
     show_long(c_long(Long::B(())));
     show_big(c_big(Big::B(8, 9)));
     show_big(c_big(Big::C(5)));
-    puts(&raw const b"from c");
+    print(&b"from c");
     field(c_calls_erebos() as u64);
     putc(b'\n');
     exit(0)

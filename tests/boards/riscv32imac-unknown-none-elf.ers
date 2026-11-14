@@ -1,7 +1,8 @@
 // The board of the tests on riscv32: QEMU `virt` (ADR 0010, 0077). The
 // harness gives each program a copy of it as `board.ers`, which the program
 // declares with `mod board;`. It offers what ADR 0077 lists: `putc`, `exit`
-// and `SCRATCH`, and holds the machine's `memory` block.
+// and `SCRATCH`, and `print` (ADR 0117), and holds the machine's `memory`
+// block.
 
 // QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
 // in the second a 1 MiB stack at its start, then `.data` and `.bss`.
@@ -24,6 +25,15 @@ pub const SCRATCH: usize = 0x8100_0000;
 // Writes one byte to the UART.
 pub fn putc(byte: u8) {
     *UART = byte;
+}
+
+// Writes the bytes of `s` to the UART, in order, through `putc` (ADR 0117).
+pub fn print(s: &[u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc(s[i]);
+        i += 1;
+    }
 }
 
 // Stops QEMU: 0 passes, any other code fails with it as the exit status.

@@ -8,10 +8,10 @@
 // expect-exit: 1
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 fn message() -> *const [u8] {
-    print(&raw const b"computing the message\n");
+    print(&b"computing the message\n");
     &raw const b"x is too large"
 }
 
@@ -21,17 +21,9 @@ fn checked(x: u32) {
 
 entry fn main() -> ! {
     checked(3);
-    print(&raw const b"passed\n");
+    print(&b"passed\n");
     checked(12);
     exit(0)
-}
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
 }
 
 fn print_u32(value: u32) {
@@ -46,7 +38,7 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 fn reason(reason: core::PanicReason) -> *const [u8] {
@@ -62,17 +54,17 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
 
 // Prints `<reason>[: <message>] at <file>:<line>:<column>` (ADR 0053).
 panic fn on_panic(info: &core::PanicInfo) -> ! {
-    print(reason(info.reason));
+    print(&*reason(info.reason));
     if len(info.message) > 0 {
-        print(&raw const b": ");
-        print(info.message);
+        print(&b": ");
+        print(&*info.message);
     }
-    print(&raw const b" at ");
-    print(info.file);
-    print(&raw const b":");
+    print(&b" at ");
+    print(&*info.file);
+    print(&b":");
     print_u32(info.line);
-    print(&raw const b":");
+    print(&b":");
     print_u32(info.column);
-    print(&raw const b"\n");
+    print(&b"\n");
     exit(1)
 }

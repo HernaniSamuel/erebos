@@ -9,19 +9,11 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
 static mut BYTES: [u8; 5] = [0, 0, 0, 0, 0];
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
 
 fn name(m: Mode) -> *const [u8] {
     match m {
@@ -42,25 +34,25 @@ entry fn main() -> ! {
     let modes: *const Mode = &raw const BYTES as *const Mode;
     let device: *const volatile Mode = &raw const BYTES as *const volatile Mode;
 
-    print(&raw const b"plain:");
+    print(&b"plain:");
     let mut i: usize = 0;
     while i < 5 {
         putc(b' ');
-        print(name(modes[i]));
+        print(&*name(modes[i]));
         i += 1;
     }
     putc(b'\n');
 
-    print(&raw const b"volatile:");
+    print(&b"volatile:");
     i = 0;
     while i < 5 {
         putc(b' ');
-        print(name(device[i]));
+        print(&*name(device[i]));
         i += 1;
     }
     putc(b'\n');
 
-    print(&raw const b"as:");
+    print(&b"as:");
     i = 0;
     while i < 5 {
         putc(b' ');
@@ -69,7 +61,7 @@ entry fn main() -> ! {
     }
     putc(b'\n');
 
-    print(&raw const b"eq: ");
+    print(&b"eq: ");
     i = 0;
     while i < 5 {
         flag(modes[i] == Mode::Sleep);

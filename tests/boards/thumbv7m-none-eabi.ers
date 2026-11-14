@@ -1,8 +1,9 @@
 // The board of the tests on thumbv7m: QEMU `mps2-an385`, a Cortex-M3 (ADR
 // 0074, 0077). The harness gives each program a copy of it as `board.ers`,
 // which the program declares with `mod board;`. It offers what ADR 0077
-// lists: `putc`, `exit` and `SCRATCH`, and holds the machine's `memory`
-// block. It stops QEMU with an `asm` expression (ADR 0079) and has no C file.
+// lists: `putc`, `exit` and `SCRATCH`, and `print` (ADR 0117), and holds the
+// machine's `memory` block. It stops QEMU with an `asm` expression (ADR 0079)
+// and has no C file.
 
 // 4 MiB of RAM at 0 hold the image; the 4 MiB at 0x2000_0000 hold a 1 MiB
 // stack at their start, then `.data` and `.bss`.
@@ -34,6 +35,15 @@ pub fn putc(byte: u8) {
     *UART_CTRL = 1;
     while (*UART_STATE & 1) != 0 {}
     *UART_DATA = byte as u32;
+}
+
+// Writes the bytes of `s` to the UART, in order, through `putc` (ADR 0117).
+pub fn print(s: &[u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc(s[i]);
+        i += 1;
+    }
 }
 
 // Stops QEMU: 0 passes, any other code fails with it as the exit status. The

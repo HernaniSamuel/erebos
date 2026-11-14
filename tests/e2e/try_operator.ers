@@ -14,7 +14,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
 
@@ -73,14 +73,6 @@ fn quarter(v: u32) -> Option(u32) {
     half(half(v)?)
 }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -94,37 +86,37 @@ fn field(n: u64) {
 }
 
 fn show_chain(r: Result(u32, ParseError)) {
-    puts(&raw const b"chain");
+    print(&b"chain");
     match r {
         .Ok(let v: u32) => {
-            puts(&raw const b" ok");
+            print(&b" ok");
             field(v as u64);
         }
         .Err(.BadDigit(let c: u8)) => {
-            puts(&raw const b" bad digit");
+            print(&b" bad digit");
             field(c as u64);
         }
-        .Err(.Empty) => puts(&raw const b" empty"),
+        .Err(.Empty) => print(&b" empty"),
     }
     putc(b'\n');
 }
 
 fn show_sum(o: Option(u32)) {
-    puts(&raw const b"sum");
+    print(&b"sum");
     match o {
         .Some(let v: u32) => field(v as u64),
-        .None => puts(&raw const b" none"),
+        .None => print(&b" none"),
     }
-    puts(&raw const b" calls");
+    print(&b" calls");
     field(CALLS as u64);
     putc(b'\n');
 }
 
 fn show_quarter(o: Option(u32)) {
-    puts(&raw const b"quarter");
+    print(&b"quarter");
     match o {
         .Some(let v: u32) => field(v as u64),
-        .None => puts(&raw const b" none"),
+        .None => print(&b" none"),
     }
     putc(b'\n');
 }

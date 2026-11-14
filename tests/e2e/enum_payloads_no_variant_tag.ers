@@ -19,10 +19,10 @@ static BYTES: [u8; 16] = [
     9, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        putc((*s)[i]);
+        putc(s[i]);
         i += 1;
     }
     putc(b'\n');
@@ -39,12 +39,12 @@ fn strict(m: Msg) -> *const [u8] {
 
 entry fn main() -> ! {
     let msgs: *const Msg = &raw const BYTES as *const Msg;
-    print(strict(msgs[0]));
-    print(strict(msgs[1]));
+    print(&*strict(msgs[0]));
+    print(&*strict(msgs[1]));
     exit(0)
 }
 
 panic fn on_panic() -> ! {
-    print(&raw const b"panic");
+    print(&b"panic");
     exit(1)
 }

@@ -21,7 +21,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 // The simulated port: one bit per pin in each word.
 static mut ENABLED: u32 = 0;
@@ -37,14 +37,6 @@ struct Output { pin: u32 }
 // What `read` gives back: the pin, still an input, and the level it saw.
 struct Reading { pin: Input, high: bool }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(n: u32) {
     if n >= 10 {
         print_u32(n / 10);
@@ -54,9 +46,9 @@ fn print_u32(n: u32) {
 
 // Starts a line: `pin N: `.
 fn line(pin: u32) {
-    puts(&raw const b"pin ");
+    print(&b"pin ");
     print_u32(pin);
-    puts(&raw const b": ");
+    print(&b": ");
 }
 
 fn bit(pin: u32) -> u32 {
@@ -67,7 +59,7 @@ fn disabled(pin: u32) -> Disabled {
     ENABLED &= !bit(pin);
     DIRECTION &= !bit(pin);
     line(pin);
-    puts(&raw const b"disabled\n");
+    print(&b"disabled\n");
     Disabled { pin: pin }
 }
 
@@ -75,14 +67,14 @@ fn into_input(p: Disabled) -> Input {
     ENABLED |= bit(p.pin);
     DIRECTION &= !bit(p.pin);
     line(p.pin);
-    puts(&raw const b"input\n");
+    print(&b"input\n");
     Input { pin: p.pin }
 }
 
 fn into_output(p: Input) -> Output {
     DIRECTION |= bit(p.pin);
     line(p.pin);
-    puts(&raw const b"output\n");
+    print(&b"output\n");
     Output { pin: p.pin }
 }
 
@@ -90,10 +82,10 @@ fn set(p: Output, high: bool) -> Output {
     line(p.pin);
     if high {
         LEVEL |= bit(p.pin);
-        puts(&raw const b"output high\n");
+        print(&b"output high\n");
     } else {
         LEVEL &= !bit(p.pin);
-        puts(&raw const b"output low\n");
+        print(&b"output low\n");
     }
     p
 }
@@ -102,9 +94,9 @@ fn read(p: Input) -> Reading {
     let high: bool = (LEVEL & bit(p.pin)) != 0;
     line(p.pin);
     if high {
-        puts(&raw const b"input reads high\n");
+        print(&b"input reads high\n");
     } else {
-        puts(&raw const b"input reads low\n");
+        print(&b"input reads low\n");
     }
     Reading { pin: p, high: high }
 }
@@ -113,14 +105,14 @@ fn read(p: Input) -> Reading {
 fn release(p: Output) -> Input {
     DIRECTION &= !bit(p.pin);
     line(p.pin);
-    puts(&raw const b"input\n");
+    print(&b"input\n");
     Input { pin: p.pin }
 }
 
 fn disable(p: Input) -> Disabled {
     ENABLED &= !bit(p.pin);
     line(p.pin);
-    puts(&raw const b"disabled\n");
+    print(&b"disabled\n");
     Disabled { pin: p.pin }
 }
 
@@ -143,7 +135,7 @@ entry fn main() -> ! {
     let o5: Output = into_output(i5);
     let o5_high: Output = set(o5, true);
 
-    puts(&raw const b"port ");
+    print(&b"port ");
     print_u32(ENABLED);
     putc(b' ');
     print_u32(DIRECTION);

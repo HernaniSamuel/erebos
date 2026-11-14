@@ -28,17 +28,17 @@ mod devices;
 
 use devices::{Fcr, Ier, Iir, Lcr, Lsr, Mcr, UART0};
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        devices::putc((*s)[i]);
+        devices::putc(s[i]);
         i += 1;
     }
 }
 
 // ` 0x` and two hex digits per byte of `bytes`.
 fn print_hex(value: u32, bytes: u32) {
-    print(&raw const b" 0x");
+    print(&b" 0x");
     let mut shift: u32 = bytes * 8;
     while shift > 0 {
         shift -= 4;
@@ -81,44 +81,44 @@ entry fn main() -> ! {
     let kept: u8 = UART0.rbr;
     UART0.mcr.loopback = false;
 
-    print(&raw const b"divisor");
+    print(&b"divisor");
     print_hex(divisor as u32, 2);
-    print(&raw const b"\nier");
+    print(&b"\nier");
     print_hex(ier as u32, 1);
-    print(&raw const b"\nlcr");
+    print(&b"\nlcr");
     print_hex(lcr as u32, 1);
     if lcr.word_length == .Eight {
-        print(&raw const b" eight bits");
+        print(&b" eight bits");
     }
-    print(&raw const b"\niir");
+    print(&b"\niir");
     print_hex(iir as u32, 1);
     if iir.fifos == 3 {
-        print(&raw const b" fifos on");
+        print(&b" fifos on");
     }
-    print(&raw const b"\nmcr");
+    print(&b"\nmcr");
     print_hex(mcr as u32, 1);
     if mcr.loopback {
-        print(&raw const b" loopback");
+        print(&b" loopback");
     }
-    print(&raw const b"\nloopback ");
+    print(&b"\nloopback ");
     devices::putc(echo);
-    print(&raw const b"\nlsr");
+    print(&b"\nlsr");
     print_hex(first as u32, 1);
     if first.overrun {
-        print(&raw const b" overrun");
+        print(&b" overrun");
     } else {
-        print(&raw const b" no overrun");
+        print(&b" no overrun");
     }
-    print(&raw const b"\nlsr");
+    print(&b"\nlsr");
     print_hex(second as u32, 1);
     if second.overrun {
-        print(&raw const b" overrun");
+        print(&b" overrun");
     } else {
-        print(&raw const b" no overrun");
+        print(&b" no overrun");
     }
-    print(&raw const b"\nrbr ");
+    print(&b"\nrbr ");
     devices::putc(kept);
-    print(&raw const b"\n");
+    print(&b"\n");
     devices::exit(0)
 }
 

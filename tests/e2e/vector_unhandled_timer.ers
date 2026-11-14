@@ -8,7 +8,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
 const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
@@ -25,14 +25,6 @@ entry fn main() -> ! {
     }
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_hex(value: u32) {
     let mut shift: u32 = 32;
     while shift > 0 {
@@ -44,16 +36,16 @@ fn print_hex(value: u32) {
 
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     match info.reason {
-        .UnhandledVector => print(&raw const b"vector not handled"),
+        .UnhandledVector => print(&b"vector not handled"),
         _ => exit(3),
     }
-    print(&raw const b": ");
-    print(info.message);
+    print(&b": ");
+    print(&*info.message);
     let mut cause: u32 = 0;
     asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
-    print(&raw const b" mcause ");
+    print(&b" mcause ");
     print_hex(cause);
-    print(&raw const b" mie ");
+    print(&b" mie ");
     putc(if core::arch::interrupts_enabled() { b'1' } else { b'0' });
     putc(b'\n');
     exit(1)

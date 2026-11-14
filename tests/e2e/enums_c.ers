@@ -11,7 +11,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum Mode: u8 { Off = 0, Idle = 1, Run = 3 }
 enum Level: i8 { Low = -1, Mid = 0, High = 1 }
@@ -29,14 +29,6 @@ fn erebos_next(m: Mode) -> Mode {
 
 fn erebos_level(high: bool) -> Level {
     if high { Level::High } else { Level::Low }
-}
-
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
 }
 
 fn print_i64(n: i64) {
@@ -57,23 +49,23 @@ fn print_u64(n: u64) {
 
 entry fn main() -> ! {
     let mode: Mode = c_next_mode(Mode::Idle);
-    puts(&raw const b"mode ");
+    print(&b"mode ");
     print_u64(mode as u64);
     putc(b'\n');
     let level: Level = c_same_level(Level::Low);
     if level != Level::Low {
         exit(2);
     }
-    puts(&raw const b"level ");
+    print(&b"level ");
     print_i64(level as i64);
     putc(b'\n');
-    puts(&raw const b"c sees ");
+    print(&b"c sees ");
     print_i64(c_level_as_int(Level::Low) as i64);
     putc(b'\n');
-    puts(&raw const b"from c ");
+    print(&b"from c ");
     print_u64(c_calls_erebos() as u64);
     putc(b'\n');
-    puts(&raw const b"c gets ");
+    print(&b"c gets ");
     print_i64(c_level_from_erebos() as i64);
     putc(b'\n');
     exit(0)

@@ -27,7 +27,7 @@
 // expect-exit: 0
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
 
@@ -137,14 +137,6 @@ comptime {
 
 static mut LAST: Cmd = Cmd::Nop;
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(value: u32) {
     let mut digits: [u8; 10] = [0; 10];
     let mut n: usize = 0;
@@ -157,12 +149,12 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 // `value` in `digits` hexadecimal digits, after `0x`.
 fn print_hex(value: u32, digits: u32) {
-    print(&raw const b"0x");
+    print(&b"0x");
     let mut i: u32 = digits;
     while i > 0 {
         i -= 1;
@@ -181,45 +173,45 @@ fn mode_name(mode: Mode) -> *const [u8] {
 // Prints the action `cmd` stands for, on one line.
 fn dispatch(cmd: Cmd) {
     match cmd {
-        Cmd::Nop => print(&raw const b"nop"),
-        Cmd::Led(true) => print(&raw const b"led on"),
-        Cmd::Led(false) => print(&raw const b"led off"),
+        Cmd::Nop => print(&b"nop"),
+        Cmd::Led(true) => print(&b"led on"),
+        Cmd::Led(false) => print(&b"led off"),
         // The control register.
         Cmd::Write(0x10, let v: u16) => {
-            print(&raw const b"control <- ");
+            print(&b"control <- ");
             print_hex(v as u32, 4);
         }
         Cmd::Write(let r: u8, 0) | Cmd::Clear(let r: u8) => {
-            print(&raw const b"clear ");
+            print(&b"clear ");
             print_hex(r as u32, 2);
         }
         Cmd::Write(let r: u8, let v: u16) => {
-            print(&raw const b"write ");
+            print(&b"write ");
             print_hex(r as u32, 2);
-            print(&raw const b" <- ");
+            print(&b" <- ");
             print_hex(v as u32, 4);
         }
-        Cmd::SetMode(Mode::Run) => print(&raw const b"start"),
+        Cmd::SetMode(Mode::Run) => print(&b"start"),
         Cmd::SetMode(let mode: Mode) => {
-            print(&raw const b"mode ");
-            print(mode_name(mode));
+            print(&b"mode ");
+            print(&*mode_name(mode));
         }
     }
-    print(&raw const b"\n");
+    print(&b"\n");
 }
 
 entry fn main() -> ! {
     // Read before any write: `.bss` was zeroed by `_start`.
-    print(&raw const b"last ");
+    print(&b"last ");
     dispatch(LAST);
 
     let mut at: usize = 0;
     loop {
         print_u32(at as u32);
-        print(&raw const b": ");
+        print(&b": ");
         match decode(rest(&raw const STREAM, at)) {
             Decoded::Done => {
-                print(&raw const b"done\n");
+                print(&b"done\n");
                 break;
             }
             Decoded::Cmd(let cmd: Cmd, let size: usize) => {
@@ -228,17 +220,17 @@ entry fn main() -> ! {
                 at += size;
             }
             Decoded::Bad(let code: u8, let size: usize) => {
-                print(&raw const b"bad ");
+                print(&b"bad ");
                 print_hex(code as u32, 2);
-                print(&raw const b", skipped ");
+                print(&b", skipped ");
                 print_u32(size as u32);
-                print(&raw const b"\n");
+                print(&b"\n");
                 at += size;
             }
         }
     }
 
-    print(&raw const b"last ");
+    print(&b"last ");
     dispatch(LAST);
     let last_ok: bool = match LAST {
         Cmd::Led(false) => true,

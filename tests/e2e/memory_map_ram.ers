@@ -42,16 +42,16 @@ static mut COUNTER: u32 = 0x1234_5678;
 static mut ZEROED: u32 = 0;
 static GREETING: [u8; 4] = [b'e', b'r', b'e', b'b'];
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        *UART = (*s)[i];
+        *UART = s[i];
         i += 1;
     }
 }
 
 fn print_hex(value: usize) {
-    print(&raw const b"0x");
+    print(&b"0x");
     let mut shift: usize = 32;
     while shift > 0 {
         shift -= 4;
@@ -65,14 +65,14 @@ fn in_range(address: usize, start: usize, end: usize) -> bool {
 
 // Prints `<what> ok`, or `<what> at <address>` and counts a failure.
 fn check(what: *const [u8], fine: bool, address: usize) -> u32 {
-    print(what);
+    print(&*what);
     if fine {
-        print(&raw const b" ok\n");
+        print(&b" ok\n");
         0
     } else {
-        print(&raw const b" at ");
+        print(&b" at ");
         print_hex(address);
-        print(&raw const b"\n");
+        print(&b"\n");
         1
     }
 }

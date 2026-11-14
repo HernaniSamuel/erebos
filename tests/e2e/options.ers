@@ -23,7 +23,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1, Overflow = 2 }
 #[copy]
@@ -85,14 +85,6 @@ fn pair(a: Option(u16), b: Option(u16)) -> Option(Point) {
     }
 }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -106,14 +98,14 @@ fn field(n: u64) {
 }
 
 fn line(s: *const [u8]) {
-    puts(s);
+    print(&*s);
     putc(b'\n');
 }
 
 fn show_mul(o: Option(u32)) {
     match o {
         .Some(let v: u32) => {
-            puts(&raw const b"mul");
+            print(&b"mul");
             field(v as u64);
             putc(b'\n');
         }
@@ -124,26 +116,26 @@ fn show_mul(o: Option(u32)) {
 fn show_digit(r: Result(u32, ParseError)) {
     match r {
         .Ok(let d: u32) => {
-            puts(&raw const b"digit");
+            print(&b"digit");
             field(d as u64);
         }
         .Err(.BadDigit(let c: u8)) => {
-            puts(&raw const b"bad digit");
+            print(&b"bad digit");
             field(c as u64);
         }
-        .Err(.Empty | .Overflow) => puts(&raw const b"other"),
+        .Err(.Empty | .Overflow) => print(&b"other"),
     }
     putc(b'\n');
 }
 
 fn show_slot(i: u64, o: Option(Mode)) {
-    puts(&raw const b"slot");
+    print(&b"slot");
     field(i);
     match o {
-        .None => puts(&raw const b" empty"),
-        .Some(.Off) => puts(&raw const b" off"),
+        .None => print(&b" empty"),
+        .Some(.Off) => print(&b" off"),
         .Some(.Run(let speed: u8)) => {
-            puts(&raw const b" run");
+            print(&b" run");
             field(speed as u64);
         }
     }
@@ -154,7 +146,7 @@ fn show_error(r: Result(Mode, ParseError)) {
     match r {
         .Ok(_) => line(&raw const b"slot 4 ok"),
         .Err(.BadDigit(let c: u8)) => {
-            puts(&raw const b"slot 4 error bad digit");
+            print(&b"slot 4 error bad digit");
             field(c as u64);
             putc(b'\n');
         }
@@ -165,7 +157,7 @@ fn show_error(r: Result(Mode, ParseError)) {
 fn show_nested(o: Option(Option(u8))) {
     match o {
         .Some(.Some(let v: u8)) => {
-            puts(&raw const b"nested some some");
+            print(&b"nested some some");
             field(v as u64);
             putc(b'\n');
         }
@@ -175,15 +167,15 @@ fn show_nested(o: Option(Option(u8))) {
 }
 
 fn show_parsed(r: Result(u32, ParseError)) {
-    puts(&raw const b"parsed");
+    print(&b"parsed");
     match r {
         .Ok(let v: u32) => field(v as u64),
-        .Err(.Empty) => puts(&raw const b" empty"),
+        .Err(.Empty) => print(&b" empty"),
         .Err(.BadDigit(let c: u8)) => {
-            puts(&raw const b" bad digit");
+            print(&b" bad digit");
             field(c as u64);
         }
-        .Err(.Overflow) => puts(&raw const b" overflow"),
+        .Err(.Overflow) => print(&b" overflow"),
     }
     putc(b'\n');
 }
@@ -191,7 +183,7 @@ fn show_parsed(r: Result(u32, ParseError)) {
 fn show_pair(o: Option(Point)) {
     match o {
         .Some(let p: Point) => {
-            puts(&raw const b"pair");
+            print(&b"pair");
             field(p.x as u64);
             field(p.y as u64);
             putc(b'\n');
@@ -232,7 +224,7 @@ entry fn main() -> ! {
     LAST = .Some(Point { x: 5, y: 6 });
     match LAST {
         .Some(let p: Point) => {
-            puts(&raw const b"last");
+            print(&b"last");
             field(p.x as u64);
             field(p.y as u64);
             putc(b'\n');

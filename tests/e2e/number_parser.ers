@@ -15,7 +15,7 @@
 // expect-exit: 0
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1, Overflow = 2 }
 
@@ -123,14 +123,6 @@ comptime {
     );
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(value: u32) {
     let mut digits: [u8; 10] = [0; 10];
     let mut n: usize = 0;
@@ -143,25 +135,25 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 // Prints `s` in quotes, then what `parse` makes of it, on one line.
 fn show(s: *const [u8]) {
-    print(&raw const b"\"");
-    print(s);
-    print(&raw const b"\" -> ");
+    print(&b"\"");
+    print(&*s);
+    print(&b"\" -> ");
     match parse(s) {
         .Ok(let v: u32) => print_u32(v),
-        .Err(.Empty) => print(&raw const b"empty"),
+        .Err(.Empty) => print(&b"empty"),
         .Err(.BadDigit(let c: u8)) => {
-            print(&raw const b"bad digit '");
+            print(&b"bad digit '");
             board::putc(c);
-            print(&raw const b"'");
+            print(&b"'");
         }
-        .Err(.Overflow) => print(&raw const b"overflow"),
+        .Err(.Overflow) => print(&b"overflow"),
     }
-    print(&raw const b"\n");
+    print(&b"\n");
 }
 
 entry fn main() -> ! {

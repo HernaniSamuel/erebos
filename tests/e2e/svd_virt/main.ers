@@ -55,10 +55,10 @@ fn putc(byte: u8) {
     UART0.thr = byte;
 }
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        putc((*s)[i]);
+        putc(s[i]);
         i += 1;
     }
 }
@@ -70,7 +70,7 @@ fn print_digit(value: u32) {
 
 // ` 0x` and two hex digits per byte of `bytes`.
 fn print_hex(value: u32, bytes: u32) {
-    print(&raw const b" 0x");
+    print(&b" 0x");
     let mut shift: u32 = bytes * 8;
     while shift > 0 {
         shift -= 4;
@@ -86,11 +86,11 @@ fn set_threshold(context: *mut Ctx, value: u32) {
 
 // The driver of one virtio-mmio transport, whichever it is.
 fn describe(index: usize, transport: *const Virtio) {
-    print(&raw const b"virtio");
+    print(&b"virtio");
     print_digit(index as u32);
-    print(&raw const b" magic");
+    print(&b" magic");
     print_hex((*transport).magic_value, 4);
-    print(&raw const b"\n");
+    print(&b"\n");
 }
 
 // Stops QEMU: 0 passes, any other code fails with it.
@@ -115,11 +115,11 @@ entry fn main() -> ! {
     UART0.lcr = Lcr { wls: .Eight, .. };
     let lcr: Lcr = UART0.lcr;
 
-    print(&raw const b"divisor");
+    print(&b"divisor");
     print_hex(divisor as u32, 2);
-    print(&raw const b"\nlcr");
+    print(&b"\nlcr");
     print_hex(lcr as u32, 1);
-    print(&raw const b"\nhello from svd\n");
+    print(&b"\nhello from svd\n");
 
     // Sources 1 to 4, priorities 1 to 4.
     let mut source: usize = 1;
@@ -127,7 +127,7 @@ entry fn main() -> ! {
         PLIC.priority[source] = source as u32;
         source += 1;
     }
-    print(&raw const b"priorities");
+    print(&b"priorities");
     source = 1;
     while source <= 4 {
         putc(b' ');
@@ -137,11 +137,11 @@ entry fn main() -> ! {
 
     // Threshold 3 for context 0, read through both views of its bytes.
     set_threshold(&raw mut PLIC.ctx[0], 3);
-    print(&raw const b"\nthreshold ");
+    print(&b"\nthreshold ");
     print_digit(PLIC.ctx[0].threshold);
-    print(&raw const b" m0 ");
+    print(&b" m0 ");
     print_digit(PLIC_M0.threshold);
-    print(&raw const b"\n");
+    print(&b"\n");
 
     let mut transport: usize = 0;
     while transport < 8 {

@@ -15,7 +15,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print};
 use core::arch::Vector;
 
 // SysTick (ARMv7-M): control and status (bit 0 enables the counter, bit 1 the
@@ -72,14 +72,6 @@ interrupt fn tick() at Vector::SysTick {
         SEQ += 1;
         push(&mut SAMPLES, FILLED, SEQ);
         FILLED += 1;
-    }
-}
-
-fn print(s: &[u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
     }
 }
 

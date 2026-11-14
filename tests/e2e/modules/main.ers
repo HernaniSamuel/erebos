@@ -13,25 +13,25 @@ mod uart;
 mod math;
 
 entry fn main() -> ! {
-    uart::print(&raw const b"modules");
+    board::print(&b"modules");
     uart::newline();
 
-    uart::print(&raw const b"squares");
+    board::print(&b"squares");
     let mut i: usize = 0;
     while i < math::COUNT {
-        uart::print(&raw const b" ");
+        board::print(&b" ");
         uart::print_u32(math::table::SQUARES[i]);
         i += 1;
     }
     uart::newline();
 
-    uart::print(&raw const b"sum ");
+    board::print(&b"sum ");
     uart::print_u32(math::sum());
     uart::newline();
 
     // Read before the line below adds to it.
     let lines: u32 = uart::LINES;
-    uart::print(&raw const b"lines ");
+    board::print(&b"lines ");
     uart::print_u32(lines);
     uart::newline();
 

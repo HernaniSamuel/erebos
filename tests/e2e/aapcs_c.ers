@@ -25,23 +25,15 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print};
 
 static mut FAILED: u32 = 0;
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn report(name: *const [u8], ok: bool) {
     if !ok {
-        print(&raw const b"FAIL ");
-        print(name);
-        print(&raw const b"\n");
+        print(&b"FAIL ");
+        print(&*name);
+        print(&b"\n");
         FAILED = 1;
     }
 }
@@ -1371,7 +1363,7 @@ entry fn main() -> ! {
     report(&raw const b"a16big_4", t_a16big_4());
     report(&raw const b"a16big_4, called by C", c_calls_a16big_4() != 0);
     if FAILED == 0 {
-        print(&raw const b"aapcs ok\n");
+        print(&b"aapcs ok\n");
         exit(0)
     }
     exit(1)

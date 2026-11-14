@@ -8,7 +8,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 use core::arch::Vector;
 
 const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
@@ -33,14 +33,6 @@ entry fn main() -> ! {
     }
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_hex(value: u32) {
     let mut shift: u32 = 32;
     while shift > 0 {
@@ -52,12 +44,12 @@ fn print_hex(value: u32) {
 
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     match info.reason {
-        .DivisionByZero => print(&raw const b"division by zero"),
+        .DivisionByZero => print(&b"division by zero"),
         _ => exit(3),
     }
     let mut cause: u32 = 0;
     asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
-    print(&raw const b" mcause ");
+    print(&b" mcause ");
     print_hex(cause);
     putc(b'\n');
     exit(1)

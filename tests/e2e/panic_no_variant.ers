@@ -7,7 +7,7 @@
 // expect-exit: 1
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
@@ -20,18 +20,10 @@ fn name(m: Mode) -> *const [u8] {
 entry fn main() -> ! {
     BYTES = [1, 7];
     let modes: *const Mode = &raw const BYTES as *const Mode;
-    print(name(modes[0]));
-    print(&raw const b"\n");
-    print(name(modes[1]));
+    print(&*name(modes[0]));
+    print(&b"\n");
+    print(&*name(modes[1]));
     exit(0)
-}
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
 }
 
 fn print_u32(value: u32) {
@@ -46,7 +38,7 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 fn reason(reason: core::PanicReason) -> *const [u8] {
@@ -63,17 +55,17 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
 // Prints `<reason>[: <message>] at <file>:<line>:<column>`; the message of
 // these checks is empty (ADR 0053).
 panic fn on_panic(info: &core::PanicInfo) -> ! {
-    print(reason(info.reason));
+    print(&*reason(info.reason));
     if len(info.message) > 0 {
-        print(&raw const b": ");
-        print(info.message);
+        print(&b": ");
+        print(&*info.message);
     }
-    print(&raw const b" at ");
-    print(info.file);
-    print(&raw const b":");
+    print(&b" at ");
+    print(&*info.file);
+    print(&b":");
     print_u32(info.line);
-    print(&raw const b":");
+    print(&b":");
     print_u32(info.column);
-    print(&raw const b"\n");
+    print(&b"\n");
     exit(1)
 }

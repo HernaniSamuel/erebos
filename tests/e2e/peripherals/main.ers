@@ -12,16 +12,16 @@ mod devices;
 
 static CONSOLE: *mut devices::Uart16550 = &raw mut devices::UART0;
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        devices::putc(CONSOLE, (*s)[i]);
+        devices::putc(CONSOLE, s[i]);
         i += 1;
     }
 }
 
 entry fn main() -> ! {
-    print(&raw const b"hello world\n");
+    print(&b"hello world\n");
     devices::exit(0)
 }
 

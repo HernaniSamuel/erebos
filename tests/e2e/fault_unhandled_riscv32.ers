@@ -8,20 +8,12 @@
 // expect-exit: 1
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 entry fn main() -> ! {
     // `unimp` is the instruction of all zeros, which is illegal.
     asm("unimp");
     exit(2)
-}
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
 }
 
 fn print_u32(value: u32) {
@@ -36,7 +28,7 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 fn reason(reason: core::PanicReason) -> *const [u8] {
@@ -52,15 +44,15 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
 
 // Prints `<reason>: <message> at <file>:<line>:<column>`.
 panic fn on_panic(info: &core::PanicInfo) -> ! {
-    print(reason(info.reason));
-    print(&raw const b": ");
-    print(info.message);
-    print(&raw const b" at ");
-    print(info.file);
-    print(&raw const b":");
+    print(&*reason(info.reason));
+    print(&b": ");
+    print(&*info.message);
+    print(&b" at ");
+    print(&*info.file);
+    print(&b":");
     print_u32(info.line);
-    print(&raw const b":");
+    print(&b":");
     print_u32(info.column);
-    print(&raw const b"\n");
+    print(&b"\n");
     exit(1)
 }

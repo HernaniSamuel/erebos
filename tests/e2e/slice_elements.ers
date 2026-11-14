@@ -20,10 +20,10 @@ fn putc(byte: u8) {
     board::putc((*cell())[0]);
 }
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        putc((*s)[i]);
+        putc(s[i]);
         i += 1;
     }
 }
@@ -50,11 +50,11 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&*slice(&raw const digits[10 - n], n));
 }
 
 entry fn main() -> ! {
-    print(&raw const b"hello\n");
+    print(&b"hello\n");
 
     // The middle of a buffer, written through a slice of it.
     let mut line: [u8; 8] = b"-------\n";
@@ -64,9 +64,9 @@ entry fn main() -> ! {
         (*middle)[i] = b'a' + i as u8;
         i += 1;
     }
-    print(&raw const line);
+    print(&line);
 
-    print(&raw const b"sum ");
+    print(&b"sum ");
     print_u32(sum(&raw const b"abc"));
     putc(b'\n');
 
@@ -83,7 +83,7 @@ entry fn main() -> ! {
         failures += 1;
     }
     if failures == 0 {
-        print(&raw const b"ok\n");
+        print(&b"ok\n");
     }
     exit(failures)
 }

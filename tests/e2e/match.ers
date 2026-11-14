@@ -11,15 +11,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
+use board::{exit, print, putc};
 
 fn hex_digit(d: u8) -> u8 {
     match d {
@@ -31,13 +23,13 @@ const LAST: u8 = 255;
 
 fn classify(x: u8) {
     match x {
-        0 => print(&raw const b"zero"),
-        1 => print(&raw const b"one"),
-        2 | 3 | 4 => print(&raw const b"small"),
-        LAST => print(&raw const b"last"),
+        0 => print(&b"zero"),
+        1 => print(&b"one"),
+        2 | 3 | 4 => print(&b"small"),
+        LAST => print(&b"last"),
         let other: u8 => {
             if other < 100 {
-                print(&raw const b"big");
+                print(&b"big");
             } else {
                 putc(hex_digit(other >> 4));
                 putc(hex_digit(other & 15));
@@ -78,7 +70,7 @@ fn next() -> u8 {
 }
 
 entry fn main() -> ! {
-    print(&raw const b"classify:");
+    print(&b"classify:");
     let inputs: [u8; 7] = [0, 1, 2, 4, 50, 0x7F, 255];
     let mut i: usize = 0;
     while i < 7 {
@@ -88,28 +80,28 @@ entry fn main() -> ! {
     }
     putc(b'\n');
 
-    print(&raw const b"signed: ");
-    print(signed(-128));
+    print(&b"signed: ");
+    print(&*signed(-128));
     putc(b' ');
-    print(signed(-1));
+    print(&*signed(-1));
     putc(b' ');
-    print(signed(5));
+    print(&*signed(5));
     putc(b' ');
-    print(signed(127));
+    print(&*signed(127));
     putc(b'\n');
 
-    print(&raw const b"wide: ");
-    print(wide(0xFFFF_FFFF_0000_0000));
+    print(&b"wide: ");
+    print(&*wide(0xFFFF_FFFF_0000_0000));
     putc(b' ');
-    print(wide(0xFFFF_FFFF_FFFF_FFFF));
+    print(&*wide(0xFFFF_FFFF_FFFF_FFFF));
     putc(b' ');
-    print(wide(0xFFFF_FFFF));
+    print(&*wide(0xFFFF_FFFF));
     putc(b'\n');
 
-    print(&raw const b"bool: ");
-    print(answer(CALLS == 0));
+    print(&b"bool: ");
+    print(&*answer(CALLS == 0));
     putc(b' ');
-    print(answer(CALLS != 0));
+    print(&*answer(CALLS != 0));
     putc(b'\n');
 
     // A call as scrutinee runs once, whichever arm is taken, and the
@@ -119,18 +111,18 @@ entry fn main() -> ! {
         1 => &raw const b"one",
         let n: u8 => &raw const b"later",
     };
-    print(&raw const b"once: ");
+    print(&b"once: ");
     putc(b'0' + CALLS);
-    print(&raw const b" call, arm ");
-    print(arm);
+    print(&b" call, arm ");
+    print(&*arm);
     putc(b'\n');
     let bound: u8 = match next() {
         1 => 10,
         let n: u8 => n,
     };
-    print(&raw const b"once: ");
+    print(&b"once: ");
     putc(b'0' + CALLS);
-    print(&raw const b" calls, bound ");
+    print(&b" calls, bound ");
     putc(b'0' + bound);
     putc(b'\n');
 

@@ -44,10 +44,10 @@ static TRANSPORTS: [*const VirtioMmio; 8] = [
     &raw const devices::VIRTIO7,
 ];
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        devices::putc((*s)[i]);
+        devices::putc(s[i]);
         i += 1;
     }
 }
@@ -59,7 +59,7 @@ fn print_digit(value: u32) {
 
 // ` 0x` and eight hex digits.
 fn print_hex(value: u32) {
-    print(&raw const b" 0x");
+    print(&b" 0x");
     let mut shift: u32 = 32;
     while shift > 0 {
         shift -= 4;
@@ -75,17 +75,17 @@ fn set_threshold(context: *mut PlicContext, value: u32) {
 
 // The driver of one virtio-mmio transport, whichever it is.
 fn describe(index: usize, transport: *const VirtioMmio) {
-    print(&raw const b"virtio");
+    print(&b"virtio");
     print_digit(index as u32);
-    print(&raw const b" magic");
+    print(&b" magic");
     print_hex((*transport).magic_value);
-    print(&raw const b" version ");
+    print(&b" version ");
     print_digit((*transport).version);
-    print(&raw const b" device ");
+    print(&b" device ");
     print_digit((*transport).device_id);
-    print(&raw const b" vendor");
+    print(&b" vendor");
     print_hex((*transport).vendor_id);
-    print(&raw const b"\n");
+    print(&b"\n");
 }
 
 entry fn main() -> ! {
@@ -95,20 +95,20 @@ entry fn main() -> ! {
         devices::PLIC.priority[source] = ((source - 1) % 7 + 1) as u32;
         source += 1;
     }
-    print(&raw const b"priorities");
+    print(&b"priorities");
     source = 1;
     while source <= 8 {
         devices::putc(b' ');
         print_digit(devices::PLIC.priority[source]);
         source += 1;
     }
-    print(&raw const b"\n");
+    print(&b"\n");
 
     // Sources 1 to 8 enabled for context 0.
     devices::PLIC.enables[0].word[0] = 0x1FE;
-    print(&raw const b"enable");
+    print(&b"enable");
     print_hex(devices::PLIC.enables[0].word[0]);
-    print(&raw const b"\n");
+    print(&b"\n");
 
     // Threshold 3 for context 0 and 5 for context 1, through one driver.
     let mut context: usize = 0;
@@ -116,15 +116,15 @@ entry fn main() -> ! {
         set_threshold(&raw mut devices::PLIC.ctx[context], 3 + context as u32 * 2);
         context += 1;
     }
-    print(&raw const b"threshold ");
+    print(&b"threshold ");
     print_digit(devices::PLIC.ctx[0].threshold);
     devices::putc(b' ');
     print_digit(devices::PLIC.ctx[1].threshold);
-    print(&raw const b"\nthreshold m0 ");
+    print(&b"\nthreshold m0 ");
     print_digit(devices::PLIC_M0.threshold);
-    print(&raw const b"\nclaim ");
+    print(&b"\nclaim ");
     print_digit(devices::PLIC_M0.claim);
-    print(&raw const b"\n");
+    print(&b"\n");
 
     let mut transport: usize = 0;
     while transport < 8 {

@@ -35,7 +35,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum Fault: u8 { Timeout = 3, Busy = 7 }
 
@@ -84,14 +84,6 @@ fn erebos_result(x: Result(u32, Fault)) -> Result(u32, Fault) {
     }
 }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -105,12 +97,12 @@ fn field(n: u64) {
 }
 
 fn option(name: *const [u8], present: bool, value: u64) {
-    puts(name);
+    print(&*name);
     if present {
-        puts(&raw const b" some");
+        print(&b" some");
         field(value);
     } else {
-        puts(&raw const b" none");
+        print(&b" none");
     }
     putc(b'\n');
 }
@@ -137,14 +129,14 @@ fn show_u64(x: Option(u64)) {
 }
 
 fn show_result(x: Result(u32, Fault)) {
-    puts(&raw const b"result");
+    print(&b"result");
     match x {
         .Ok(let v: u32) => {
-            puts(&raw const b" ok");
+            print(&b" ok");
             field(v as u64);
         }
         .Err(let e: Fault) => {
-            puts(&raw const b" err");
+            print(&b" err");
             field(e as u64);
         }
     }
@@ -153,8 +145,8 @@ fn show_result(x: Result(u32, Fault)) {
 
 // What C saw: the tag and the payload value it read from its union.
 fn seen(name: *const [u8], tag: u8, value: u64) {
-    puts(&raw const b"c sees ");
-    puts(name);
+    print(&b"c sees ");
+    print(&*name);
     field(tag as u64);
     field(value);
     putc(b'\n');

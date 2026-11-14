@@ -21,7 +21,7 @@
 // expect-exit: 0
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 enum State: u8 { Idle = 0, Running = 1, Paused = 2, Done = 3 }
 
@@ -86,14 +86,6 @@ comptime {
 
 static mut STATE: State = State::Idle;
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn state_name(state: State) -> *const [u8] {
     match state {
         State::Idle => &raw const b"idle",
@@ -116,9 +108,9 @@ fn event_name(event: Event) -> *const [u8] {
 
 entry fn main() -> ! {
     // Read before any write: `.bss` was zeroed by `_start`.
-    print(&raw const b"state ");
-    print(state_name(STATE));
-    print(&raw const b"\n");
+    print(&b"state ");
+    print(&*state_name(STATE));
+    print(&b"\n");
 
     let mut i: usize = 0;
     while i < len(EVENTS) {
@@ -127,19 +119,19 @@ entry fn main() -> ! {
         let from: State = STATE;
         STATE = step(from, event);
         board::putc(byte);
-        print(&raw const b" ");
-        print(event_name(event));
-        print(&raw const b": ");
-        print(state_name(from));
-        print(&raw const b" -> ");
-        print(state_name(STATE));
-        print(&raw const b"\n");
+        print(&b" ");
+        print(&*event_name(event));
+        print(&b": ");
+        print(&*state_name(from));
+        print(&b" -> ");
+        print(&*state_name(STATE));
+        print(&b"\n");
         i += 1;
     }
 
-    print(&raw const b"state ");
-    print(state_name(STATE));
-    print(&raw const b"\n");
+    print(&b"state ");
+    print(&*state_name(STATE));
+    print(&b"\n");
     exit(if STATE == run(EVENTS) { 0 } else { 2 })
 }
 

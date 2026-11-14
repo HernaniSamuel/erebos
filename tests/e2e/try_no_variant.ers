@@ -16,10 +16,10 @@ static BYTES: [u8; 16] = [
     2, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        putc((*s)[i]);
+        putc(s[i]);
         i += 1;
     }
     putc(b'\n');
@@ -31,8 +31,8 @@ fn plus_one(o: Option(u32)) -> Option(u32) {
 
 fn show(o: Option(u32)) {
     match o {
-        .Some(6) => print(&raw const b"some 6"),
-        _ => print(&raw const b"other"),
+        .Some(6) => print(&b"some 6"),
+        _ => print(&b"other"),
     }
 }
 
@@ -44,6 +44,6 @@ entry fn main() -> ! {
 }
 
 panic fn on_panic() -> ! {
-    print(&raw const b"panic");
+    print(&b"panic");
     exit(1)
 }

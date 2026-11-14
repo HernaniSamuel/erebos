@@ -9,7 +9,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 #[interrupts]
 enum Interrupt: u32 {
@@ -17,14 +17,6 @@ enum Interrupt: u32 {
 }
 
 interrupt fn uart() at Interrupt::Uart {}
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
 
 entry fn main() -> ! {
     core::arch::nvic_pend(31);
@@ -43,7 +35,7 @@ entry fn main() -> ! {
 
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     match info.reason {
-        .AssertionFailed => print(&raw const b"assertion failed"),
+        .AssertionFailed => print(&b"assertion failed"),
         _ => exit(5),
     }
     putc(b'\n');

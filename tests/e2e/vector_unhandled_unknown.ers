@@ -8,7 +8,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 // `SSIP` and `SSIE`: bit 1 of `mip` and of `mie`.
 const SUPERVISOR_SOFTWARE: u32 = 2;
@@ -19,14 +19,6 @@ entry fn main() -> ! {
     core::arch::enable_interrupts();
     loop {
         core::arch::wait_for_interrupt();
-    }
-}
-
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
     }
 }
 
@@ -41,14 +33,14 @@ fn print_hex(value: u32) {
 
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     match info.reason {
-        .UnhandledVector => print(&raw const b"vector not handled"),
+        .UnhandledVector => print(&b"vector not handled"),
         _ => exit(3),
     }
-    print(&raw const b": ");
-    print(info.message);
+    print(&b": ");
+    print(&*info.message);
     let mut cause: u32 = 0;
     asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
-    print(&raw const b" mcause ");
+    print(&b" mcause ");
     print_hex(cause);
     putc(b'\n');
     exit(1)

@@ -21,7 +21,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum Parity: u8 { None = 0, Odd = 1, Even = 3 }
 
@@ -60,14 +60,6 @@ fn hidden(x: u32) -> u32 {
     *p
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -86,7 +78,7 @@ fn print_i64(n: i64) {
 
 // ` 0x` and `digits` hex digits.
 fn print_hex(value: u64, digits: u32) {
-    print(&raw const b" 0x");
+    print(&b" 0x");
     let mut shift: u32 = digits * 4;
     while shift > 0 {
         shift -= 4;
@@ -96,7 +88,7 @@ fn print_hex(value: u64, digits: u32) {
 }
 
 fn print_bool(b: bool) {
-    print(if b { &raw const b" true" } else { &raw const b" false" });
+    print(if b { &b" true" } else { &b" false" });
 }
 
 fn parity_name(p: Parity) -> *const [u8] {
@@ -111,20 +103,20 @@ fn parity_name(p: Parity) -> *const [u8] {
 entry fn main() -> ! {
     // Defaults; the reserved bits are 0.
     let defaults: Lcr = Lcr { .. };
-    print(&raw const b"defaults");
+    print(&b"defaults");
     print_hex(defaults as u64, 2);
     putc(b'\n');
 
     // Fields in another order than declared, a value computed at run time.
     let lcr: Lcr = Lcr { parity: .Even, dlab: true, word_length: hidden(2) as u8, .. };
-    print(&raw const b"literal");
+    print(&b"literal");
     print_hex(lcr as u64, 2);
     putc(b'\n');
 
-    print(&raw const b"reads ");
+    print(&b"reads ");
     print_u64(lcr.word_length as u64);
     print_bool(lcr.two_stop_bits);
-    print(parity_name(lcr.parity));
+    print(&*parity_name(lcr.parity));
     print_bool(lcr.dlab);
     putc(b'\n');
 
@@ -133,7 +125,7 @@ entry fn main() -> ! {
     m.dlab = false;
     m.parity = .Odd;
     m.two_stop_bits = true;
-    print(&raw const b"writes");
+    print(&b"writes");
     print_hex(m as u64, 2);
     putc(b'\n');
 
@@ -143,7 +135,7 @@ entry fn main() -> ! {
     s.level >>= 3;
     s.level |= 0x0F;
     s.ready = !s.ready;
-    print(&raw const b"compound ");
+    print(&b"compound ");
     print_u64(s.count as u64);
     putc(b' ');
     print_u64(s.level as u64);
@@ -154,7 +146,7 @@ entry fn main() -> ! {
     // Reserved bits set by `as` stay through field writes, and come back
     // out through `as` to every width.
     let mut r: Lcr = hidden(0x60) as u8 as Lcr;
-    print(&raw const b"reserved");
+    print(&b"reserved");
     print_hex(r as u64, 2);
     r.word_length = 2;
     r.parity = .Even;
@@ -164,7 +156,7 @@ entry fn main() -> ! {
     putc(b'\n');
 
     let mut st: Status = hidden(0x7005) as u16 as Status;
-    print(&raw const b"reserved");
+    print(&b"reserved");
     print_hex(st as u64, 4);
     st.count = 9;
     print_hex(st as u64, 4);
@@ -175,7 +167,7 @@ entry fn main() -> ! {
     putc(b'\n');
 
     // To a signed type, as the integer type converts.
-    print(&raw const b"signed ");
+    print(&b"signed ");
     print_i64(lcr as i8 as i64);
     putc(b' ');
     print_i64(lcr as i32 as i64);
@@ -190,7 +182,7 @@ entry fn main() -> ! {
     port.lcr.dlab = true;
     port.status.count += 4;
     port.control.high = hidden(0x5A) as u8;
-    print(&raw const b"in a struct ");
+    print(&b"in a struct ");
     print_u64(port.id as u64);
     print_hex(port.lcr as u64, 2);
     print_hex(port.status as u64, 4);
@@ -199,28 +191,28 @@ entry fn main() -> ! {
 
     SAVED.word_length = 0;
     SAVED.parity = .Odd;
-    print(&raw const b"static");
+    print(&b"static");
     print_hex(SAVED as u64, 2);
     print_bool(SAVED.dlab);
-    print(parity_name(SAVED.parity));
+    print(&*parity_name(SAVED.parity));
     putc(b'\n');
 
     let device: *mut volatile Control = &raw mut DEVICE as *mut volatile Control;
     (*device).high = 0x5A;
     (*device).mode = .Even;
     (*device).low += 1;
-    print(&raw const b"volatile");
+    print(&b"volatile");
     print_hex(DEVICE as u64, 8);
     print_hex((*device).high as u64, 2);
-    print(parity_name((*device).mode));
+    print(&*parity_name((*device).mode));
     putc(b'\n');
 
     // Bits 3 and 4 hold 2, which is no variant of `Parity`; a field write
     // carries it as is.
     let odd: Lcr = hidden(0x10) as u8 as Lcr;
-    print(&raw const b"enum field ");
+    print(&b"enum field ");
     print_u64(odd.parity as u64);
-    print(parity_name(odd.parity));
+    print(&*parity_name(odd.parity));
     let mut carried: Lcr = Lcr { .. };
     carried.parity = odd.parity;
     print_hex(carried as u64, 2);

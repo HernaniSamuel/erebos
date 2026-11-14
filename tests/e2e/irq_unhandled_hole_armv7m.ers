@@ -8,7 +8,7 @@
 // expect-exit: 1
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 #[interrupts]
 enum Interrupt: u32 {
@@ -33,14 +33,6 @@ entry fn main() -> ! {
     }
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(value: u32) {
     let mut digits: [u8; 10] = [0; 10];
     let mut n: usize = 0;
@@ -53,7 +45,7 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 fn reason(reason: core::PanicReason) -> *const [u8] {
@@ -71,16 +63,16 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     let mut ipsr: u32 = 0;
     asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
-    print(reason(info.reason));
-    print(&raw const b": ");
-    print(info.message);
-    print(&raw const b" at ");
-    print(info.file);
-    print(&raw const b":");
+    print(&*reason(info.reason));
+    print(&b": ");
+    print(&*info.message);
+    print(&b" at ");
+    print(&*info.file);
+    print(&b":");
     print_u32(info.line);
-    print(&raw const b":");
+    print(&b":");
     print_u32(info.column);
-    print(&raw const b"\n");
+    print(&b"\n");
     // The shared default handler of the hole called us: the line (4) is still active.
     if ipsr != 16 + 4 {
         exit(4)

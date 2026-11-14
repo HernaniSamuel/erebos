@@ -1,5 +1,5 @@
 // Numbers written in decimal to the UART.
-use crate::uart::print;
+use crate::board::print;
 
 pub fn print_u32(value: u32) {
     let mut digits: [u8; 10] = [0; 10];
@@ -13,5 +13,5 @@ pub fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }

@@ -18,7 +18,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 extern fn c_sum(s: &[u8]) -> u32;
 extern fn c_fill(s: &mut [u8], b: u8);
@@ -43,15 +43,6 @@ fn erebos_first_plus_len(s: &[u8]) -> u32 {
     (*s)[0] as u32 + len(s) as u32
 }
 
-fn print(s: *const [u8]) {
-    let bytes: *const u8 = s as *const u8;
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc(bytes[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(value: u32) {
     let mut digits: [u8; 10] = [0; 10];
     let mut n: usize = 0;
@@ -64,48 +55,48 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 entry fn main() -> ! {
     let mut buf: [u8; 6] = [1, 2, 3, 4, 5, 6];
     let whole: *mut [u8] = &raw mut buf;
-    print(&raw const b"sum ");
+    print(&b"sum ");
     print_u32(c_sum(&*whole));
     putc(b'\n');
 
     c_fill(&mut *whole, 9);
-    print(&raw const b"filled ");
+    print(&b"filled ");
     print_u32(c_sum(&*whole));
     putc(b'\n');
 
     let words: [u32; 3] = [100000, 200000, 300000];
     let all: *const [u32] = &raw const words;
-    print(&raw const b"words ");
+    print(&b"words ");
     print_u32(c_sum_words(&*all));
     putc(b'\n');
 
     let none: *const [u8] = slice(&raw const buf[0], 0);
-    print(&raw const b"empty ");
+    print(&b"empty ");
     print_u32(c_sum(&*none));
     putc(b'\n');
 
-    print(&raw const b"from c ");
+    print(&b"from c ");
     print_u32(c_calls_erebos());
     putc(b'\n');
 
     // The array behind `buf` and a byte string, converted where a `&[u8]` is
     // taken; an Erebos function and an empty byte string too.
-    print(&raw const b"array ");
+    print(&b"array ");
     print_u32(c_sum(&buf));
     putc(b'\n');
-    print(&raw const b"literal ");
+    print(&b"literal ");
     print_u32(c_sum(&b"abc"));
     putc(b'\n');
-    print(&raw const b"erebos ");
+    print(&b"erebos ");
     print_u32(erebos_sum(&words));
     putc(b'\n');
-    print(&raw const b"blank ");
+    print(&b"blank ");
     print_u32(c_sum(&b""));
     putc(b'\n');
     exit(0)

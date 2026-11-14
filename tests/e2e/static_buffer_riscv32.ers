@@ -15,7 +15,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print};
 use core::arch::Vector;
 
 const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
@@ -72,14 +72,6 @@ interrupt fn tick() at Vector::MachineTimer {
         FILLED += 1;
     }
     *MTIMECMP_LOW = *MTIME + PERIOD;
-}
-
-fn print(s: &[u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
 }
 
 fn print_u32(value: u32) {

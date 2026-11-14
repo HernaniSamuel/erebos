@@ -18,20 +18,12 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 #[copy]
 struct Pair {
     a: u16,
     b: u16,
-}
-
-fn print(s: &[u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
 }
 
 // The decimal digits are written at the end of a buffer and printed from
@@ -52,7 +44,7 @@ fn print_u32(value: u32) {
 }
 
 fn show(label: &[u8], value: u32) {
-    print(label);
+    print(&*label);
     print_u32(value);
     putc(b'\n');
 }

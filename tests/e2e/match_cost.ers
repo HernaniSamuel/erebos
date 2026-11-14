@@ -69,7 +69,7 @@
 // expect-exit: 0
 
 mod board;
-use board::exit;
+use board::{exit, print};
 
 #[copy]
 enum P: u8 {
@@ -306,14 +306,6 @@ comptime {
     assert(nested_agree(), &b"the nested or-pattern takes the arms and binds the values expected");
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        board::putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(value: u32) {
     let mut digits: [u8; 10] = [0; 10];
     let mut n: usize = 0;
@@ -326,15 +318,15 @@ fn print_u32(value: u32) {
             break;
         }
     }
-    print(slice(&raw const digits[10 - n], n));
+    print(&digits[10 - n..]);
 }
 
 // `<name> <index>: arm <arm>`, without the end of the line.
 fn print_taken(name: *const [u8], index: usize, arm: u8) {
-    print(name);
-    print(&raw const b" ");
+    print(&*name);
+    print(&b" ");
     print_u32(index as u32);
-    print(&raw const b": arm ");
+    print(&b": arm ");
     print_u32(arm as u32);
 }
 
@@ -342,14 +334,14 @@ entry fn main() -> ! {
     let mut i: usize = 0;
     while i < len(&raw const PAIRS) {
         print_taken(&raw const b"pairs", i, pairs_arm(PAIRS[i]));
-        print(&raw const b"\n");
+        print(&b"\n");
         i += 1;
     }
 
     i = 0;
     while i < len(&raw const ORS) {
         print_taken(&raw const b"ors", i, ors_arm(ORS[i]));
-        print(&raw const b"\n");
+        print(&b"\n");
         i += 1;
     }
 
@@ -357,9 +349,9 @@ entry fn main() -> ! {
     while i < len(&raw const NESTED) {
         let taken: Taken = nested_arm(NESTED[i]);
         print_taken(&raw const b"nested", i, taken.arm);
-        print(&raw const b", x ");
+        print(&b", x ");
         print_u32(taken.x as u32);
-        print(&raw const b"\n");
+        print(&b"\n");
         i += 1;
     }
     exit(0)

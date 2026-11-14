@@ -12,10 +12,10 @@ enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
 static mut BYTES: [u8; 2] = [0, 0];
 
-fn print(s: *const [u8]) {
+fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        putc((*s)[i]);
+        putc(s[i]);
         i += 1;
     }
     putc(b'\n');
@@ -32,12 +32,12 @@ fn name(m: Mode) -> *const [u8] {
 entry fn main() -> ! {
     BYTES = [1, 7];
     let modes: *const Mode = &raw const BYTES as *const Mode;
-    print(name(modes[0]));
-    print(name(modes[1]));
+    print(&*name(modes[0]));
+    print(&*name(modes[1]));
     exit(0)
 }
 
 panic fn on_panic() -> ! {
-    print(&raw const b"panic");
+    print(&b"panic");
     exit(1)
 }

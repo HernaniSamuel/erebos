@@ -23,7 +23,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 struct Status: u32 {
     pub enable: bool at 0 = false,
@@ -50,14 +50,6 @@ fn word(index: usize) -> *mut volatile u32 {
     &raw mut DEVICE[index] as *mut volatile u32
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -67,7 +59,7 @@ fn print_u64(n: u64) {
 
 // ` 0x` and eight hex digits.
 fn print_hex(value: u32) {
-    print(&raw const b" 0x");
+    print(&b" 0x");
     let mut shift: u32 = 32;
     while shift > 0 {
         shift -= 4;
@@ -93,27 +85,27 @@ entry fn main() -> ! {
     // `start` and `level` ones.
     *status = 0x0003_0500;
     (*timer).status.enable = true;
-    print(&raw const b"field");
+    print(&b"field");
     print_hex(*status);
     putc(b'\n');
 
     // Assigned, `overrun` gets its 1; `done` gets its neutral 0.
     *status = 0x0003_0000;
     (*timer).status.overrun = true;
-    print(&raw const b"effect field");
+    print(&b"effect field");
     print_hex(*status);
     putc(b'\n');
 
     *status = 0x0003_0500;
     (*timer).status.count += 2;
-    print(&raw const b"compound");
+    print(&b"compound");
     print_hex(*status);
     putc(b'\n');
 
     // Every bit of the old value is gone; reserved bits are 0.
     *status = 0xFFFF_FFFF;
     (*timer).status = Status { enable: true, .. };
-    print(&raw const b"literal");
+    print(&b"literal");
     print_hex(*status);
     putc(b'\n');
 
@@ -122,7 +114,7 @@ entry fn main() -> ! {
     let read: Status = (*timer).status;
     *status = 0;
     (*timer).status = read;
-    print(&raw const b"whole");
+    print(&b"whole");
     print_hex(*status);
     putc(b'\n');
 
@@ -131,7 +123,7 @@ entry fn main() -> ! {
     copy.enable = true;
     *status = 0;
     (*timer).status = copy;
-    print(&raw const b"local");
+    print(&b"local");
     print_hex(copy as u32);
     print_hex(*status);
     putc(b'\n');
@@ -139,7 +131,7 @@ entry fn main() -> ! {
     let v: *mut volatile Status = status as *mut volatile Status;
     *status = 0x0003_0500;
     (*v).enable = true;
-    print(&raw const b"volatile");
+    print(&b"volatile");
     print_hex(*status);
     *status = 0x0003_0000;
     (*v).done = true;
@@ -150,9 +142,9 @@ entry fn main() -> ! {
     let second: *mut volatile u32 = word(1);
     *second = 2;
     let mode: Mode = (*timer).mode;
-    print(&raw const b"mode ");
+    print(&b"mode ");
     print_u64(mode as u64);
-    print(mode_name(mode));
+    print(&*mode_name(mode));
     (*timer).mode = .Auto;
     print_hex(*second);
     putc(b'\n');

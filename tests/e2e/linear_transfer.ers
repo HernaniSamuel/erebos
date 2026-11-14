@@ -14,7 +14,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 mod dma {
     // `channel` is private: only this module builds a transfer and takes one
@@ -78,14 +78,6 @@ mod dma {
     }
 }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u32(n: u32) {
     if n >= 10 {
         print_u32(n / 10);
@@ -136,9 +128,9 @@ fn run(out: *mut u8) -> u32 {
 entry fn main() -> ! {
     let mut out: [u8; 16] = [0; 16];
     let polls: u32 = run(&raw mut out as *mut u8);
-    puts(slice(&raw const out as *const u8, 11));
+    print(&*slice(&raw const out as *const u8, 11));
     putc(b'\n');
-    puts(&raw const b"polls ");
+    print(&b"polls ");
     print_u32(polls);
     putc(b'\n');
     exit(0)

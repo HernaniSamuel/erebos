@@ -7,7 +7,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 
 enum Msg: u8 { Nop = 0, Write(u8, u16) = 2, Three(u16, u8, u32) = 5 }
 
@@ -42,14 +42,6 @@ fn word(m: *const Msg, at: usize) -> u64 {
     half(m, at) | half(m, at + 2) << 16
 }
 
-fn puts(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -66,7 +58,7 @@ entry fn main() -> ! {
     // Write(u8 at 1, u16 at 2): `f` runs first, then `g`.
     let write: Msg = Msg::Write(f(), g());
     let w: *const Msg = &raw const write;
-    puts(&raw const b"write");
+    print(&b"write");
     field(byte(w, 0));
     field(byte(w, 1));
     field(half(w, 2));
@@ -75,7 +67,7 @@ entry fn main() -> ! {
     // Three(u16 at 2, u8 at 4, u32 at 8): `g`, `f`, then `h`.
     let three: Msg = Msg::Three(g(), f(), h());
     let t: *const Msg = &raw const three;
-    puts(&raw const b"three");
+    print(&b"three");
     field(byte(t, 0));
     field(half(t, 2));
     field(byte(t, 4));
@@ -83,7 +75,7 @@ entry fn main() -> ! {
     putc(b'\n');
 
     let nop: Msg = Msg::Nop;
-    puts(&raw const b"nop");
+    print(&b"nop");
     field(byte(&raw const nop, 0));
     putc(b'\n');
     exit(0)

@@ -7,7 +7,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, putc};
 use core::arch::Vector;
 
 const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
@@ -31,22 +31,14 @@ entry fn main() -> ! {
     }
 }
 
-fn print(s: *const [u8]) {
-    let mut i: usize = 0;
-    while i < len(s) {
-        putc((*s)[i]);
-        i += 1;
-    }
-}
-
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     match info.reason {
-        .DivisionByZero => print(&raw const b"division by zero"),
+        .DivisionByZero => print(&b"division by zero"),
         _ => exit(3),
     }
     let mut ipsr: u32 = 0;
     asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
-    print(&raw const b" ipsr ");
+    print(&b" ipsr ");
     putc(b'0' + (ipsr / 10) as u8);
     putc(b'0' + (ipsr % 10) as u8);
     putc(b'\n');
