@@ -286,7 +286,9 @@ fn _start() -> ! {
 // the C ABI wants at a call) with the pointer for the remainder at its
 // bottom, the fifth word of the call, and the remainder's own place above it,
 // and calls the function of `core::builtins` that divides, with the arguments
-// it was given in `r0`-`r3`. Nothing calls them from Erebos, which divides
+// it was given in `r0`-`r3`. The slot they pass is what a `&mut u64` (or
+// `&mut i64`) is in the C ABI, a pointer to a place that holds a value, which
+// is what the functions take since ADR 0117. Nothing calls them from Erebos, which divides
 // through the functions of ADR 0076. A zero divisor is not checked (C leaves
 // it undefined, and `__aeabi_ldiv0` is not called).
 

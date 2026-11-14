@@ -7452,8 +7452,8 @@ the compiler binary, and compiled and checked with every program.
     "Targets"). They never divide 64-bit values themselves: all four go
     through `__erebos_udivmod64` to the restoring loop,
     `__erebos_udivmoddi4`.
-  - The functions `__erebos_udivmoddi4(n: u64, d: u64, rem: *mut u64) ->
-    u64` and `__erebos_divmoddi4(n: i64, d: i64, rem: *mut i64) -> i64`
+  - The functions `__erebos_udivmoddi4(n: u64, d: u64, rem: &mut u64) ->
+    u64` and `__erebos_divmoddi4(n: i64, d: i64, rem: &mut i64) -> i64`
     return the quotient and store the remainder. They are `pub` inside the
     private `builtins`, so that `core::arch` names them in `sym` operands and
     programs cannot, and they are not `#[export]` (their symbols are
