@@ -259,6 +259,14 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `resolve::unknown-path`; the plan says such a path "is judged when
   resolved", so both follow it, but the first message is confusing.
   (M5.5, step 1)
+- `src/analysis/shared_statics.rs`: `unprotected_peripherals` and
+  `unmaskable_peripherals` repeat the lines that compute `itself`, `reaches`
+  and the wording of the title; a helper would remove the copy. `Named::key`
+  converts the index with `index as u64`, where `u64::try_from` would say it
+  is checked. (M5.6, step 3)
+- `src/driver.rs`, the comment before `Found`: an edit left a short wrapped
+  line ("... and no peripheral (ADR 0115)" / "and have no check. The walk");
+  reflow the paragraph. (M5.6, final review)
 
 ## Tests
 
@@ -415,6 +423,20 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `tests/ui/reference_places.ers`: `&mut r[i]` through a `&mut [T]` has no
   direct case (`&mut t[..2]`, `t[1] = x` and `&mut m.buf[0]` are there); the
   code path is shared. (M5.5, step 2)
+- `tests/e2e/uart_interrupt_riscv32/main.ers` (header, lines 17-19) says the
+  generated `Finisher` is still written by `svd_virt` and `uart_fields`; only
+  `svd_virt` writes the generated `virt::test::Finisher`, and `uart_fields`
+  writes a hand-written `FinisherStatus` (a bit-field struct of the same
+  kind). Say "a bit-field finisher struct". (M5.6, step 1)
+- `tests/e2e/uart_interrupt_armv7m/main.ers`: the comment on the `critical`
+  block says why the block exists but not why `nvic_enable` and
+  `enable_interrupts` stay outside it (they name no peripheral), as step 1's
+  Decisions say it does. (M5.6, step 1)
+- `tests/e2e/uart_owned_armv7m/main.ers` and `tests/e2e/uart_owned_riscv32/
+  main.ers`: header lines longer than the wrap (a 122-character line at line
+  16 of the first; 81 characters at line 2 of the first and lines 14, 15 and
+  140 of the second), and the paragraph at lines 17-18 of the second breaks
+  after "which". (M5.6, step 4)
 
 ## Docs
 
@@ -548,3 +570,10 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   a pointer or reference; the prose and the Decisions of M5.5 step 2 say that
   `r.f`, `r[i]` and a method call with a `self` receiver give the same error,
   and the row should list them. (M5.5, final review)
+- `docs/reference.md`, "Shared statics": the sentence "The errors of
+  peripherals follow those of statics for the same rule." is glued to a
+  147-character line and would sit better next to the sentence on the other
+  context's places it qualifies; "...and names no `static mut` and no
+  peripheral), nor is a default handler..." overflows the wrap; the text
+  before the `main.ers` example of "Peripherals in the rule" names the
+  `external` handler, which the shortened block does not show. (M5.6, step 5)
