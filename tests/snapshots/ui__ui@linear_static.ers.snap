@@ -15,8 +15,8 @@ ty::linear-static
  14 │ static mut TWO: Transfer = Transfer { channel: 2 };
     ╰────
   help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
-        which forgets it; keep it in a variable and pass it on; how a context owns what a static
-        holds is decided in M5.6 (ADR 0101)
+        which forgets it; keep it in a variable and pass it on; a context owns a static's value by
+        being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)
 ty::linear-static
 
   × the static mut `TWO` is of the linear type `Transfer`
@@ -28,8 +28,8 @@ ty::linear-static
  15 │ static mut MAYBE: Option(Transfer) = .None;
     ╰────
   help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
-        which forgets it; keep it in a variable and pass it on; how a context owns what a static
-        holds is decided in M5.6 (ADR 0101)
+        which forgets it; keep it in a variable and pass it on; a context owns a static's value by
+        being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)
 ty::linear-static
 
   × the static mut `MAYBE` is of the linear type `Option(Transfer)`
@@ -41,8 +41,8 @@ ty::linear-static
  16 │ static HELD: Holder = Holder { n: 0, t: Transfer { channel: 3 } };
     ╰────
   help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
-        which forgets it; keep it in a variable and pass it on; how a context owns what a static
-        holds is decided in M5.6 (ADR 0101)
+        which forgets it; keep it in a variable and pass it on; a context owns a static's value by
+        being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)
 ty::linear-static
 
   × the static `HELD` is of the linear type `Holder`
@@ -54,8 +54,8 @@ ty::linear-static
  17 │ static mut SLOT: Slot = Slot::Empty;
     ╰────
   help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
-        which forgets it; keep it in a variable and pass it on; how a context owns what a static
-        holds is decided in M5.6 (ADR 0101)
+        which forgets it; keep it in a variable and pass it on; a context owns a static's value by
+        being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)
 ty::linear-static
 
   × the static mut `SLOT` is of the linear type `Slot`
@@ -67,8 +67,8 @@ ty::linear-static
  18 │ extern static OUTSIDE: Transfer;
     ╰────
   help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
-        which forgets it; keep it in a variable and pass it on; how a context owns what a static
-        holds is decided in M5.6 (ADR 0101)
+        which forgets it; keep it in a variable and pass it on; a context owns a static's value by
+        being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)
 ty::linear-static
 
   × the static `OUTSIDE` is of the linear type `Transfer`
@@ -80,5 +80,5 @@ ty::linear-static
  19 │ 
     ╰────
   help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
-        which forgets it; keep it in a variable and pass it on; how a context owns what a static
-        holds is decided in M5.6 (ADR 0101)
+        which forgets it; keep it in a variable and pass it on; a context owns a static's value by
+        being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)

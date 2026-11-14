@@ -240,7 +240,7 @@ pub fn report_linear_statics(q: &mut Queries) {
                 format!("the {what} `{}` is of the linear type `{ty}`", def.path),
             )
             .label(def.ty_span, format!("`{ty}` is linear"))
-            .help("the value a static holds is never moved out (ADR 0094), so it could only be overwritten, which forgets it; keep it in a variable and pass it on; how a context owns what a static holds is decided in M5.6 (ADR 0101)"),
+            .help("the value a static holds is never moved out (ADR 0094), so it could only be overwritten, which forgets it; keep it in a variable and pass it on; a context owns a static's value by being the only one to reach it, and nothing moves out of a static (ADR 0094, 0115)"),
         );
     }
 }
