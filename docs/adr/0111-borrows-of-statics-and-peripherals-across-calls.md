@@ -1,6 +1,6 @@
 # 0111. Borrows of statics and peripherals, across calls
 
-- Status: Accepted
+- Status: Accepted; amended by 0116 (the call a check makes is not followed because the reference it passes is to the check's own `PanicInfo`)
 - Date: 2026-11-12
 - Amends: 0106 (statics and peripherals as roots; parts of a peripheral
   overlap; the conflicts of a call with what its callee reaches)

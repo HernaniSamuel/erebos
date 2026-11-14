@@ -1,6 +1,6 @@
 # 0108. Slices behind references
 
-- Status: Accepted; amended by 0110 (borrows through a volatile raw slice and of a `static mut` allowed; volatile references to slices)
+- Status: Accepted; amended by 0110 (borrows through a volatile raw slice and of a `static mut` allowed; volatile references to slices), 0116 (an `assert` message is a `&[u8]`; the panic function takes a `&core::PanicInfo`)
 - Date: 2026-11-12
 - Amends: 0008 (a reference to an array converts to a reference to a slice),
   0021 (an index may be a range), 0031 ("Slices": a place of type `[T]` can be

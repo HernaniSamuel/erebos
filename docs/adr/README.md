@@ -43,7 +43,7 @@ Do not write one for local implementation details that the code already explains
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
 | 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Superseded by 0083 |
 | 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted, amended by 0058 |
-| 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053 |
+| 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053, 0116 |
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
 | 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted, amended by 0079 |
 | 0017 | [Literal operands of `as` take the target type](0017-literal-cast-operands.md) | Accepted, amended by 0059 |
@@ -60,7 +60,7 @@ Do not write one for local implementation details that the code already explains
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
 | 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034, 0049 |
 | 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057, 0074, 0083, 0085, 0086 |
-| 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053, 0108 |
+| 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053, 0108, 0116 |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039, 0059, 0108 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted, amended by 0063, 0094 |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted, amended by 0039 |
@@ -82,7 +82,7 @@ Do not write one for local implementation details that the code already explains
 | 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054, 0059, 0113 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted, amended by 0113 |
 | 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056, 0080, 0083, 0084, 0086 |
-| 0053 | [Panic information](0053-panic-information.md) | Accepted, amended by 0059, 0085 |
+| 0053 | [Panic information](0053-panic-information.md) | Accepted, amended by 0059, 0085, 0116 |
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
@@ -106,7 +106,7 @@ Do not write one for local implementation details that the code already explains
 | 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080, 0083, 0085, 0090 |
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
-| 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088 |
+| 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088, 0117 |
 | 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted, amended by 0093, 0115 |
 | 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083, 0084 |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
@@ -124,7 +124,7 @@ Do not write one for local implementation details that the code already explains
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted, amended by 0110, 0112, 0115 |
 | 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted, amended by 0110, 0115 |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107, 0109, 0112 |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107, 0109, 0112, 0116 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
 | 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103, 0105 |
 | 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103, 0107 |
@@ -134,14 +134,16 @@ Do not write one for local implementation details that the code already explains
 | 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted, amended by 0113 |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
-| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114 |
+| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114, 0116 |
 | 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108, 0111 |
 | 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109, 0112 |
-| 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110 |
+| 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110, 0116 |
 | 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted, amended 2026-11-12, amended by 0112 |
 | 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted, amended by 0115 |
-| 0111 | [Borrows of statics and peripherals, across calls](0111-borrows-of-statics-and-peripherals-across-calls.md) | Accepted |
+| 0111 | [Borrows of statics and peripherals, across calls](0111-borrows-of-statics-and-peripherals-across-calls.md) | Accepted, amended by 0116 |
 | 0112 | [Borrows of statics, peripherals and volatile places in MIR](0112-borrows-of-statics-in-mir-and-the-analyses.md) | Accepted |
 | 0113 | [Functions of a type](0113-functions-of-a-type.md) | Accepted |
 | 0114 | [Method calls, and places through a reference](0114-method-calls-and-places-through-references.md) | Accepted |
 | 0115 | [Peripherals owned by contexts](0115-peripherals-owned-by-contexts.md) | Accepted |
+| 0116 | [References in `assert` and the panic function](0116-references-in-assert-and-the-panic-function.md) | Accepted |
+| 0117 | [What stays a raw pointer](0117-what-stays-a-raw-pointer.md) | Accepted |
