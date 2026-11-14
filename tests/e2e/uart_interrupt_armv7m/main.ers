@@ -80,9 +80,13 @@ fn send(text: *const [u8]) {
 }
 
 entry fn main() -> ! {
-    // The divisor must be set before the transmitter is enabled.
-    UART0.bauddiv = 16;
-    UART0.ctrl = Ctrl { tx_en: true, tx_inten: true, .. };
+    // The handler names `UART0` too, so the entry function's setup is inside
+    // `critical` (ADR 0115). The divisor must be set before the transmitter is
+    // enabled.
+    critical {
+        UART0.bauddiv = 16;
+        UART0.ctrl = Ctrl { tx_en: true, tx_inten: true, .. };
+    }
     core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
     core::arch::enable_interrupts();
 

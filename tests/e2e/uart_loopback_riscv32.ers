@@ -122,22 +122,29 @@ fn wait_for_empty(count: u32) {
 }
 
 entry fn main() -> ! {
-    PLIC.priority[UART_SOURCE as usize] = 1;
-    PLIC.enable = 1 << UART_SOURCE;
-    PLIC.threshold = 0;
+    // The handler names `PLIC` and `UART0` too, so every access of the entry
+    // function to them is inside `critical` (ADR 0115).
+    critical {
+        PLIC.priority[UART_SOURCE as usize] = 1;
+        PLIC.enable = 1 << UART_SOURCE;
+        PLIC.threshold = 0;
+    }
     // `mie.MEIE`: the machine external interrupt is enabled.
     asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
     core::arch::enable_interrupts();
 
     // Nothing is enabled in the UART, and nothing is raised.
-    if PLIC.claim != 0 {
+    let claimed: u32 = critical { PLIC.claim };
+    if claimed != 0 {
         exit(2)
     }
 
     // A byte written in loopback comes back as a received one: cause 4.
-    UART0.mcr = Mcr { loopback: true };
-    UART0.ier = Ier { rdi: true, .. };
-    UART0.thr = b'x';
+    critical {
+        UART0.mcr = Mcr { loopback: true };
+        UART0.ier = Ier { rdi: true, .. };
+        UART0.thr = b'x';
+    }
     wait_for_received(1);
     critical {
         if CAUSE != 4 || BYTE != b'x' || RECEIVED != 1 || EMPTY != 0 {
@@ -146,7 +153,9 @@ entry fn main() -> ! {
     }
 
     // An empty `THR` raises the interrupt when `THRI` is set: cause 2.
-    UART0.ier = Ier { thri: true, .. };
+    critical {
+        UART0.ier = Ier { thri: true, .. };
+    }
     wait_for_empty(1);
     critical {
         if CAUSE != 2 || RECEIVED != 1 || EMPTY != 1 {
@@ -155,9 +164,12 @@ entry fn main() -> ! {
     }
 
     // Both off: one source, no cause left.
-    UART0.ier = Ier { .. };
-    UART0.mcr = Mcr { .. };
-    if PLIC.claim != 0 {
+    let left: u32 = critical {
+        UART0.ier = Ier { .. };
+        UART0.mcr = Mcr { .. };
+        PLIC.claim
+    };
+    if left != 0 {
         exit(5)
     }
     putc(b'l'); putc(b'o'); putc(b'o'); putc(b'p'); putc(b'b'); putc(b'a');

@@ -12,7 +12,11 @@
 // gives 0, serves source 10 with the UART's own handler, and completes each. That
 // one reads `IIR`, which names the cause and takes it, sends the next byte and
 // counts the bytes sent, which the entry function compares with the message's
-// length; when the queue is empty it clears `IER.THRI`.
+// length; when the queue is empty it clears `IER.THRI`. The entry function's
+// setup of `PLIC` is inside `critical`, as the handler claims through it too
+// (ADR 0115); the program exits through `board::exit`, which writes the test
+// finisher through a `const` pointer, so that `TEST` is named by no context
+// (the generated `Finisher` is still written by `svd_virt` and `uart_fields`).
 // takes-exceptions: yes
 // targets: riscv32imac-unknown-none-elf
 // expect-output: uart tx by interrupt
@@ -20,9 +24,9 @@
 mod board;
 mod virt;
 
+use board::exit;
 use core::arch::Vector;
-use virt::test::Finisher;
-use virt::{Interrupt, PLIC, TEST, UART0};
+use virt::{Interrupt, PLIC, UART0};
 
 const UART_SOURCE: u32 = Interrupt::Uart0 as u32;
 const SLOTS: usize = 16;
@@ -36,16 +40,6 @@ static mut TAIL: usize = 0;
 static mut BUSY: bool = false;
 // The interrupts of the transmitter that the handler served.
 static mut SENT: u32 = 0;
-
-// Stops QEMU: 0 passes, any other code fails with it.
-fn exit(code: u16) -> ! {
-    TEST.finisher = if code == 0 {
-        Finisher { status: .Pass, .. }
-    } else {
-        Finisher { status: .Fail, code: code }
-    };
-    loop {}
-}
 
 // The UART's interrupt: THR is empty, so the byte before it has been sent.
 fn uart_interrupt() {
@@ -107,9 +101,13 @@ fn send(text: *const [u8]) {
 }
 
 entry fn main() -> ! {
-    PLIC.priority[UART_SOURCE as usize] = 1;
-    PLIC.enable[0].sources[0] = 1 << UART_SOURCE;
-    PLIC.ctx[0].threshold = 0;
+    // The handler claims through `PLIC` too, so the entry function's setup is
+    // inside `critical` (ADR 0115).
+    critical {
+        PLIC.priority[UART_SOURCE as usize] = 1;
+        PLIC.enable[0].sources[0] = 1 << UART_SOURCE;
+        PLIC.ctx[0].threshold = 0;
+    }
     // `mie.MEIE`: the machine external interrupt is enabled.
     asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
     core::arch::enable_interrupts();
