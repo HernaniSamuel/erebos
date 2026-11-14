@@ -1,0 +1,22 @@
+// emit: llvm-ir
+// opt: both
+// The verdict does not depend on the optimization level: MIR is the same at
+// both, so the same error is reported at both (ADR 0115).
+use core::arch::Vector;
+
+peripheral Bank {
+    read write data: u32 at 0,
+}
+
+peripheral DEVICE: Bank at 0x1000_0000;
+
+interrupt fn tick() at Vector::MachineTimer {
+    DEVICE.data += 1;
+}
+
+entry fn main() -> ! {
+    DEVICE.data = 0;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

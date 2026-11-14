@@ -1,0 +1,21 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_typeck.ers
+---
+--- typeck ---
+peripheral Bank { read write data: u32 at 0x0 } extent 4, align 4
+peripheral DEVICE: Bank at 0x10000000 covers [0x10000000, 0x10000004)
+interrupt fn tick() -> () at MachineTimer
+    expr 0 assign += 313..329: ()
+    expr 1 register data 313..324: u32
+    expr 2 peripheral DEVICE 313..319: Bank
+    expr 3 int 1 328..329: u32
+entry fn main() -> !
+    expr 4 assign 361..376: ()
+    expr 5 register data 361..372: u32
+    expr 6 peripheral DEVICE 361..367: Bank
+    expr 7 int 0 375..376: u32
+    expr 8 loop 382..389: !
+panic fn on_panic() -> !
+    expr 9 loop 420..427: !

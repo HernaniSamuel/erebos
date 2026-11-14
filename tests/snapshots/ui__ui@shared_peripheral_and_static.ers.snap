@@ -1,0 +1,96 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_and_static.ers
+---
+--- errors ---
+analysis::unmaskable-peripheral
+
+  × `FAULT_DEVICE` is reached from the unmaskable handler `crash`, and the thread context reaches
+  │ it too
+    ╭─[shared_peripheral_and_static.ers:26:5]
+ 25 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 26 │     FAULT_DEVICE.data = FAULT_COUNT;
+    ·     ───────────────┬───────────────
+    ·                    ╰── reached here; `critical` does not stop this handler
+ 27 │     loop {}
+ 28 │ }
+ 29 │ 
+ 30 │ entry fn main() -> ! {
+ 31 │     DEVICE.data = COUNT;
+ 32 │     critical {
+ 33 │         FAULT_DEVICE.data = FAULT_COUNT;
+    ·         ───────────────┬───────────────
+    ·                        ╰── the thread context reaches it here
+ 34 │     }
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`
+analysis::unmaskable-static
+
+  × `FAULT_COUNT` is reached from the unmaskable handler `crash`, and the thread context reaches
+  │ it too
+    ╭─[shared_peripheral_and_static.ers:26:25]
+ 25 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 26 │     FAULT_DEVICE.data = FAULT_COUNT;
+    ·                         ─────┬─────
+    ·                              ╰── reached here; `critical` does not stop this handler
+ 27 │     loop {}
+ 28 │ }
+ 29 │ 
+ 30 │ entry fn main() -> ! {
+ 31 │     DEVICE.data = COUNT;
+ 32 │     critical {
+ 33 │         FAULT_DEVICE.data = FAULT_COUNT;
+    ·                             ─────┬─────
+    ·                                  ╰── the thread context reaches it here
+ 34 │     }
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unprotected-peripheral
+
+  × `DEVICE` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_and_static.ers:31:5]
+ 20 │ interrupt fn tick() at Vector::MachineTimer {
+ 21 │     DEVICE.data = COUNT;
+    ·     ─────────┬─────────
+    ·              ╰── the handler `tick` reaches it here
+ 22 │     COUNT += 1;
+ 23 │ }
+ 24 │ 
+ 25 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 26 │     FAULT_DEVICE.data = FAULT_COUNT;
+ 27 │     loop {}
+ 28 │ }
+ 29 │ 
+ 30 │ entry fn main() -> ! {
+ 31 │     DEVICE.data = COUNT;
+    ·     ─────────┬─────────
+    ·              ╰── reached here, outside `critical`
+ 32 │     critical {
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-static
+
+  × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_and_static.ers:31:19]
+ 20 │ interrupt fn tick() at Vector::MachineTimer {
+ 21 │     DEVICE.data = COUNT;
+    ·                   ──┬──
+    ·                     ╰── the handler `tick` reaches it here
+ 22 │     COUNT += 1;
+ 23 │ }
+ 24 │ 
+ 25 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 26 │     FAULT_DEVICE.data = FAULT_COUNT;
+ 27 │     loop {}
+ 28 │ }
+ 29 │ 
+ 30 │ entry fn main() -> ! {
+ 31 │     DEVICE.data = COUNT;
+    ·                   ──┬──
+    ·                     ╰── reached here, outside `critical`
+ 32 │     critical {
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

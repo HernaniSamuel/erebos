@@ -1,0 +1,193 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_accepted.ers
+---
+--- mir ---
+peripheral Bank { 0 data: u32 at 0x0 } // extent 4, align 4
+peripheral Whole { 0 words: [u32; 8] step 0x4 at 0x0 } // extent 32, align 4
+peripheral Half { 0 words: [u32; 4] step 0x4 at 0x0 } // extent 16, align 4
+peripheral Nothing {} // extent 0, align 1
+peripheral AROUND: Bank at 0x10000000;
+peripheral CALLED: Bank at 0x10001000;
+peripheral MINE: Bank at 0x10002000;
+peripheral OWNED: Bank at 0x10003000;
+peripheral FAULTY: Bank at 0x10004000;
+peripheral BETWEEN: Bank at 0x10005000;
+peripheral LENT: Bank at 0x10006000;
+peripheral CONSTED: Bank at 0x10007000;
+peripheral APART_THREAD: Bank at 0x10008000;
+peripheral APART_HANDLER: Bank at 0x10009000;
+peripheral WHOLE: Whole at 0x1000a000;
+peripheral LOW: Half at 0x1000a000;
+peripheral HIGH: Half at 0x1000a010;
+peripheral FULL: Whole at 0x1000b000;
+peripheral EMPTY: Nothing at 0x1000b008;
+
+fn called() -> () {
+    let _0: ();
+    let _1: *mut Bank;
+
+    bb0: {
+        _1 = const peripheral CALLED;
+        (*_1).0 = Add(copy (*_1).0, const 1_u32);
+        return;
+    }
+}
+
+fn lend(_1: &mut Bank) -> () {
+    let _0: ();
+    let _1: &mut Bank; // r
+
+    bb0: {
+        (*_1).0 = const 1_u32;
+        return;
+    }
+}
+
+fn through_pointers() -> () {
+    let _0: ();
+    let _1: *mut Bank; // cast
+    let _2: *mut Bank;
+    let _3: *mut Bank;
+
+    bb0: {
+        _2 = const 268464128_usize as *mut Bank;
+        (*_2).0 = const 1_u32;
+        _3 = const 1342177280_usize as *mut Bank;
+        _1 = copy _3;
+        (*_1).0 = const 2_u32;
+        return;
+    }
+}
+
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+    let _1: *mut Nothing; // empty
+    let _2: *mut Bank;
+    let _3: *mut Bank;
+    let _4: *mut Bank;
+    let _5: *mut Bank;
+    let _6: *mut Bank;
+    let _7: *mut Bank;
+    let _8: *mut Half;
+    let _9: *mut Nothing;
+
+    bb0: {
+        _2 = const peripheral AROUND;
+        (*_2).0 = const 0_u32;
+        _3 = const peripheral CALLED;
+        (*_3).0 = const 0_u32;
+        _4 = const peripheral LENT;
+        (*_4).0 = const 0_u32;
+        _5 = const peripheral BETWEEN;
+        (*_5).0 = Add(copy (*_5).0, const 1_u32);
+        _6 = const peripheral OWNED;
+        (*_6).0 = const 1_u32;
+        _7 = const peripheral APART_HANDLER;
+        (*_7).0 = const 1_u32;
+        _8 = const peripheral HIGH;
+        (*_8).0[0] = const 1_u32;
+        _9 = const peripheral EMPTY;
+        _1 = copy _9;
+        call through_pointers();
+        return;
+    }
+}
+
+interrupt fn soft() -> () at MachineSoftware {
+    let _0: ();
+    let _1: *mut Bank;
+
+    bb0: {
+        _1 = const peripheral BETWEEN;
+        (*_1).0 = Add(copy (*_1).0, const 2_u32);
+        return;
+    }
+}
+
+interrupt fn crash() -> ! at IllegalInstruction {
+    let _0: !;
+    let _1: *mut Bank;
+
+    bb0: {
+        _1 = const peripheral FAULTY;
+        (*_1).0 = const 1_u32;
+        call through_pointers();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: u32;
+    let _2: *mut Bank;
+    let _3: u32;
+    let _4: u32;
+    let _5: *mut Bank;
+    let _6: &mut Bank;
+    let _7: *mut Bank;
+    let _8: *mut Bank;
+    let _9: *mut Half;
+    let _10: *mut Whole;
+
+    bb0: {
+        critical_enter _1;
+        _2 = const peripheral AROUND;
+        (*_2).0 = Add(copy (*_2).0, const 1_u32);
+        critical_exit _1;
+        critical_enter _3;
+        call called();
+        critical_exit _3;
+        critical_enter _4;
+        _5 = const peripheral LENT;
+        _6 = &mut (*_5);
+        call lend(move _6);
+        critical_exit _4;
+        _7 = const peripheral MINE;
+        (*_7).0 = const 1_u32;
+        _8 = const peripheral APART_THREAD;
+        (*_8).0 = const 1_u32;
+        _9 = const peripheral LOW;
+        (*_9).0[0] = const 1_u32;
+        _10 = const peripheral FULL;
+        (*_10).0[0] = const 1_u32;
+        call through_pointers();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn FROM_CONST() -> *mut Bank {
+    let _0: *mut Bank;
+    let _1: *mut Bank;
+
+    bb0: {
+        _1 = const peripheral CONSTED;
+        _0 = copy _1;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

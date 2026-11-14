@@ -1,0 +1,38 @@
+// emit: mir
+// A statement that names a shared static and a shared peripheral (ADR 0093,
+// 0115) is one place for each: under rule 1, the entry function's
+// `DEVICE.data = COUNT` is an error under `analysis::unprotected-static` and
+// another under `analysis::unprotected-peripheral`; under rule 2, the same in
+// a fault handler against the thread, under `analysis::unmaskable-static` and
+// `analysis::unmaskable-peripheral`.
+use core::arch::Vector;
+
+peripheral Bank {
+    read write data: u32 at 0,
+}
+
+peripheral DEVICE: Bank at 0x1000_0000;
+peripheral FAULT_DEVICE: Bank at 0x1000_1000;
+
+static mut COUNT: u32 = 0;
+static mut FAULT_COUNT: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    DEVICE.data = COUNT;
+    COUNT += 1;
+}
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    FAULT_DEVICE.data = FAULT_COUNT;
+    loop {}
+}
+
+entry fn main() -> ! {
+    DEVICE.data = COUNT;
+    critical {
+        FAULT_DEVICE.data = FAULT_COUNT;
+    }
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

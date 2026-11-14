@@ -1,0 +1,135 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_unmaskable.ers
+---
+--- errors ---
+analysis::unmaskable-peripheral
+
+  × `FAULTS` is reached from the unmaskable handler `crash`, and the thread context reaches it too
+    ╭─[shared_peripheral_unmaskable.ers:24:5]
+ 23 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 24 │     FAULTS.a += 1;
+    ·     ──────┬──────
+    ·           ╰── reached here; `critical` does not stop this handler
+ 25 │     SHARED.a += 1;
+ 26 │     loop {}
+ 27 │ }
+ 28 │ 
+ 29 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 30 │     SHARED.b += 1;
+ 31 │     loop {}
+ 32 │ }
+ 33 │ 
+ 34 │ interrupt fn divide() -> ! at Vector::LoadFault {
+ 35 │     let x: u32 = 1 / ZERO;
+ 36 │     loop {}
+ 37 │ }
+ 38 │ 
+ 39 │ interrupt fn alias() -> ! at Vector::StoreFault {
+ 40 │     DEVICE_VIEW.a = 1;
+ 41 │     loop {}
+ 42 │ }
+ 43 │ 
+ 44 │ entry fn main() -> ! {
+ 45 │     let seen: u32 = critical { FAULTS.a };
+    ·                                ────┬───
+    ·                                    ╰── the thread context reaches it here
+ 46 │     let written: u32 = PANICKED.a;
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`
+analysis::unmaskable-peripheral
+
+  × `SHARED` is reached from the unmaskable handler `crash`, and the unmaskable handler `fetch`
+  │ reaches it too
+    ╭─[shared_peripheral_unmaskable.ers:25:5]
+ 24 │     FAULTS.a += 1;
+ 25 │     SHARED.a += 1;
+    ·     ──────┬──────
+    ·           ╰── reached here; `critical` does not stop this handler
+ 26 │     loop {}
+ 27 │ }
+ 28 │ 
+ 29 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 30 │     SHARED.b += 1;
+    ·     ──────┬──────
+    ·           ╰── the unmaskable handler `fetch` reaches it here
+ 31 │     loop {}
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`
+analysis::unmaskable-peripheral
+
+  × `SHARED` is reached from the unmaskable handler `fetch`, and the unmaskable handler `crash`
+  │ reaches it too
+    ╭─[shared_peripheral_unmaskable.ers:30:5]
+ 24 │     FAULTS.a += 1;
+ 25 │     SHARED.a += 1;
+    ·     ──────┬──────
+    ·           ╰── the unmaskable handler `crash` reaches it here
+ 26 │     loop {}
+ 27 │ }
+ 28 │ 
+ 29 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 30 │     SHARED.b += 1;
+    ·     ──────┬──────
+    ·           ╰── reached here; `critical` does not stop this handler
+ 31 │     loop {}
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`
+analysis::unmaskable-peripheral
+
+  × `DEVICE_VIEW` is reached from the unmaskable handler `alias`, and the thread context reaches
+  │ `DEVICE`, whose bytes meet it
+    ╭─[shared_peripheral_unmaskable.ers:40:5]
+ 39 │ interrupt fn alias() -> ! at Vector::StoreFault {
+ 40 │     DEVICE_VIEW.a = 1;
+    ·     ────────┬────────
+    ·             ╰── reached here; `critical` does not stop this handler
+ 41 │     loop {}
+ 42 │ }
+ 43 │ 
+ 44 │ entry fn main() -> ! {
+ 45 │     let seen: u32 = critical { FAULTS.a };
+ 46 │     let written: u32 = PANICKED.a;
+ 47 │     critical {
+ 48 │         DEVICE.b = 2;
+    ·         ──────┬─────
+    ·               ╰── the thread context reaches `DEVICE` here, whose bytes meet `DEVICE_VIEW`'s
+ 49 │     }
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`
+analysis::unmaskable-peripheral
+
+  × `PANICKED` is reached from the unmaskable handler `divide`, and the thread context reaches it
+  │ too
+    ╭─[shared_peripheral_unmaskable.ers:54:5]
+ 34 │ interrupt fn divide() -> ! at Vector::LoadFault {
+ 35 │     let x: u32 = 1 / ZERO;
+    ·                  ────┬───
+    ·                      ╰── this check may call the panic function
+ 36 │     loop {}
+ 37 │ }
+ 38 │ 
+ 39 │ interrupt fn alias() -> ! at Vector::StoreFault {
+ 40 │     DEVICE_VIEW.a = 1;
+ 41 │     loop {}
+ 42 │ }
+ 43 │ 
+ 44 │ entry fn main() -> ! {
+ 45 │     let seen: u32 = critical { FAULTS.a };
+ 46 │     let written: u32 = PANICKED.a;
+    ·                        ─────┬────
+    ·                             ╰── the thread context reaches it here
+ 47 │     critical {
+ 48 │         DEVICE.b = 2;
+ 49 │     }
+ 50 │     loop {}
+ 51 │ }
+ 52 │ 
+ 53 │ panic fn on_panic() -> ! {
+ 54 │     PANICKED.b = 1;
+    ·     ───────┬──────
+    ·            ╰── reached here; `critical` does not stop this handler
+ 55 │     loop {}
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`

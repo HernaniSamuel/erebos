@@ -1,0 +1,56 @@
+// emit: mir
+// Rule 2 of ADR 0115, on riscv32: a fault handler and the thread, the
+// thread's access inside `critical` (no mask stops a fault handler); two
+// unmaskable handlers, both reported; a fault handler with a check, and a
+// panic function that writes a peripheral the thread writes (the path ends at
+// the panic function); a fault handler naming a peripheral `over` the one the
+// thread names, the title and the label naming the other.
+use core::arch::Vector;
+
+peripheral Bank {
+    read write a: u32 at 0,
+    read write b: u32 at 4,
+}
+
+peripheral FAULTS: Bank at 0x1000_0000;
+peripheral SHARED: Bank at 0x1000_1000;
+peripheral PANICKED: Bank at 0x1000_2000;
+peripheral DEVICE: Bank at 0x1000_3000;
+peripheral DEVICE_VIEW: Bank at 0x1000_3000 over DEVICE;
+
+static ZERO: u32 = 0;
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    FAULTS.a += 1;
+    SHARED.a += 1;
+    loop {}
+}
+
+interrupt fn fetch() -> ! at Vector::InstructionFault {
+    SHARED.b += 1;
+    loop {}
+}
+
+interrupt fn divide() -> ! at Vector::LoadFault {
+    let x: u32 = 1 / ZERO;
+    loop {}
+}
+
+interrupt fn alias() -> ! at Vector::StoreFault {
+    DEVICE_VIEW.a = 1;
+    loop {}
+}
+
+entry fn main() -> ! {
+    let seen: u32 = critical { FAULTS.a };
+    let written: u32 = PANICKED.a;
+    critical {
+        DEVICE.b = 2;
+    }
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    PANICKED.b = 1;
+    loop {}
+}

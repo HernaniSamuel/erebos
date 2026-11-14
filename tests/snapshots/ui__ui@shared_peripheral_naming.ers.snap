@@ -1,0 +1,503 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_naming.ers
+---
+--- errors ---
+analysis::unprotected-peripheral
+
+  × `CALLED` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:68:5]
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+    ·     ───────┬───────
+    ·            ╰── the handler `tick` reaches it here
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+    ·     ───────┬───────
+    ·            ╰── reached here, outside `critical`
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+ 81 │     let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+ 82 │     METHOD.restart();
+ 83 │     let address: *mut Device = &raw mut ADDRESS;
+ 84 │     let part: *mut Context = &raw mut CLUSTER_ADDRESS.first;
+ 85 │     callee();
+    ·     ────┬───
+    ·         ╰── called here, outside `critical`
+ 86 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `READ` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:72:22]
+ 50 │ interrupt fn tick() at Vector::MachineTimer {
+ 51 │     READ.data = 1;
+    ·     ──────┬──────
+    ·           ╰── the handler `tick` reaches it here
+ 52 │     WRITE.data = 1;
+ 53 │     COMPOUND.data = 1;
+ 54 │     FIELD.data = 1;
+ 55 │     ELEMENT.data = 1;
+ 56 │     CLUSTER.data = 1;
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+    ·                      ────┬────
+    ·                          ╰── reached here, outside `critical`
+ 73 │     WRITE.data = value;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `WRITE` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:73:5]
+ 51 │     READ.data = 1;
+ 52 │     WRITE.data = 1;
+    ·     ───────┬──────
+    ·            ╰── the handler `tick` reaches it here
+ 53 │     COMPOUND.data = 1;
+ 54 │     FIELD.data = 1;
+ 55 │     ELEMENT.data = 1;
+ 56 │     CLUSTER.data = 1;
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+    ·     ─────────┬────────
+    ·              ╰── reached here, outside `critical`
+ 74 │     COMPOUND.data += 1;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `COMPOUND` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:74:5]
+ 52 │     WRITE.data = 1;
+ 53 │     COMPOUND.data = 1;
+    ·     ────────┬────────
+    ·             ╰── the handler `tick` reaches it here
+ 54 │     FIELD.data = 1;
+ 55 │     ELEMENT.data = 1;
+ 56 │     CLUSTER.data = 1;
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+    ·     ─────────┬────────
+    ·              ╰── reached here, outside `critical`
+ 75 │     FIELD.control.enable = true;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `FIELD` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:75:5]
+ 53 │     COMPOUND.data = 1;
+ 54 │     FIELD.data = 1;
+    ·     ───────┬──────
+    ·            ╰── the handler `tick` reaches it here
+ 55 │     ELEMENT.data = 1;
+ 56 │     CLUSTER.data = 1;
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+    ·     ─────────────┬─────────────
+    ·                  ╰── reached here, outside `critical`
+ 76 │     ELEMENT.words[1] = 2;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `ELEMENT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:76:5]
+ 54 │     FIELD.data = 1;
+ 55 │     ELEMENT.data = 1;
+    ·     ────────┬───────
+    ·             ╰── the handler `tick` reaches it here
+ 56 │     CLUSTER.data = 1;
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+    ·     ──────────┬─────────
+    ·               ╰── reached here, outside `critical`
+ 77 │     CLUSTER.first.threshold = 3;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `CLUSTER` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:77:5]
+ 55 │     ELEMENT.data = 1;
+ 56 │     CLUSTER.data = 1;
+    ·     ────────┬───────
+    ·             ╰── the handler `tick` reaches it here
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+    ·     ─────────────┬─────────────
+    ·                  ╰── reached here, outside `critical`
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `CLUSTER_ELEMENT` is reached outside `critical` in the thread context, and a handler reaches
+  │ it too
+    ╭─[shared_peripheral_naming.ers:78:24]
+ 56 │     CLUSTER.data = 1;
+ 57 │     CLUSTER_ELEMENT.data = 1;
+    ·     ────────────┬───────────
+    ·                 ╰── the handler `tick` reaches it here
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+    ·                        ──────────────┬─────────────
+    ·                                      ╰── reached here, outside `critical`
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `SHARED_REFERENCE` is reached outside `critical` in the thread context, and a handler reaches
+  │ it too
+    ╭─[shared_peripheral_naming.ers:79:27]
+ 57 │     CLUSTER_ELEMENT.data = 1;
+ 58 │     SHARED_REFERENCE.data = 1;
+    ·     ────────────┬────────────
+    ·                 ╰── the handler `tick` reaches it here
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+    ·                           ────────┬────────
+    ·                                   ╰── reached here, outside `critical`
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `MUTABLE_REFERENCE` is reached outside `critical` in the thread context, and a handler reaches
+  │ it too
+    ╭─[shared_peripheral_naming.ers:80:32]
+ 58 │     SHARED_REFERENCE.data = 1;
+ 59 │     MUTABLE_REFERENCE.data = 1;
+    ·     ─────────────┬────────────
+    ·                  ╰── the handler `tick` reaches it here
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+    ·                                ───────────┬──────────
+    ·                                           ╰── reached here, outside `critical`
+ 81 │     let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `CLUSTER_REFERENCE` is reached outside `critical` in the thread context, and a handler reaches
+  │ it too
+    ╭─[shared_peripheral_naming.ers:81:33]
+ 59 │     MUTABLE_REFERENCE.data = 1;
+ 60 │     CLUSTER_REFERENCE.data = 1;
+    ·     ─────────────┬────────────
+    ·                  ╰── the handler `tick` reaches it here
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+ 81 │     let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+    ·                                 ──────────────┬─────────────
+    ·                                               ╰── reached here, outside `critical`
+ 82 │     METHOD.restart();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `METHOD` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:82:5]
+ 60 │     CLUSTER_REFERENCE.data = 1;
+ 61 │     METHOD.data = 1;
+    ·     ───────┬───────
+    ·            ╰── the handler `tick` reaches it here
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+ 81 │     let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+ 82 │     METHOD.restart();
+    ·     ───┬──
+    ·        ╰── reached here, outside `critical`
+ 83 │     let address: *mut Device = &raw mut ADDRESS;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `ADDRESS` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_naming.ers:83:32]
+ 61 │     METHOD.data = 1;
+ 62 │     ADDRESS.data = 1;
+    ·     ────────┬───────
+    ·             ╰── the handler `tick` reaches it here
+ 63 │     CLUSTER_ADDRESS.data = 1;
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+ 81 │     let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+ 82 │     METHOD.restart();
+ 83 │     let address: *mut Device = &raw mut ADDRESS;
+    ·                                ────────┬───────
+    ·                                        ╰── reached here, outside `critical`
+ 84 │     let part: *mut Context = &raw mut CLUSTER_ADDRESS.first;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `CLUSTER_ADDRESS` is reached outside `critical` in the thread context, and a handler reaches
+  │ it too
+    ╭─[shared_peripheral_naming.ers:84:30]
+ 62 │     ADDRESS.data = 1;
+ 63 │     CLUSTER_ADDRESS.data = 1;
+    ·     ────────────┬───────────
+    ·                 ╰── the handler `tick` reaches it here
+ 64 │     CALLED.data = 1;
+ 65 │ }
+ 66 │ 
+ 67 │ fn callee() {
+ 68 │     CALLED.data = 2;
+ 69 │ }
+ 70 │ 
+ 71 │ entry fn main() -> ! {
+ 72 │     let value: u32 = READ.data;
+ 73 │     WRITE.data = value;
+ 74 │     COMPOUND.data += 1;
+ 75 │     FIELD.control.enable = true;
+ 76 │     ELEMENT.words[1] = 2;
+ 77 │     CLUSTER.first.threshold = 3;
+ 78 │     let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+ 79 │     let shared: &Device = &SHARED_REFERENCE;
+ 80 │     let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+ 81 │     let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+ 82 │     METHOD.restart();
+ 83 │     let address: *mut Device = &raw mut ADDRESS;
+ 84 │     let part: *mut Context = &raw mut CLUSTER_ADDRESS.first;
+    ·                              ───────────────┬──────────────
+    ·                                             ╰── reached here, outside `critical`
+ 85 │     callee();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context

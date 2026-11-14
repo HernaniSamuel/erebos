@@ -1,0 +1,43 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_opt.ers
+---
+--- errors ---
+analysis::unprotected-peripheral
+
+  × `DEVICE` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_opt.ers:18:5]
+ 13 │ interrupt fn tick() at Vector::MachineTimer {
+ 14 │     DEVICE.data += 1;
+    ·     ────────┬───────
+    ·             ╰── the handler `tick` reaches it here
+ 15 │ }
+ 16 │ 
+ 17 │ entry fn main() -> ! {
+ 18 │     DEVICE.data = 0;
+    ·     ───────┬───────
+    ·            ╰── reached here, outside `critical`
+ 19 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+--- errors -O ---
+analysis::unprotected-peripheral
+
+  × `DEVICE` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_opt.ers:18:5]
+ 13 │ interrupt fn tick() at Vector::MachineTimer {
+ 14 │     DEVICE.data += 1;
+    ·     ────────┬───────
+    ·             ╰── the handler `tick` reaches it here
+ 15 │ }
+ 16 │ 
+ 17 │ entry fn main() -> ! {
+ 18 │     DEVICE.data = 0;
+    ·     ───────┬───────
+    ·            ╰── reached here, outside `critical`
+ 19 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context

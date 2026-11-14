@@ -1,0 +1,56 @@
+// emit: mir
+// Peripherals whose bytes meet are one device (ADR 0115, 0066). A peripheral
+// `over` another, the thread naming one and the handler the other, both ways:
+// the title and the label name the other peripheral. `TWIN`'s view is the first
+// place of the handler, before `TWIN` itself: the title says the handler
+// reaches `TWIN` (it does), and the label names the view. A device `WHOLE`
+// with `LOW` and `HIGH` over its halves, the thread naming `WHOLE` and `LOW`
+// and the handler `HIGH`: the thread's places of `WHOLE` are errors, those of
+// `LOW` are not, since `LOW` and `HIGH` share no byte (the relation is not
+// closed transitively).
+use core::arch::Vector;
+
+peripheral Bank {
+    read write a: u32 at 0,
+    read write b: u32 at 4,
+}
+
+peripheral Whole {
+    read write words: [u32; 8] at 0 step 4,
+}
+
+peripheral Half {
+    read write words: [u32; 4] at 0 step 4,
+}
+
+peripheral DATA: Bank at 0x1000_0000;
+peripheral VIEW: Bank at 0x1000_0000 over DATA;
+
+peripheral PORT: Bank at 0x1000_1000;
+peripheral PORT_VIEW: Bank at 0x1000_1000 over PORT;
+
+peripheral TWIN: Bank at 0x1000_2000;
+peripheral TWIN_VIEW: Bank at 0x1000_2000 over TWIN;
+
+peripheral WHOLE: Whole at 0x1000_3000;
+peripheral LOW: Half at 0x1000_3000 over WHOLE;
+peripheral HIGH: Half at 0x1000_3010 over WHOLE;
+
+interrupt fn tick() at Vector::MachineTimer {
+    VIEW.a = 1;
+    PORT.a = 1;
+    TWIN_VIEW.a = 1;
+    TWIN.a = 1;
+    HIGH.words[0] = 1;
+}
+
+entry fn main() -> ! {
+    DATA.a = 2;
+    PORT_VIEW.a = 2;
+    TWIN.b = 2;
+    WHOLE.words[0] = 2;
+    LOW.words[0] = 2;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

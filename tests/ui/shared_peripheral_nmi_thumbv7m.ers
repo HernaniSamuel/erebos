@@ -1,0 +1,31 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// Nothing protects a peripheral from an unmaskable handler (ADR 0084, 0115):
+// the thread's access inside `critical` is still an error, and it is the
+// thread's place that the other label shows. The NMI and the SVCall handler
+// each have a peripheral of their own with the thread; the entry function's
+// reads are in `critical`, which a maskable handler would have accepted.
+use core::arch::Vector;
+
+peripheral Bank {
+    read write a: u32 at 0,
+}
+
+peripheral RUNS: Bank at 0x4000_0000;
+peripheral CALLS: Bank at 0x4000_1000;
+
+interrupt fn nonmaskable() at Vector::NMI {
+    RUNS.a += 1;
+}
+
+interrupt fn service() at Vector::SVCall {
+    CALLS.a += 1;
+}
+
+entry fn main() -> ! {
+    let runs: u32 = critical { RUNS.a };
+    let calls: u32 = critical { CALLS.a };
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

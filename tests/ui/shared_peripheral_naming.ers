@@ -1,0 +1,89 @@
+// emit: mir
+// The ways to name a peripheral (ADR 0115), each in the entry function and one
+// in a function it calls, outside `critical`: a register read, written and
+// compound assigned; a field of a register; an element of a register array; a
+// register of a cluster and of an element of a cluster array; `&P`, `&mut P`
+// and `&mut P.c`; a method called on `P`; `&raw` of `P` and of a cluster. The
+// handler names every peripheral too, so each place of the thread context is
+// an error, and the callee's carries the path.
+use core::arch::Vector;
+
+struct Control: u8 {
+    pub enable: bool at 0 = false,
+    pub mode: u8 at 1..=2 = 0,
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+    read claim: u32 at 4,
+}
+
+peripheral Device {
+    read write data: u32 at 0,
+    read write control: Control at 4,
+    read write words: [u16; 4] at 0x10 step 2,
+    first: Context at 0x100,
+    ctx: [Context; 2] at 0x200 step 0x10,
+}
+
+impl Device {
+    fn restart(&mut self) {
+        (*self).data = 0;
+    }
+}
+
+peripheral READ: Device at 0x1000_0000;
+peripheral WRITE: Device at 0x1000_1000;
+peripheral COMPOUND: Device at 0x1000_2000;
+peripheral FIELD: Device at 0x1000_3000;
+peripheral ELEMENT: Device at 0x1000_4000;
+peripheral CLUSTER: Device at 0x1000_5000;
+peripheral CLUSTER_ELEMENT: Device at 0x1000_6000;
+peripheral SHARED_REFERENCE: Device at 0x1000_7000;
+peripheral MUTABLE_REFERENCE: Device at 0x1000_8000;
+peripheral CLUSTER_REFERENCE: Device at 0x1000_9000;
+peripheral METHOD: Device at 0x1000_a000;
+peripheral ADDRESS: Device at 0x1000_b000;
+peripheral CLUSTER_ADDRESS: Device at 0x1000_c000;
+peripheral CALLED: Device at 0x1000_d000;
+
+interrupt fn tick() at Vector::MachineTimer {
+    READ.data = 1;
+    WRITE.data = 1;
+    COMPOUND.data = 1;
+    FIELD.data = 1;
+    ELEMENT.data = 1;
+    CLUSTER.data = 1;
+    CLUSTER_ELEMENT.data = 1;
+    SHARED_REFERENCE.data = 1;
+    MUTABLE_REFERENCE.data = 1;
+    CLUSTER_REFERENCE.data = 1;
+    METHOD.data = 1;
+    ADDRESS.data = 1;
+    CLUSTER_ADDRESS.data = 1;
+    CALLED.data = 1;
+}
+
+fn callee() {
+    CALLED.data = 2;
+}
+
+entry fn main() -> ! {
+    let value: u32 = READ.data;
+    WRITE.data = value;
+    COMPOUND.data += 1;
+    FIELD.control.enable = true;
+    ELEMENT.words[1] = 2;
+    CLUSTER.first.threshold = 3;
+    let claimed: u32 = CLUSTER_ELEMENT.ctx[1].claim;
+    let shared: &Device = &SHARED_REFERENCE;
+    let mutable: &mut Device = &mut MUTABLE_REFERENCE;
+    let cluster: &mut Context = &mut CLUSTER_REFERENCE.first;
+    METHOD.restart();
+    let address: *mut Device = &raw mut ADDRESS;
+    let part: *mut Context = &raw mut CLUSTER_ADDRESS.first;
+    callee();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

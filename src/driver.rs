@@ -898,7 +898,8 @@ mod tests {
 
     // ADR 0093, "What is a call": the calls code generation and LLVM insert
     // are not in MIR, and the check does not see them. That holds while the
-    // functions they reach name no `static mut` and have no check. The walk
+    // functions they reach name no `static mut` and no peripheral (ADR 0115)
+    // and have no check. The walk
     // below is the test's own, not `analysis`'s: it follows `sym` operands,
     // which the check does not, and it reads every block, reachable or not.
 
@@ -920,16 +921,19 @@ mod tests {
         }
     }
 
-    /// What a walk found: the bodies that hold a check (`Terminator::Panic`)
-    /// and the `static mut` they or others name, as `body: static`.
+    /// What a walk found: the bodies that hold a check (`Terminator::Panic`),
+    /// the `static mut` they or others name, as `body: static`, and the
+    /// peripherals, as `body: peripheral`.
     #[derive(Debug, Default, PartialEq)]
     struct Found {
         checks: Vec<String>,
         statics: Vec<String>,
+        peripherals: Vec<String>,
     }
 
-    /// The `static mut`s a body names, by operand or by `sym`, and whether it
-    /// holds a check; the bodies it calls or gives a `sym` to.
+    /// The `static mut`s and peripherals a body names, by operand or by `sym`
+    /// (a peripheral has no symbol), and whether it holds a check; the bodies
+    /// it calls or gives a `sym` to.
     fn read_body(body: &mir::Body, found: &mut Found, next: &mut Vec<mir::BodyId>) {
         let mut note = |stat: mir::StaticRef| {
             if stat.def().mutable {
@@ -938,25 +942,32 @@ mod tests {
                     .push(format!("{}: {}", body.name, stat.def().name));
             }
         };
+        let mut peripherals = Vec::new();
         let mut checks = false;
         for (_, block) in body.blocks() {
             let mut asms = Vec::new();
             for statement in &block.statements {
-                statement.visit_operands(&mut |operand| {
-                    if let mir::Operand::Const(mir::Const::Static(stat)) = operand {
-                        note(*stat);
+                statement.visit_operands(&mut |operand| match operand {
+                    mir::Operand::Const(mir::Const::Static(stat)) => note(*stat),
+                    mir::Operand::Const(mir::Const::Peripheral(p)) => {
+                        peripherals.push(format!("{}: {}", body.name, p.def().name));
                     }
+                    _ => {}
                 });
                 if let mir::Statement::Call { callee, .. } = statement {
                     next.push(*callee);
                 }
                 asms.extend(statement.asm());
             }
-            block.terminator.visit_operands(&mut |operand| {
-                if let mir::Operand::Const(mir::Const::Static(stat)) = operand {
-                    note(*stat);
-                }
-            });
+            block
+                .terminator
+                .visit_operands(&mut |operand| match operand {
+                    mir::Operand::Const(mir::Const::Static(stat)) => note(*stat),
+                    mir::Operand::Const(mir::Const::Peripheral(p)) => {
+                        peripherals.push(format!("{}: {}", body.name, p.def().name));
+                    }
+                    _ => {}
+                });
             asms.extend(block.terminator.asm());
             checks |= matches!(block.terminator, mir::Terminator::Panic(..));
             for asm in asms {
@@ -968,6 +979,7 @@ mod tests {
                 }
             }
         }
+        found.peripherals.extend(peripherals);
         if checks {
             found.checks.push(body.name.clone());
         }
@@ -986,6 +998,7 @@ mod tests {
         }
         found.checks.sort();
         found.statics.sort();
+        found.peripherals.sort();
         found
     }
 
@@ -1007,11 +1020,12 @@ mod tests {
 
     const BOTH_TARGETS: [&Target; 2] = [&target::RISCV32IMAC, &target::THUMBV7M];
 
-    /// The calls the compiler inserts reach no check and no `static mut`, on
-    /// both targets. A later change to `core` that gives one a check fails
-    /// here, and must then add the edge to the check (ADR 0093).
+    /// The calls the compiler inserts reach no check, no `static mut` and no
+    /// peripheral, on both targets. A later change to `core` that gives one a
+    /// check fails here, and must then add the edge to the check (ADR 0093); one
+    /// that declares a peripheral, or names one, fails here too (ADR 0115).
     #[test]
-    fn inserted_calls_reach_no_static_and_no_check() {
+    fn inserted_calls_reach_no_static_no_peripheral_and_no_check() {
         for target in BOTH_TARGETS {
             let mir = whole_mir(target, BARE);
             let roots = inserted_roots(&mir);
@@ -1050,14 +1064,17 @@ mod tests {
     }
 
     /// The walk can fail: from roots the program declares, it finds a check
-    /// in a function that has one, and a `static mut` in another, through
-    /// a call and through a `sym`.
+    /// in a function that has one, a `static mut` in another and a peripheral
+    /// in a third, through a call and through a `sym`.
     #[test]
-    fn the_walk_finds_a_check_and_a_static() {
+    fn the_walk_finds_a_check_a_static_and_a_peripheral() {
         let text = "
+            peripheral Device { read write ctrl: u32 at 0, }
+            peripheral DEVICE: Device at 0x1000_0000;
             static mut COUNT: u32 = 0;
             fn checked(a: u32, d: u32) -> u32 { a / d }
             fn writes() { COUNT = 1; }
+            fn drives() { DEVICE.ctrl = 1; }
             fn through_call() { writes(); }
             #[naked]
             fn through_sym() -> ! {
@@ -1079,18 +1096,27 @@ mod tests {
                 walk(&mir, &root("checked")),
                 Found {
                     checks: vec!["checked".to_owned()],
-                    statics: Vec::new()
+                    ..Found::default()
                 },
                 "{}",
                 at("checked")
             );
             let writes = Found {
-                checks: Vec::new(),
                 statics: vec!["writes: COUNT".to_owned()],
+                ..Found::default()
             };
             for name in ["writes", "through_call", "through_sym"] {
                 assert_eq!(walk(&mir, &root(name)), writes, "{}", at(name));
             }
+            assert_eq!(
+                walk(&mir, &root("drives")),
+                Found {
+                    peripherals: vec!["drives: DEVICE".to_owned()],
+                    ..Found::default()
+                },
+                "{}",
+                at("drives")
+            );
             assert_eq!(
                 walk(&mir, &root("quiet")),
                 Found::default(),
@@ -1101,14 +1127,18 @@ mod tests {
     }
 
     /// `Mir::reset` leads into the program through `sym entry`, so a walk
-    /// from it reaches the program's statics; its own body names none, as
-    /// "Contexts, as MIR shows them" relies on.
+    /// from it reaches the program's statics; its own body names none, nor
+    /// a peripheral, as "Contexts, as MIR shows them" relies on.
     #[test]
-    fn reset_names_no_static_mut() {
+    fn reset_names_no_static_mut_and_no_peripheral() {
         for target in BOTH_TARGETS {
             let mir = whole_mir(
                 target,
-                "static mut COUNT: u32 = 0; entry fn main() -> ! { COUNT = 1; loop {} } panic fn on_panic() -> ! { loop {} }",
+                "peripheral Device { read write ctrl: u32 at 0, } \
+                 peripheral DEVICE: Device at 0x1000_0000; \
+                 static mut COUNT: u32 = 0; \
+                 entry fn main() -> ! { COUNT = 1; DEVICE.ctrl = 1; loop {} } \
+                 panic fn on_panic() -> ! { loop {} }",
             );
             let reset = mir.reset.expect("core holds `_start`");
             let mut found = Found::default();
@@ -1117,12 +1147,9 @@ mod tests {
             assert_eq!(found, Found::default(), "{}", target.name);
             assert!(!next.is_empty(), "{}: `_start` leads nowhere", target.name);
             // The walk would find the program's static through it.
-            assert_eq!(
-                walk(&mir, &[reset]).statics,
-                ["main: COUNT"],
-                "{}",
-                target.name
-            );
+            let walked = walk(&mir, &[reset]);
+            assert_eq!(walked.statics, ["main: COUNT"], "{}", target.name);
+            assert_eq!(walked.peripherals, ["main: DEVICE"], "{}", target.name);
         }
     }
 }

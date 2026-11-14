@@ -1,0 +1,47 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_nmi_thumbv7m.ers
+---
+--- errors ---
+analysis::unmaskable-peripheral
+
+  × `RUNS` is reached from the unmaskable handler `nonmaskable`, and the thread context reaches it
+  │ too
+    ╭─[shared_peripheral_nmi_thumbv7m.ers:18:5]
+ 17 │ interrupt fn nonmaskable() at Vector::NMI {
+ 18 │     RUNS.a += 1;
+    ·     ─────┬─────
+    ·          ╰── reached here; `critical` does not stop this handler
+ 19 │ }
+ 20 │ 
+ 21 │ interrupt fn service() at Vector::SVCall {
+ 22 │     CALLS.a += 1;
+ 23 │ }
+ 24 │ 
+ 25 │ entry fn main() -> ! {
+ 26 │     let runs: u32 = critical { RUNS.a };
+    ·                                ───┬──
+    ·                                   ╰── the thread context reaches it here
+ 27 │     let calls: u32 = critical { CALLS.a };
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`
+analysis::unmaskable-peripheral
+
+  × `CALLS` is reached from the unmaskable handler `service`, and the thread context reaches it
+  │ too
+    ╭─[shared_peripheral_nmi_thumbv7m.ers:22:5]
+ 21 │ interrupt fn service() at Vector::SVCall {
+ 22 │     CALLS.a += 1;
+    ·     ──────┬─────
+    ·           ╰── reached here; `critical` does not stop this handler
+ 23 │ }
+ 24 │ 
+ 25 │ entry fn main() -> ! {
+ 26 │     let runs: u32 = critical { RUNS.a };
+ 27 │     let calls: u32 = critical { CALLS.a };
+    ·                                 ───┬───
+    ·                                    ╰── the thread context reaches it here
+ 28 │     loop {}
+    ╰────
+  help: leave the device to this handler, or reach it through a pointer from a `const`

@@ -1,0 +1,96 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_over.ers
+---
+--- errors ---
+analysis::unprotected-peripheral
+
+  × `DATA` is reached outside `critical` in the thread context, and a handler reaches `VIEW`,
+  │ whose bytes meet it
+    ╭─[shared_peripheral_over.ers:48:5]
+ 39 │ interrupt fn tick() at Vector::MachineTimer {
+ 40 │     VIEW.a = 1;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches `VIEW` here, whose bytes meet `DATA`'s
+ 41 │     PORT.a = 1;
+ 42 │     TWIN_VIEW.a = 1;
+ 43 │     TWIN.a = 1;
+ 44 │     HIGH.words[0] = 1;
+ 45 │ }
+ 46 │ 
+ 47 │ entry fn main() -> ! {
+ 48 │     DATA.a = 2;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`
+ 49 │     PORT_VIEW.a = 2;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `PORT_VIEW` is reached outside `critical` in the thread context, and a handler reaches `PORT`,
+  │ whose bytes meet it
+    ╭─[shared_peripheral_over.ers:49:5]
+ 40 │     VIEW.a = 1;
+ 41 │     PORT.a = 1;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches `PORT` here, whose bytes meet `PORT_VIEW`'s
+ 42 │     TWIN_VIEW.a = 1;
+ 43 │     TWIN.a = 1;
+ 44 │     HIGH.words[0] = 1;
+ 45 │ }
+ 46 │ 
+ 47 │ entry fn main() -> ! {
+ 48 │     DATA.a = 2;
+ 49 │     PORT_VIEW.a = 2;
+    ·     ───────┬───────
+    ·            ╰── reached here, outside `critical`
+ 50 │     TWIN.b = 2;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `TWIN` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_over.ers:50:5]
+ 41 │     PORT.a = 1;
+ 42 │     TWIN_VIEW.a = 1;
+    ·     ───────┬───────
+    ·            ╰── the handler `tick` reaches `TWIN_VIEW` here, whose bytes meet `TWIN`'s
+ 43 │     TWIN.a = 1;
+ 44 │     HIGH.words[0] = 1;
+ 45 │ }
+ 46 │ 
+ 47 │ entry fn main() -> ! {
+ 48 │     DATA.a = 2;
+ 49 │     PORT_VIEW.a = 2;
+ 50 │     TWIN.b = 2;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`
+ 51 │     WHOLE.words[0] = 2;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+analysis::unprotected-peripheral
+
+  × `WHOLE` is reached outside `critical` in the thread context, and a handler reaches `HIGH`,
+  │ whose bytes meet it
+    ╭─[shared_peripheral_over.ers:51:5]
+ 43 │     TWIN.a = 1;
+ 44 │     HIGH.words[0] = 1;
+    ·     ────────┬────────
+    ·             ╰── the handler `tick` reaches `HIGH` here, whose bytes meet `WHOLE`'s
+ 45 │ }
+ 46 │ 
+ 47 │ entry fn main() -> ! {
+ 48 │     DATA.a = 2;
+ 49 │     PORT_VIEW.a = 2;
+ 50 │     TWIN.b = 2;
+ 51 │     WHOLE.words[0] = 2;
+    ·     ─────────┬────────
+    ·              ╰── reached here, outside `critical`
+ 52 │     LOW.words[0] = 2;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context

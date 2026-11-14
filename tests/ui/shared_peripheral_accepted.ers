@@ -1,0 +1,101 @@
+// emit: mir
+// What the rule accepts for peripherals (ADR 0115); the dump shows the program
+// passed. The thread's accesses inside `critical`, directly (`AROUND`) and
+// through a call (`CALLED`); a peripheral the thread reaches only (`MINE`), one
+// the handler context reaches only (`OWNED`), one an unmaskable handler reaches
+// only (`FAULTY`); two maskable handlers sharing one (`BETWEEN`); a reference
+// to a peripheral taken inside `critical` and lent to a function that names
+// none (`LENT`); a pointer from a `const` and one cast from an integer, used in
+// every context; two peripherals that do not meet, one per context; `LOW` and
+// `HIGH` over the halves of `WHOLE`, `LOW` in the thread and `HIGH` in a
+// handler, `WHOLE` named by neither; a peripheral of extent 0 inside the range
+// of another, one per context (`EMPTY` and `FULL`).
+use core::arch::Vector;
+
+peripheral Bank {
+    read write data: u32 at 0,
+}
+
+peripheral Whole {
+    read write words: [u32; 8] at 0 step 4,
+}
+
+peripheral Half {
+    read write words: [u32; 4] at 0 step 4,
+}
+
+peripheral Nothing {}
+
+peripheral AROUND: Bank at 0x1000_0000;
+peripheral CALLED: Bank at 0x1000_1000;
+peripheral MINE: Bank at 0x1000_2000;
+peripheral OWNED: Bank at 0x1000_3000;
+peripheral FAULTY: Bank at 0x1000_4000;
+peripheral BETWEEN: Bank at 0x1000_5000;
+peripheral LENT: Bank at 0x1000_6000;
+peripheral CONSTED: Bank at 0x1000_7000;
+peripheral APART_THREAD: Bank at 0x1000_8000;
+peripheral APART_HANDLER: Bank at 0x1000_9000;
+peripheral WHOLE: Whole at 0x1000_a000;
+peripheral LOW: Half at 0x1000_a000 over WHOLE;
+peripheral HIGH: Half at 0x1000_a010 over WHOLE;
+peripheral FULL: Whole at 0x1000_b000;
+peripheral EMPTY: Nothing at 0x1000_b008 over FULL;
+
+const FROM_CONST: *mut Bank = &raw mut CONSTED;
+
+fn called() {
+    CALLED.data += 1;
+}
+
+fn lend(r: &mut Bank) {
+    (*r).data = 1;
+}
+
+fn through_pointers() {
+    (*FROM_CONST).data = 1;
+    let cast: *mut Bank = 0x5000_0000 as *mut Bank;
+    (*cast).data = 2;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    AROUND.data = 0;
+    CALLED.data = 0;
+    LENT.data = 0;
+    BETWEEN.data += 1;
+    OWNED.data = 1;
+    APART_HANDLER.data = 1;
+    HIGH.words[0] = 1;
+    let empty: *mut Nothing = &raw mut EMPTY;
+    through_pointers();
+}
+
+interrupt fn soft() at Vector::MachineSoftware {
+    BETWEEN.data += 2;
+}
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    FAULTY.data = 1;
+    through_pointers();
+    loop {}
+}
+
+entry fn main() -> ! {
+    critical {
+        AROUND.data += 1;
+    }
+    critical {
+        called();
+    }
+    critical {
+        lend(&mut LENT);
+    }
+    MINE.data = 1;
+    APART_THREAD.data = 1;
+    LOW.words[0] = 1;
+    FULL.words[0] = 1;
+    through_pointers();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
