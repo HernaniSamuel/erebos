@@ -255,7 +255,12 @@ Agreed as useful, not yet scheduled:
 - Range-typed array indexes, as in Ada (`type Pin is range 0 .. 3`, an
   array indexed by `Pin`): when the index type is exactly the array's
   range, no bounds check is needed. A third way next to the checked and
-  unchecked indexing of M2.1; part of the Ada-inspired types above.
+  unchecked indexing of M2.1; part of the Ada-inspired types above. Handles
+  into static arrays built on it would replace the raw pointers of linked
+  data; M5.7 counted them (ADR 0117, reason 7): 6 sites (16 lines) in three
+  programs of `tests/e2e/` (`structs`, `static_pointers`,
+  `comptime_differential`), all of which test linked data by pointer on
+  purpose, so none is an incidental use that handles would remove.
 - Typestate for hardware, as Rust's `Pin<Input>` / `Pin<Output>` pattern:
   a conversion consumes the old value and returns the new type, so using
   an input pin as an output is a compile error. It needs the moves of
@@ -268,7 +273,12 @@ Agreed as useful, not yet scheduled:
   not items (ADR 0057), so how a static names its region is open: an
   attribute on the static naming a region would make region names
   visible to code, while a placement in the `memory` block naming the
-  static would not.
+  static would not. M5.7 counted what it would remove (ADR 0117, reason 6, a
+  device reads memory at an address the program computes): 0 sites in `rt/`,
+  `tests/boards/` and `tests/e2e/`. The tests' DMA buffers are locals and
+  byte strings whose addresses a simulated device holds as numbers (reason
+  9), so the idea has no case in the tests; that says nothing of a program
+  for a chip.
 - Reset code of the program, for boards that must run code before
   `.bss` and `.data` are initialized, such as setting up an external
   memory controller that holds them (ADR 0083 gives every program
@@ -294,7 +304,12 @@ Agreed as useful, not yet scheduled:
     of them stay raw because the safe form returns or stores a reference,
     open an ADR for this (a `Proposed` one, reviewed first). Storing a
     reference in a struct is a larger step (it needs written lifetimes or
-    regions) and is not part of this idea.
+    regions) and is not part of this idea. Counted (ADR 0117): of 59
+    candidate sites (reasons 2, 6, 7, 8) 53 are reason 8, 89.8 percent, above
+    the 60 percent that ADR 0117 sets, so this idea is now a pending decision
+    (see "After M5" below), with the caveat that 29 of those sites are
+    functions returning a static byte string chosen by a value, not a
+    sub-slice of an argument.
   The same step would let a `&mut [T]` be split in two halves in use
   together, as Rust's `split_at_mut`, which ADR 0108 leaves out because the
   two references could be neither returned nor bound in pairs.
@@ -509,24 +524,54 @@ ADRs:
     thread and finishes it in a handler (M5.3's `Transfer`, a DMA driver)
     keeps its state in a static that is not linear; M5.7 meets this when it
     measures DMA buffers.
-  - M5.7: fewer raw pointers, measured once references exist: parameters
-    by address and slices move to references; a static placed in a named
-    region (deferred ideas) replaces a computed address for a DMA buffer;
-    handles into static arrays, with range-typed indexes (deferred ideas),
-    replace pointers in linked data. What stays raw is `extern`, `asm`
-    operands, fixed addresses outside peripherals, reinterpreting memory and
-    the inside of allocators. Rule of thumb: if the safe form needs a written
-    lifetime or region, leave it raw. Whether to mark the dereference of a
-    raw pointer (the language has no `unsafe`, ADR 0030) waits until it is
-    clear what remains.
-    Whether `assert` takes a `&[u8]` message, so that `assert(c, &b"...")`
-    is written without `&raw const` (an amendment of ADR 0031; ADR 0108
-    leaves the message a `*const [u8]`).
+  - M5.7: settled by ADR 0116 (`assert` takes a `&[u8]` message, the panic
+    function a `&core::PanicInfo`) and ADR 0117 (the rule for `rt/`, the
+    boards and the e2e programs, the nine reasons a raw pointer stays,
+    `board::print`, the measurement). The counts are under "After M5" below.
   - Typestate written `Pin(comptime state: PinState)` waits for M6; M5.2's
     program uses one struct per state.
   - Not in M5: references returned or stored in structs (ADR 0094); function
     pointers; priorities and several cores, to which ADR 0094 says how it
     extends.
+- **After M5**, from the measurement of M5.7 (ADR 0117). What stays a raw
+  pointer in `rt/`, `tests/boards/` and `tests/e2e/`: 886 lines and 385 sites
+  (1587 and 538 before M5.7; the sites are declarations of raw type and the
+  `&raw` expressions that flow into none, counted as the plan
+  `.claude/plans/M5.7.md` records, step 7). By reason, as sites (lines):
+  1 the test's subject 97 (121); 2 an analysis rejected the reference 0;
+  3 a signature fixed by another caller 26 (15); 4 an `asm` operand 1 (1);
+  5 a fixed address outside a peripheral 96 (101); 6 device memory at a
+  computed address 0; 7 linked data 6 (16); 8 a reference returned or stored
+  55 (204), 53 without the two fields of `core::PanicInfo`; 9 reinterpreting
+  memory 104 (428). `aapcs_c.ers` alone is 373 of the lines and 55 of the
+  sites.
+  - Marking the dereference of a raw pointer, since the language has no
+    `unsafe` (ADR 0030): moved here from M5, as ADR 0117 says, whatever the
+    counts. The question is whether what remains is rare and local enough to
+    be marked. What remains is mostly not rare: 886 lines in 89 files, but
+    the sites in the programs that exist to test raw pointers (reasons 1, 9:
+    201 of 385) are the point of those tests, and reasons 3 to 5 (123 sites)
+    are `core`'s memory functions, the boards' registers and `asm`. The user
+    decides, with these numbers.
+  - Returning a reference tied to the one reference parameter (deferred
+    ideas): of the 59 candidate sites (reasons 2, 6, 7, 8), 53 are reason 8
+    without `PanicInfo`'s fields, 89.8 percent, which is above the 60 percent
+    that ADR 0117 sets, so this is a pending decision: open its own
+    `Proposed` ADR, reviewed first, as the deferred idea says. Not built in
+    M5.7. What the 53 are: 32 return types, 12 `const`s and `static`s of
+    slices, 4 parameters, 1 field, 1 local and 3 operands of `slice(..)`.
+    Of the 32 return types, 29 return a byte string in static memory chosen
+    by an enum, an integer or a `bool` (`reason`, `name`, `state_name`): they
+    have no reference parameter to tie a result to, so the idea as written
+    removes 3 of them (`rest`, `part`, `erebos_skip`, which return a
+    sub-slice of their argument); the rest need a reference to static data
+    that may be returned or stored, which the idea leaves out. Reason 2 has
+    no case (no program was rejected by the borrow check, the check of moves
+    or the rule of shared statics when it moved to references), so the
+    cases that "may want the same feature" are none.
+  - A static placed in a named region and handles with range-typed indexes
+    (deferred ideas): counts in their entries (reason 6: 0 sites, reason 7:
+    6 sites).
 - **M6:**
   - `compile_error` (ADR 0031).
   - `!` as a type argument, such as `Result(T, !)` for generic code
