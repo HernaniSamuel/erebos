@@ -6,11 +6,11 @@
 // names `.Eight` and takes the other fields' defaults with `..`. A message
 // is sent through `thr` while `lsr.thre` is polled. The PLIC's priorities of
 // sources 1 to 4 are written in a loop with a run-time index and read back;
-// the threshold of context 0 is set through a driver taking a pointer to the
-// type of the cluster `ctx`, which `&raw mut PLIC.ctx[0]` serves, and read
+// the threshold of context 0 is set through a driver taking a reference to the
+// type of the cluster `ctx`, which `&mut PLIC.ctx[0]` serves, and read
 // through `PLIC_M0`, a view of the same bytes the generator wrote `over
 // PLIC` by itself. The magic value of each virtio-mmio transport is read
-// through one driver taking a `*const Virtio`, from a table of pointers. The
+// through one driver taking a `&Virtio`, from a table of pointers. The
 // program stops through the test finisher with `.Pass`.
 // Only on riscv32 (ADR 0077, reason 1): it uses the devices of `virt` as
 // `erebos svd` generates them from `virt.svd`. It keeps its own devices
@@ -80,16 +80,16 @@ fn print_hex(value: u32, bytes: u32) {
 }
 
 // The driver of one PLIC context, whichever it is.
-fn set_threshold(context: *mut Ctx, value: u32) {
-    (*context).threshold = value;
+fn set_threshold(context: &mut Ctx, value: u32) {
+    context.threshold = value;
 }
 
 // The driver of one virtio-mmio transport, whichever it is.
-fn describe(index: usize, transport: *const Virtio) {
+fn describe(index: usize, transport: &Virtio) {
     print(&b"virtio");
     print_digit(index as u32);
     print(&b" magic");
-    print_hex((*transport).magic_value, 4);
+    print_hex(transport.magic_value, 4);
     print(&b"\n");
 }
 
@@ -136,7 +136,7 @@ entry fn main() -> ! {
     }
 
     // Threshold 3 for context 0, read through both views of its bytes.
-    set_threshold(&raw mut PLIC.ctx[0], 3);
+    set_threshold(&mut PLIC.ctx[0], 3);
     print(&b"\nthreshold ");
     print_digit(PLIC.ctx[0].threshold);
     print(&b" m0 ");
@@ -145,7 +145,7 @@ entry fn main() -> ! {
 
     let mut transport: usize = 0;
     while transport < 8 {
-        describe(transport, TRANSPORTS[transport]);
+        describe(transport, &*TRANSPORTS[transport]);
         transport += 1;
     }
     exit(0)

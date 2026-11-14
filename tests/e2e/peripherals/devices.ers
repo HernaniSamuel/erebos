@@ -18,9 +18,9 @@ pub peripheral FINISHER: TestFinisher at 0x0010_0000;
 const THR_EMPTY: u8 = 0x20;
 
 // Writes a byte to any 16550, once it can take one.
-pub fn putc(u: *mut Uart16550, byte: u8) {
-    while (*u).lsr & THR_EMPTY == 0 {}
-    (*u).thr = byte;
+pub fn putc(u: &mut Uart16550, byte: u8) {
+    while u.lsr & THR_EMPTY == 0 {}
+    u.thr = byte;
 }
 
 // Stops QEMU: 0 passes, any other code fails with it.

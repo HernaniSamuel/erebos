@@ -1,5 +1,5 @@
 // The M2.1 milestone program: a ring buffer on the stack, built from a
-// struct holding an array, used through pointers, wrapping around its end.
+// struct holding an array, used through references, wrapping around its end.
 // expect-output: hel
 // expect-output: full at !
 // expect-output: lo, ring
@@ -18,27 +18,27 @@ struct Ring {
     len: usize,
 }
 
-fn push(ring: *mut Ring, byte: u8) -> bool {
-    if (*ring).len == size_of([u8; 8]) {
+fn push(ring: &mut Ring, byte: u8) -> bool {
+    if ring.len == size_of([u8; 8]) {
         return false;
     }
-    (*ring).slots[(*ring).head] = byte;
-    (*ring).head = ((*ring).head + 1) % 8;
-    (*ring).len += 1;
+    ring.slots[ring.head] = byte;
+    ring.head = (ring.head + 1) % 8;
+    ring.len += 1;
     true
 }
 
-fn pop(ring: *mut Ring, byte: *mut u8) -> bool {
-    if (*ring).len == 0 {
+fn pop(ring: &mut Ring, byte: &mut u8) -> bool {
+    if ring.len == 0 {
         return false;
     }
-    *byte = (*ring).slots[(*ring).tail];
-    (*ring).tail = ((*ring).tail + 1) % 8;
-    (*ring).len -= 1;
+    *byte = ring.slots[ring.tail];
+    ring.tail = (ring.tail + 1) % 8;
+    ring.len -= 1;
     true
 }
 
-fn push_all(ring: *mut Ring, text: &[u8]) {
+fn push_all(ring: &mut Ring, text: &[u8]) {
     let mut i: usize = 0;
     while i < len(text) {
         if !push(ring, text[i]) {
@@ -56,10 +56,10 @@ fn push_all(ring: *mut Ring, text: &[u8]) {
     }
 }
 
-fn pop_some(ring: *mut Ring, n: u32) {
+fn pop_some(ring: &mut Ring, n: u32) {
     let mut byte: u8 = 0;
     let mut i: u32 = 0;
-    while i < n && pop(ring, &raw mut byte) {
+    while i < n && pop(ring, &mut byte) {
         putc(byte);
         i += 1;
     }
@@ -68,7 +68,7 @@ fn pop_some(ring: *mut Ring, n: u32) {
 
 entry fn main() -> ! {
     let mut ring: Ring = Ring { slots: [0; 8], head: 0, tail: 0, len: 0 };
-    let r: *mut Ring = &raw mut ring;
+    let r: &mut Ring = &mut ring;
 
     let hello: [u8; 5] = [b'h', b'e', b'l', b'l', b'o'];
     push_all(r, &hello);
@@ -80,7 +80,7 @@ entry fn main() -> ! {
     pop_some(r, 100);
 
     let mut byte: u8 = 0;
-    if !pop(r, &raw mut byte) {
+    if !pop(r, &mut byte) {
         let empty: [u8; 5] = [b'e', b'm', b'p', b't', b'y'];
         let mut i: usize = 0;
         while i < 5 {

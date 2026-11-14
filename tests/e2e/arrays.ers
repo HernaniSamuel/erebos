@@ -33,7 +33,7 @@ fn sort(a: &mut [u32; 7]) {
     }
 }
 
-fn counter(count: *mut u32) -> u8 {
+fn counter(count: &mut u32) -> u8 {
     *count += 1;
     7
 }
@@ -63,15 +63,15 @@ entry fn main() -> ! {
 
     // `[v; N]` evaluates `v` exactly once, even for N of 0 and 1.
     let mut count: u32 = 0;
-    let none: [u8; 0] = [counter(&raw mut count); 0];
+    let none: [u8; 0] = [counter(&mut count); 0];
     print_u32(count);
     putc(b' ');
     count = 0;
-    let one: [u8; 1] = [counter(&raw mut count); 1];
+    let one: [u8; 1] = [counter(&mut count); 1];
     print_u32(count);
     putc(b' ');
     count = 0;
-    let many: [u8; 5] = [counter(&raw mut count); 5];
+    let many: [u8; 5] = [counter(&mut count); 5];
     print_u32(count);
     putc(b'\n');
 

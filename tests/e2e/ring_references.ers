@@ -1,5 +1,5 @@
-// The M5.4a milestone program: the ring buffer of `ring_buffer.ers` written
-// with references (ADR 0105 to 0107) instead of raw pointers. The functions
+// The M5.4a milestone program: the ring buffer of `ring_buffer.ers` as a
+// module with private fields (ADR 0105 to 0107), not a bare struct. The functions
 // of module `ring` take a `&mut Ring` or a `&Ring`; the fields are private, so
 // the rest of the program can only borrow the ring and call them.
 //
@@ -34,31 +34,31 @@ mod ring {
     }
 
     pub fn push(r: &mut Ring, b: u8) -> bool {
-        if (*r).count == 8 {
+        if r.count == 8 {
             return false;
         }
-        let at: usize = ((*r).head + (*r).count) % 8;
-        (*r).buf[at] = b;
-        (*r).count += 1;
+        let at: usize = (r.head + r.count) % 8;
+        r.buf[at] = b;
+        r.count += 1;
         true
     }
 
     pub fn pop(r: &mut Ring) -> Option(u8) {
-        if (*r).count == 0 {
+        if r.count == 0 {
             return .None;
         }
-        let b: u8 = (*r).buf[(*r).head];
-        (*r).head = ((*r).head + 1) % 8;
-        (*r).count -= 1;
+        let b: u8 = r.buf[r.head];
+        r.head = (r.head + 1) % 8;
+        r.count -= 1;
         .Some(b)
     }
 
     pub fn count(r: &Ring) -> usize {
-        (*r).count
+        r.count
     }
 
     pub fn is_full(r: &Ring) -> bool {
-        (*r).count == 8
+        r.count == 8
     }
 }
 

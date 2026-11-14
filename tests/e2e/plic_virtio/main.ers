@@ -3,11 +3,11 @@
 // (ADR 0064, 0066). The priorities of sources 1 to 8 are written in a loop
 // with a run-time index, each a value from 1 to 7 (QEMU's PLIC keeps 3
 // priority bits), and read back. The enable word of context 0 is set, and
-// the thresholds of both contexts through one driver taking a `*mut
-// PlicContext`, which `&raw mut PLIC.ctx[i]` serves with each context; the
+// the thresholds of both contexts through one driver taking a `&mut
+// PlicContext`, which `&mut PLIC.ctx[i]` serves with each context; the
 // threshold of context 0 is read back through `PLIC_M0`, a second view of
 // the same bytes. With nothing pending, `claim` is 0. Each transport is
-// read through one driver taking a `*const VirtioMmio`, from a table of
+// read through one driver taking a `&VirtioMmio`, from a table of
 // pointers: the magic value is "virt" in ASCII, `DeviceID` is 0 where no
 // device is attached, and `Version` and `VendorID` are what QEMU 11.1
 // gives with the flags of the harness (`Version` 1, the legacy transport,
@@ -69,22 +69,22 @@ fn print_hex(value: u32) {
 }
 
 // The driver of one PLIC context, whichever it is.
-fn set_threshold(context: *mut PlicContext, value: u32) {
-    (*context).threshold = value;
+fn set_threshold(context: &mut PlicContext, value: u32) {
+    context.threshold = value;
 }
 
 // The driver of one virtio-mmio transport, whichever it is.
-fn describe(index: usize, transport: *const VirtioMmio) {
+fn describe(index: usize, transport: &VirtioMmio) {
     print(&b"virtio");
     print_digit(index as u32);
     print(&b" magic");
-    print_hex((*transport).magic_value);
+    print_hex(transport.magic_value);
     print(&b" version ");
-    print_digit((*transport).version);
+    print_digit(transport.version);
     print(&b" device ");
-    print_digit((*transport).device_id);
+    print_digit(transport.device_id);
     print(&b" vendor");
-    print_hex((*transport).vendor_id);
+    print_hex(transport.vendor_id);
     print(&b"\n");
 }
 
@@ -113,7 +113,7 @@ entry fn main() -> ! {
     // Threshold 3 for context 0 and 5 for context 1, through one driver.
     let mut context: usize = 0;
     while context < 2 {
-        set_threshold(&raw mut devices::PLIC.ctx[context], 3 + context as u32 * 2);
+        set_threshold(&mut devices::PLIC.ctx[context], 3 + context as u32 * 2);
         context += 1;
     }
     print(&b"threshold ");
@@ -128,7 +128,7 @@ entry fn main() -> ! {
 
     let mut transport: usize = 0;
     while transport < 8 {
-        describe(transport, TRANSPORTS[transport]);
+        describe(transport, &*TRANSPORTS[transport]);
         transport += 1;
     }
     devices::exit(0)

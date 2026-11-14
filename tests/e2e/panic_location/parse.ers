@@ -13,7 +13,7 @@ pub fn sum(text: &[u8]) -> Sum {
     let mut reader: digits::Reader = digits::reader(text as *const [u8]);
     let mut s: Sum = Sum { total: 0, count: 0 };
     loop {
-        match digits::next(&raw mut reader) {
+        match digits::next(&mut reader) {
             .Some(let n: u32) => {
                 s.total += n;
                 s.count += 1;

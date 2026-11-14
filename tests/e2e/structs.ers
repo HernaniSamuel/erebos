@@ -40,7 +40,7 @@ struct Pair {
     second: u32,
 }
 
-fn next(counter: *mut u32) -> u32 {
+fn next(counter: &mut u32) -> u32 {
     *counter += 1;
     *counter
 }
@@ -81,7 +81,7 @@ entry fn main() -> ! {
 
     // Fields run in the order written, not the order declared.
     let mut n: u32 = 0;
-    let pair: Pair = Pair { second: next(&raw mut n), first: next(&raw mut n) };
+    let pair: Pair = Pair { second: next(&mut n), first: next(&mut n) };
     print_u32(pair.first);
     print_u32(pair.second);
     putc(b'\n');

@@ -28,17 +28,17 @@ mod uart {
     const TX_FULL: u32 = 1;
 
     pub fn init(u: &mut Cmsdk) {
-        (*u).bauddiv = 16;
-        (*u).ctrl = 1;
+        u.bauddiv = 16;
+        u.ctrl = 1;
     }
 
     pub fn ready(u: &Cmsdk) -> bool {
-        ((*u).state & TX_FULL) == 0
+        (u.state & TX_FULL) == 0
     }
 
     pub fn putc(u: &mut Cmsdk, byte: u8) {
         while !ready(u) {}
-        (*u).data = byte as u32;
+        u.data = byte as u32;
     }
 
     pub fn write(u: &mut Cmsdk, s: &[u8]) {

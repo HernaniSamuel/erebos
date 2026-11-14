@@ -33,12 +33,12 @@ mod uart {
     const THR_EMPTY: u8 = 0x20;
 
     pub fn ready(u: &Uart16550) -> bool {
-        ((*u).lsr & THR_EMPTY) != 0
+        (u.lsr & THR_EMPTY) != 0
     }
 
     pub fn putc(u: &mut Uart16550, byte: u8) {
         while !ready(u) {}
-        (*u).thr = byte;
+        u.thr = byte;
     }
 
     pub fn write(u: &mut Uart16550, s: &[u8]) {
@@ -64,16 +64,16 @@ mod plic {
     pub peripheral PLIC: Plic at 0x0C00_0000;
 
     pub fn set(c: &mut Context, value: u32) {
-        (*c).threshold = value;
+        c.threshold = value;
     }
 
     pub fn get(c: &Context) -> u32 {
-        (*c).threshold
+        c.threshold
     }
 
     // The second context, reached from the reference to the whole PLIC.
     pub fn set_second(p: &mut Plic, value: u32) {
-        set(&mut (*p).ctx[1], value);
+        set(&mut p.ctx[1], value);
     }
 }
 

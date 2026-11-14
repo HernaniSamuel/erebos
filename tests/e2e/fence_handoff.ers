@@ -29,10 +29,10 @@ entry fn main() -> ! {
     let doorbell: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
     *doorbell = 0;
 
-    let descriptor: *mut Descriptor = &raw mut DESCRIPTOR;
-    (*descriptor).addr = 1000;
-    (*descriptor).len = 64;
-    (*descriptor).flags = 3;
+    let descriptor: &mut Descriptor = &mut DESCRIPTOR;
+    descriptor.addr = 1000;
+    descriptor.len = 64;
+    descriptor.flags = 3;
 
     // Every store above is visible before the doorbell is.
     core::arch::fence();
@@ -42,9 +42,9 @@ entry fn main() -> ! {
     // the memory it knows.
     core::arch::compiler_fence();
     let seen_bell: u32 = *doorbell;
-    let seen_addr: u32 = (*descriptor).addr;
-    let seen_len: u32 = (*descriptor).len;
-    let seen_flags: u32 = (*descriptor).flags;
+    let seen_addr: u32 = descriptor.addr;
+    let seen_len: u32 = descriptor.len;
+    let seen_flags: u32 = descriptor.flags;
     core::arch::compiler_fence();
 
     print_u32(seen_addr);
