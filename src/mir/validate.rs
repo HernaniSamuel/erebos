@@ -1549,11 +1549,13 @@ impl<'a> Checker<'a> {
                     PanicCause::AssertionFailed(Some((message, _))) => {
                         if let Some(ty) = self.operand(message) {
                             let is_message = ty.slice_elem() == Some(Ty::Int(IntTy::U8))
-                                && matches!(ty, Ty::Ptr(ptr) if !ptr.mutable && !ptr.volatile);
+                                && matches!(ty, Ty::Ref(r) if !r.mutable && !r.volatile);
                             if !is_message {
                                 self.violation(
                                     "T8",
-                                    format!("the message of an `assert` has type `{ty}`, not `*const [u8]`"),
+                                    format!(
+                                        "the message of an `assert` has type `{ty}`, not `&[u8]`"
+                                    ),
                                 );
                             }
                         }
@@ -4828,7 +4830,7 @@ mod tests {
     }
 
     #[test]
-    fn t8_the_message_of_an_assert_is_a_const_slice_of_bytes() {
+    fn t8_the_message_of_an_assert_is_a_shared_reference_to_a_slice_of_bytes() {
         let assertion = |message| {
             let mut body = typed();
             body.blocks[1].terminator = Terminator::Panic(
@@ -4837,11 +4839,38 @@ mod tests {
             );
             rules(&body)
         };
-        accepts(assertion(SLICE_C));
+        // A local of type `ty` added to the ones of `typed`, moved if its type
+        // is not copy.
+        let message_of = |ty| {
+            let mut body = typed();
+            body.locals.push(decl(ty));
+            let n = body.locals.len() as u32 - 1;
+            let operand = if matches!(ty, Ty::Ref(r) if r.mutable) {
+                moved(local(n))
+            } else {
+                copy(n)
+            };
+            body.blocks[1].terminator =
+                Terminator::Panic(PanicCause::AssertionFailed(Some((operand, span()))), None);
+            rules(&body)
+        };
+        let bytes = Ty::Int(IntTy::U8);
+        let slice = |elem| Ty::Slice(Box::leak(Box::new(elem)));
+        accepts(message_of(reference(false, slice(bytes))));
+        // The raw slice of ADR 0031 is not a message any more (ADR 0116).
+        rejects(assertion(SLICE_C), "T8");
         rejects(assertion(SLICE_M), "T8");
         rejects(assertion(ARRAY_PTR), "T8");
         rejects(assertion(1), "T8");
         rejects(assertion(10), "T8");
+        // MIR building converts a `&mut [u8]` to a `&[u8]` first.
+        rejects(message_of(reference(true, slice(bytes))), "T8");
+        rejects(message_of(volatile_reference(false, slice(bytes))), "T8");
+        rejects(message_of(reference(false, slice(u32_ty()))), "T8");
+        rejects(
+            message_of(reference(false, Ty::Array(Box::leak(Box::new(bytes)), 4))),
+            "T8",
+        );
     }
 
     #[test]

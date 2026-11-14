@@ -6,14 +6,14 @@ const READY: bool = true;
 
 fn holds() {
     let t: [u8; 2] = [1, 2];
-    assert(READY, slice(&raw const t[5], 1));
-    assert(true, slice(&raw const t[6], 1));
+    assert(READY, &*slice(&raw const t[5], 1));
+    assert(true, &*slice(&raw const t[6], 1));
 }
 
 fn may_fail(x: u32) {
     let t: [u8; 2] = [1, 2];
-    assert(x < 10, slice(&raw const t[7], 1));
-    assert(!READY, slice(&raw const t[8], 1));
+    assert(x < 10, &*slice(&raw const t[7], 1));
+    assert(!READY, &*slice(&raw const t[8], 1));
 }
 
 entry fn main() -> ! { loop {} }

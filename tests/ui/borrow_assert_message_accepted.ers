@@ -1,0 +1,19 @@
+// emit: mir
+// What the borrow check accepts in a message (ADR 0116, 0106): a buffer
+// borrowed once the `&mut` of it is no longer used, and while a `&mut` of it
+// is used only on the path where the assertion holds, since the failing path
+// runs nothing else. `borrow_assert_message.ers` has the conflicts.
+fn after_the_last_use(x: u32, mut buf: [u8; 4]) {
+    let w: &mut [u8; 4] = &mut buf;
+    w[0] = 1;
+    assert(x < 10, &buf);
+}
+
+fn used_where_it_holds(x: u32, mut buf: [u8; 4]) {
+    let w: &mut [u8; 4] = &mut buf;
+    assert(x < 10, &buf);
+    w[0] = 1;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

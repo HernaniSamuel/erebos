@@ -44,7 +44,7 @@ fn widest(table: *const [*const [u8]]) -> usize {
 const WIDEST: usize = widest(&raw const MESSAGES);
 
 comptime {
-    assert(WIDEST == 12, &raw const b"the widest message is `byte strings`");
+    assert(WIDEST == 12, &b"the widest message is `byte strings`");
     assert(len(GREETING) == 17);
 }
 

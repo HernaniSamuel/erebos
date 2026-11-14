@@ -1,0 +1,158 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_assert_message_types.ers
+---
+--- mir ---
+fn bytes() -> [u8; 3] {
+    let _0: [u8; 3];
+    let _1: [u8; 3];
+
+    bb0: {
+        _1[0] = const 97_u8;
+        _1[1] = const 98_u8;
+        _1[2] = const 99_u8;
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn accepted(_1: u32, _2: &[u8], _3: &mut [u8], _4: &[u8; 4], _5: &mut [u8; 4], _6: [u8; 8]) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: &[u8]; // a
+    let _3: &mut [u8]; // b
+    let _4: &[u8; 4]; // c
+    let _5: &mut [u8; 4]; // d
+    let _6: [u8; 8]; // buf
+    let _7: bool;
+    let _8: bool;
+    let _9: &[u8];
+    let _10: bool;
+    let _11: &[u8];
+    let _12: bool;
+    let _13: &[u8];
+    let _14: bool;
+    let _15: &[u8];
+    let _16: bool;
+    let _17: &mut [u8];
+    let _18: &[u8];
+    let _19: bool;
+    let _20: *const [u8; 4];
+    let _21: &[u8];
+    let _22: bool;
+    let _23: [u8; 3];
+    let _24: [u8; 3];
+    let _25: &[u8];
+
+    bb0: {
+        _7 = Lt(copy _1, const 1_u32);
+        if copy _7 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _8 = Lt(copy _1, const 2_u32);
+        if copy _8 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(assertion failed, copy _2);
+    }
+
+    bb3: {
+        _10 = Lt(copy _1, const 3_u32);
+        if copy _10 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        _9 = &(*_3);
+        panic(assertion failed, copy _9);
+    }
+
+    bb5: {
+        _12 = Lt(copy _1, const 4_u32);
+        if copy _12 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        _11 = &(*_4)[0..4];
+        panic(assertion failed, copy _11);
+    }
+
+    bb7: {
+        _14 = Lt(copy _1, const 5_u32);
+        if copy _14 -> [true: bb9, false: bb10];
+    }
+
+    bb8: {
+        _13 = &(*_5)[0..4];
+        panic(assertion failed, copy _13);
+    }
+
+    bb9: {
+        _16 = Lt(copy _1, const 6_u32);
+        if copy _16 -> [true: bb11, false: bb12];
+    }
+
+    bb10: {
+        _15 = &_6[1..3];
+        panic(assertion failed, copy _15);
+    }
+
+    bb11: {
+        _19 = Lt(copy _1, const 7_u32);
+        if copy _19 -> [true: bb13, false: bb14];
+    }
+
+    bb12: {
+        _17 = &mut _6[2..5];
+        _18 = &(*_17);
+        panic(assertion failed, copy _18);
+    }
+
+    bb13: {
+        _22 = Lt(copy _1, const 8_u32);
+        if copy _22 -> [true: bb15, false: bb16];
+    }
+
+    bb14: {
+        _20 = const b"text";
+        _21 = &(*_20)[0..4];
+        panic(assertion failed, copy _21);
+    }
+
+    bb15: {
+        return;
+    }
+
+    bb16: {
+        _23 = call bytes();
+        _24 = copy _23;
+        _25 = &_24[0..3];
+        panic(assertion failed, copy _25);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

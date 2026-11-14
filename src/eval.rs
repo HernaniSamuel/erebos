@@ -580,7 +580,8 @@ impl Interp<'_, '_> {
         Ok(None)
     }
 
-    /// The bytes of the slice `message`, an `assert` message, as text:
+    /// The bytes of `message`, an `assert` message, a `&[u8]` laid out as a
+    /// raw slice (ADR 0108, 0116), as text:
     /// printable ASCII as it is, any other byte as `\xNN` (ADR 0031). A
     /// byte that cannot be read fails at `span`, the message's.
     fn message(&mut self, message: Operand, span: Span) -> EvalResult<String> {

@@ -23,7 +23,7 @@ fn reason() -> *const [u8] {
 }
 
 fn checked(x: u32) {
-    assert(x < 10, reason());
+    assert(x < 10, &*reason());
 }
 
 entry fn main() -> ! {

@@ -1,14 +1,14 @@
 // emit: mir
 // The message of `assert` is built on the failing branch only, before the
-// panic, which drops it until M2.6 (ADR 0031). A `*mut [u8; N]` converts to
-// the message's `*const [u8]`.
+// panic, which drops it until M2.6 (ADR 0031). It is a `&[u8]` (ADR 0116): a
+// `&mut [u8; N]` converts to it, and so does a raw slice through `&*`.
 fn reason() -> *const [u8] {
     &raw const b"x is too large"
 }
 
-fn checked(x: u32, s: *const [u8], m: *mut [u8; 3]) {
-    assert(x < 10, &raw const b"x < 10");
-    assert(x < 20, reason());
+fn checked(x: u32, s: &[u8], m: &mut [u8; 3]) {
+    assert(x < 10, &b"x < 10");
+    assert(x < 20, &*reason());
     assert(x < 30, s);
     assert(x < 40, m);
 }

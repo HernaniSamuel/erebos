@@ -19,20 +19,20 @@ fn reason() -> *const [u8] {
     }
 }
 
-fn checked(_1: u32, _2: *const [u8], _3: *mut [u8; 3]) -> () {
+fn checked(_1: u32, _2: &[u8], _3: &mut [u8; 3]) -> () {
     let _0: ();
     let _1: u32; // x
-    let _2: *const [u8]; // s
-    let _3: *mut [u8; 3]; // m
+    let _2: &[u8]; // s
+    let _3: &mut [u8; 3]; // m
     let _4: bool;
     let _5: *const [u8; 6];
-    let _6: *const [u8; 6];
-    let _7: *const [u8];
-    let _8: bool;
-    let _9: *const [u8];
+    let _6: &[u8];
+    let _7: bool;
+    let _8: *const [u8];
+    let _9: &[u8];
     let _10: bool;
     let _11: bool;
-    let _12: *const [u8];
+    let _12: &[u8];
 
     bb0: {
         _4 = Lt(copy _1, const 10_u32);
@@ -40,15 +40,14 @@ fn checked(_1: u32, _2: *const [u8], _3: *mut [u8; 3]) -> () {
     }
 
     bb1: {
-        _8 = Lt(copy _1, const 20_u32);
-        if copy _8 -> [true: bb3, false: bb4];
+        _7 = Lt(copy _1, const 20_u32);
+        if copy _7 -> [true: bb3, false: bb4];
     }
 
     bb2: {
         _5 = const b"x < 10";
-        _6 = &raw const (*_5);
-        _7 = slice(copy _6, const 6_usize);
-        panic(assertion failed, copy _7);
+        _6 = &(*_5)[0..6];
+        panic(assertion failed, copy _6);
     }
 
     bb3: {
@@ -57,7 +56,8 @@ fn checked(_1: u32, _2: *const [u8], _3: *mut [u8; 3]) -> () {
     }
 
     bb4: {
-        _9 = call reason();
+        _8 = call reason();
+        _9 = &(*_8);
         panic(assertion failed, copy _9);
     }
 
@@ -75,7 +75,7 @@ fn checked(_1: u32, _2: *const [u8], _3: *mut [u8; 3]) -> () {
     }
 
     bb8: {
-        _12 = slice(copy _3, const 3_usize);
+        _12 = &(*_3)[0..3];
         panic(assertion failed, copy _12);
     }
 }

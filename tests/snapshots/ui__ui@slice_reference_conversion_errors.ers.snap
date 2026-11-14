@@ -64,17 +64,7 @@ ty::invalid-cast
  19 │     let g: &[u8] = d as &[u8];
     ·                         ──┬──
     ·                           ╰── nothing converts to a reference
- 20 │     assert(c, &b"msg");
+ 20 │ }
     ╰────
   help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
         to, write `&*p` or `&mut *p` (ADR 0105)
-ty::mismatched-types
-
-  × mismatched types
-    ╭─[slice_reference_conversion_errors.ers:20:15]
- 19 │     let g: &[u8] = d as &[u8];
- 20 │     assert(c, &b"msg");
-    ·               ───┬───
-    ·                  ╰── expected `*const [u8]`, found `&[u8; 3]`
- 21 │ }
-    ╰────

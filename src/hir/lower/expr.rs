@@ -514,7 +514,7 @@ impl Lowerer<'_> {
                         )
                         .label(expr.span, "in this call")
                         .help(
-                            "`assert(cond)` checks one `bool`, and `assert(cond, msg)` adds a message, a `*const [u8]` (ADR 0029, 0031)",
+                            "`assert(cond)` checks one `bool`, and `assert(cond, msg)` adds a message, a `&[u8]` (ADR 0029, 0116)",
                         ),
                     );
                     return Expr {

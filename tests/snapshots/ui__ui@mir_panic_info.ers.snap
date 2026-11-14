@@ -308,13 +308,15 @@ fn messages(_1: u32, _2: *const [u8]) -> u32 {
     let _1: u32; // x
     let _2: *const [u8]; // m
     let _3: bool;
-    let _4: core::PanicInfo;
-    let _5: bool;
-    let _6: *const [u8; 14];
-    let _7: *const [u8; 14];
-    let _8: *const [u8];
-    let _9: core::PanicInfo;
-    let _10: bool;
+    let _4: &[u8];
+    let _5: core::PanicInfo;
+    let _6: *const [u8];
+    let _7: bool;
+    let _8: *const [u8; 14];
+    let _9: &[u8];
+    let _10: core::PanicInfo;
+    let _11: *const [u8];
+    let _12: bool;
 
     bb0: {
         _3 = Lt(copy _1, const 10_u32);
@@ -322,34 +324,36 @@ fn messages(_1: u32, _2: *const [u8]) -> u32 {
     }
 
     bb1: {
-        _5 = Lt(copy _1, const 20_u32);
-        if copy _5 -> [true: bb3, false: bb4];
+        _7 = Lt(copy _1, const 20_u32);
+        if copy _7 -> [true: bb3, false: bb4];
     }
 
     bb2: {
-        _4.0 = slice(const b"mir_panic_info.ers", const 18_usize);
-        _4.1 = const 33_u32;
-        _4.2 = const 5_u32;
-        _4.3 = const 2_u8;
-        _4.4 = copy _2;
-        panic(assertion failed, copy _2, &raw const _4 at mir_panic_info.ers:33:5);
+        _4 = &(*_2);
+        _5.0 = slice(const b"mir_panic_info.ers", const 18_usize);
+        _5.1 = const 33_u32;
+        _5.2 = const 5_u32;
+        _5.3 = const 2_u8;
+        _6 = copy _4 as *const [u8];
+        _5.4 = copy _6;
+        panic(assertion failed, copy _4, &raw const _5 at mir_panic_info.ers:33:5);
     }
 
     bb3: {
-        _10 = Lt(copy _1, const 3_u32);
-        if copy _10 -> [true: bb5, false: bb6];
+        _12 = Lt(copy _1, const 3_u32);
+        if copy _12 -> [true: bb5, false: bb6];
     }
 
     bb4: {
-        _6 = const b"x is too large";
-        _7 = &raw const (*_6);
-        _8 = slice(copy _7, const 14_usize);
-        _9.0 = slice(const b"mir_panic_info.ers", const 18_usize);
-        _9.1 = const 34_u32;
-        _9.2 = const 5_u32;
-        _9.3 = const 2_u8;
-        _9.4 = copy _8;
-        panic(assertion failed, copy _8, &raw const _9 at mir_panic_info.ers:34:5);
+        _8 = const b"x is too large";
+        _9 = &(*_8)[0..14];
+        _10.0 = slice(const b"mir_panic_info.ers", const 18_usize);
+        _10.1 = const 34_u32;
+        _10.2 = const 5_u32;
+        _10.3 = const 2_u8;
+        _11 = copy _9 as *const [u8];
+        _10.4 = copy _11;
+        panic(assertion failed, copy _9, &raw const _10 at mir_panic_info.ers:34:5);
     }
 
     bb5: {
@@ -396,13 +400,15 @@ fn parenthesized(_1: bool, _2: *const [u8], _3: u8, _4: Option(u32)) -> Option(u
     let _4: Option(u32); // o
     let _5: u32; // v
     let _6: u32; // x
-    let _7: core::PanicInfo;
-    let _8: u8;
-    let _9: u32;
-    let _10: Option(u32);
+    let _7: &[u8];
+    let _8: core::PanicInfo;
+    let _9: *const [u8];
+    let _10: u8;
     let _11: u32;
-    let _12: u32;
-    let _13: Option(u32);
+    let _12: Option(u32);
+    let _13: u32;
+    let _14: u32;
+    let _15: Option(u32);
 
     bb0: {
         if copy _1 -> [true: bb1, false: bb2];
@@ -417,26 +423,28 @@ fn parenthesized(_1: bool, _2: *const [u8], _3: u8, _4: Option(u32)) -> Option(u
     }
 
     bb3: {
-        _8 = copy _3;
-        switch copy _8 -> [0_u8: bb5, 1_u8: bb6, otherwise: bb7];
+        _10 = copy _3;
+        switch copy _10 -> [0_u8: bb5, 1_u8: bb6, otherwise: bb7];
     }
 
     bb4: {
-        _7.0 = slice(const b"mir_panic_info.ers", const 18_usize);
-        _7.1 = const 46_u32;
-        _7.2 = const 6_u32;
-        _7.3 = const 2_u8;
-        _7.4 = copy _2;
-        panic(assertion failed, copy _2, &raw const _7 at mir_panic_info.ers:46:6);
+        _7 = &(*_2);
+        _8.0 = slice(const b"mir_panic_info.ers", const 18_usize);
+        _8.1 = const 46_u32;
+        _8.2 = const 6_u32;
+        _8.3 = const 2_u8;
+        _9 = copy _7 as *const [u8];
+        _8.4 = copy _9;
+        panic(assertion failed, copy _7, &raw const _8 at mir_panic_info.ers:46:6);
     }
 
     bb5: {
-        _9 = const 0_u32;
+        _11 = const 0_u32;
         goto -> bb8;
     }
 
     bb6: {
-        _9 = const 1_u32;
+        _11 = const 1_u32;
         goto -> bb8;
     }
 
@@ -445,18 +453,18 @@ fn parenthesized(_1: bool, _2: *const [u8], _3: u8, _4: Option(u32)) -> Option(u
     }
 
     bb8: {
-        _5 = copy _9;
-        _10 = copy _4;
-        switch copy _10.tag -> [1_u8: bb9, 0_u8: bb10, otherwise: bb11];
+        _5 = copy _11;
+        _12 = copy _4;
+        switch copy _12.tag -> [1_u8: bb9, 0_u8: bb10, otherwise: bb11];
     }
 
     bb9: {
-        _11 = copy (_10 as 1).0;
-        _6 = copy _11;
-        _12 = Add(copy _5, copy _6);
-        (_13 as 1).0 = copy _12;
-        _13.tag = const 1_u8;
-        _0 = copy _13;
+        _13 = copy (_12 as 1).0;
+        _6 = copy _13;
+        _14 = Add(copy _5, copy _6);
+        (_15 as 1).0 = copy _14;
+        _15.tag = const 1_u8;
+        _0 = copy _15;
         return;
     }
 

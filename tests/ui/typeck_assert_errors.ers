@@ -1,11 +1,34 @@
 // emit: typeck
-// `assert` takes a `bool`, and a message of type `*const [u8]`, or what
-// converts to one (ADR 0029, 0031).
-fn errors(x: u32, w: *const [u16; 2], v: *mut volatile [u8; 2]) {
+// `assert` takes a `bool`, and a message of type `&[u8]`, or what converts to
+// one (ADR 0116). The raw slice of ADR 0031 does not: a message of a raw byte
+// slice, or a raw pointer to an array of bytes, that is not volatile gets the
+// reference to write instead, from what was written; a volatile one gets no
+// help, since no reference that is not volatile can be made from it.
+fn errors(
+    x: u32,
+    w: &[u16],
+    v: &volatile [u8],
+    m: &mut volatile [u8],
+    p: *const [u8],
+    q: *mut [u8; 2],
+    r: *const volatile [u8],
+    mut buf: [u8; 4],
+) {
     assert(x);
     assert(x == 1, false);
     assert(x == 2, w);
     assert(x == 3, v);
+    assert(x == 4, m);
+    assert(x == 5, p);
+    assert(x == 6, q);
+    assert(x == 7, r);
+    assert(x == 8, &raw const b"raw");
+    assert(x == 9, &raw const buf);
+    assert(x == 10, &raw mut buf);
+    assert(x == 11, &buf[0..2]);
+    assert(x == 12, &raw const buf[0..2]);
+    assert(x == 13, &*p);
+    assert(x == 14, &*r);
 }
 
 entry fn main() -> ! { loop {} }

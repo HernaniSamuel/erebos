@@ -8,35 +8,35 @@ const BYTES: *const [u8] = &raw const b"tab\t, nul \x00, del \x7f, high \xff, \"
 struct Header { kind: u8, len: u32 }
 
 comptime {
-    assert(size_of(Header) == 5, &raw const b"Header must match the wire format");
+    assert(size_of(Header) == 5, &b"Header must match the wire format");
 }
 
 comptime {
-    assert(false, BYTES);
+    assert(false, &*BYTES);
 }
 
 comptime {
-    assert(false, &raw const b"");
+    assert(false, &b"");
 }
 
 comptime {
-    assert(false, &raw const SCRATCH);
+    assert(false, &SCRATCH);
 }
 
 comptime {
-    assert(false, gone());
+    assert(false, &*gone());
 }
 
 comptime {
-    assert(false, slice((&raw const b"ab") as *const u8, 3));
+    assert(false, &*slice((&raw const b"ab") as *const u8, 3));
 }
 
 comptime {
-    assert(false, slice(0x1000 as *const u8, 1));
+    assert(false, &*slice(0x1000 as *const u8, 1));
 }
 
 comptime {
-    assert(true, &raw const SCRATCH);
+    assert(true, &SCRATCH);
 }
 
 fn gone() -> *const [u8] {

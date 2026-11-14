@@ -1,0 +1,29 @@
+// emit: mir
+// Each type an `assert` message accepts (ADR 0116): a `&[u8]`, a `&mut [u8]`,
+// a `&[u8; N]`, a `&mut [u8; N]`, a sub-slice, a byte string and a temporary
+// `&f()`. The ones that are not a `&[u8]` convert to one (ADR 0108); the
+// message is a `&[u8]` operand of the panic.
+fn bytes() -> [u8; 3] {
+    [b'a', b'b', b'c']
+}
+
+fn accepted(
+    x: u32,
+    a: &[u8],
+    b: &mut [u8],
+    c: &[u8; 4],
+    d: &mut [u8; 4],
+    mut buf: [u8; 8],
+) {
+    assert(x < 1, a);
+    assert(x < 2, b);
+    assert(x < 3, c);
+    assert(x < 4, d);
+    assert(x < 5, &buf[1..3]);
+    assert(x < 6, &mut buf[2..5]);
+    assert(x < 7, &b"text");
+    assert(x < 8, &bytes());
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

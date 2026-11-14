@@ -363,6 +363,7 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
         scrutinee: None,
         payload_depth: 0,
         nested_or: None,
+        assert_message: None,
     };
     checker.fn_(f);
     checker.elsewhere
@@ -491,6 +492,9 @@ struct Checker<'a, 'h> {
     /// The outermost or-pattern nested in a payload that encloses the
     /// pattern being checked.
     nested_or: Option<Span>,
+    /// The message of the `assert` being checked: a mismatch of it that is a
+    /// raw byte slice gets the help of ADR 0116.
+    assert_message: Option<ExprId>,
 }
 
 /// A `==` or `!=`: its operator and the ids of its operands, in order.
@@ -1015,6 +1019,23 @@ impl Checker<'_, '_> {
                 );
             }
         }
+        if self.assert_message == Some(expr.id)
+            && let Ty::Ptr(have) = found
+            && !have.volatile
+            && matches!(*have.pointee, Ty::Slice(elem) | Ty::Array(elem, _) if *elem == Ty::Int(IntTy::U8))
+        {
+            diag = diag.help(match &expr.kind {
+                ExprKind::AddrOf { place, .. } if matches!(place.kind, ExprKind::ByteString(_)) => {
+                    "an `assert` message is a `&[u8]`: write `&b\"...\"` for `&raw const b\"...\"` (ADR 0116)"
+                }
+                ExprKind::AddrOf { .. } => {
+                    "an `assert` message is a `&[u8]`: borrow the place with `&p` instead of `&raw const p` or `&raw mut p` (ADR 0116)"
+                }
+                _ => {
+                    "an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice or a pointer to an array that is not volatile allows (ADR 0108, 0116)"
+                }
+            });
+        }
         if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
             diag =
                 diag.help("a `while` loop can finish even with `true`; use `loop` to run forever");
@@ -1245,10 +1266,12 @@ impl Checker<'_, '_> {
             }
             ExprKind::Assert(cond, message, _) => {
                 self.check(f, cond, Some(Ty::Bool));
-                // Any `*const [u8]`, or what converts to one (ADR 0031).
+                // Any `&[u8]`, or what converts to one (ADR 0116).
                 if let Some(message) = message {
-                    let bytes = Ty::ptr(false, false, Ty::slice(Ty::Int(IntTy::U8)));
+                    let bytes = Ty::reference(false, false, Ty::slice(Ty::Int(IntTy::U8)));
+                    let outer = self.assert_message.replace(message.id);
                     self.check(f, message, Some(bytes));
+                    self.assert_message = outer;
                 }
                 Ty::Unit
             }

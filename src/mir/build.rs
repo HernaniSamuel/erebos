@@ -1725,8 +1725,9 @@ impl Builder<'_, '_> {
     /// whose `message`, from the expression at `message_span`, the current
     /// block has computed. When the panic function takes the information,
     /// the current block also fills a new local `core::PanicInfo` with the
-    /// fields known at compile time and the message, in declaration order,
-    /// and the call passes its address (ADR 0053).
+    /// fields known at compile time and the message, a `&[u8]` cast to the
+    /// field's `*const [u8]`, in declaration order, and the call passes its
+    /// address (ADR 0053, 0116).
     fn assert_panic(&mut self, message: Operand, message_span: Span, at: Span) -> Terminator {
         let cause = PanicCause::AssertionFailed(Some((message, message_span)));
         if !self.located {
@@ -1753,7 +1754,9 @@ impl Builder<'_, '_> {
                 "reason" => {
                     Rvalue::Use(Operand::Const(Const::Int(fields.reason, fields.reason_ty)))
                 }
-                "message" => Rvalue::Use(message),
+                // The `&[u8]` of the message, cast to the field's
+                // `*const [u8]` (ADR 0116, 0105).
+                "message" => Rvalue::Use(self.cast(message, field.ty)),
                 name => unreachable!("`core::PanicInfo` has no field `{name}`"),
             };
             let place = Place::local(info).project(PlaceElem::Field(index as u32));

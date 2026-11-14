@@ -110,28 +110,28 @@ comptime {
             Decoded::Cmd(Cmd::Write(0x10, 0x1234), 4) => true,
             _ => false,
         },
-        &raw const b"a write of 0x1234 to 0x10 takes four bytes",
+        &b"a write of 0x1234 to 0x10 takes four bytes",
     );
     assert(
         match decode(&raw const b"\x03\x07") {
             Decoded::Cmd(Cmd::SetMode(Mode::Off), 2) => true,
             _ => false,
         },
-        &raw const b"an unknown mode is `off`",
+        &b"an unknown mode is `off`",
     );
     assert(
         match decode(rest(&raw const b"\x00\x09", 1)) {
             Decoded::Bad(0x09, 1) => true,
             _ => false,
         },
-        &raw const b"0x09 is no command",
+        &b"0x09 is no command",
     );
     assert(
         match decode(rest(&raw const b"\x01", 1)) {
             Decoded::Done => true,
             _ => false,
         },
-        &raw const b"no bytes, no message",
+        &b"no bytes, no message",
     );
 }
 

@@ -1,0 +1,27 @@
+// emit: mir
+// The message of an `assert` is a use of the reference it borrows (ADR 0116,
+// 0106): a message that borrows a buffer while a `&mut` of it is in use is
+// `analysis::borrow-conflict`, as any `&` would be. The message is evaluated
+// on the failing path, where nothing else runs, so the `&mut` is in use there
+// only if the message itself uses it. The accepted cases are in
+// `borrow_assert_message_accepted.ers`.
+fn borrow_then_write(x: u32, mut buf: [u8; 4]) {
+    let w: &mut [u8; 4] = &mut buf;
+    assert(x < 10, {
+        let q: &[u8; 4] = &buf;
+        w[0] = 1;
+        q
+    });
+}
+
+fn slice_then_write(x: u32, mut buf: [u8; 4]) {
+    let w: &mut [u8] = &mut buf[0..2];
+    assert(x < 10, {
+        let q: &[u8] = &buf[1..3];
+        w[0] = 1;
+        q
+    });
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

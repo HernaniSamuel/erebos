@@ -12,9 +12,9 @@ eval::assertion-failed
  10 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 11 │     assert(size_of(Header) == 5, &raw const b"Header must match the wire format");
-    ·     ──────────────────────────────────────┬──────────────────────────────────────
-    ·                                           ╰── assertion failed
+ 11 │     assert(size_of(Header) == 5, &b"Header must match the wire format");
+    ·     ─────────────────────────────────┬─────────────────────────────────
+    ·                                      ╰── assertion failed
  12 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -26,9 +26,9 @@ eval::assertion-failed
  14 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 15 │     assert(false, BYTES);
-    ·     ──────────┬─────────
-    ·               ╰── assertion failed
+ 15 │     assert(false, &*BYTES);
+    ·     ───────────┬──────────
+    ·                ╰── assertion failed
  16 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -40,9 +40,9 @@ eval::assertion-failed
  18 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 19 │     assert(false, &raw const b"");
-    ·     ──────────────┬──────────────
-    ·                   ╰── assertion failed
+ 19 │     assert(false, &b"");
+    ·     ─────────┬─────────
+    ·              ╰── assertion failed
  20 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -54,9 +54,9 @@ eval::static-mut
  22 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 23 │     assert(false, &raw const SCRATCH);
-    ·                   ─────────┬────────
-    ·                            ╰── read here
+ 23 │     assert(false, &SCRATCH);
+    ·                   ────┬───
+    ·                       ╰── read here
  24 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -68,9 +68,9 @@ eval::dangling-pointer
  26 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 27 │     assert(false, gone());
-    ·                   ───┬──
-    ·                      ╰── accessed here
+ 27 │     assert(false, &*gone());
+    ·                   ────┬───
+    ·                       ╰── accessed here
  28 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -82,9 +82,9 @@ eval::invalid-access
  30 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 31 │     assert(false, slice((&raw const b"ab") as *const u8, 3));
-    ·                   ────────────────────┬────────────────────
-    ·                                       ╰── accessed here
+ 31 │     assert(false, &*slice((&raw const b"ab") as *const u8, 3));
+    ·                   ─────────────────────┬─────────────────────
+    ·                                        ╰── accessed here
  32 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -97,9 +97,9 @@ eval::invalid-access
  34 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 35 │     assert(false, slice(0x1000 as *const u8, 1));
-    ·                   ──────────────┬──────────────
-    ·                                 ╰── accessed here
+ 35 │     assert(false, &*slice(0x1000 as *const u8, 1));
+    ·                   ───────────────┬───────────────
+    ·                                  ╰── accessed here
  36 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)

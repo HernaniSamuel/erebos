@@ -1,0 +1,30 @@
+// emit: mir
+// A message that borrows a `static mut` is a place of the rule of shared
+// statics (ADR 0116, 0093, 0110): in the thread context outside `critical`,
+// while a handler writes the static, it is `analysis::unprotected-static`;
+// inside `critical` it is not.
+use core::arch::Vector;
+
+static mut TEXT: [u8; 4] = [b'o', b'k', b'!', b'!'];
+
+interrupt fn tick() at Vector::MachineTimer {
+    TEXT[0] = b'x';
+}
+
+fn unprotected(x: u32) {
+    assert(x < 10, &TEXT);
+}
+
+fn protected(x: u32) {
+    critical {
+        assert(x < 10, &TEXT);
+    }
+}
+
+entry fn main() -> ! {
+    unprotected(3);
+    protected(3);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

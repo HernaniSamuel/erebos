@@ -301,9 +301,9 @@ fn nested_agree() -> bool {
 }
 
 comptime {
-    assert(pairs_agree(), &raw const b"pairs(16) takes the arms expected");
-    assert(ors_agree(), &raw const b"ors(12) takes the arms expected");
-    assert(nested_agree(), &raw const b"the nested or-pattern takes the arms and binds the values expected");
+    assert(pairs_agree(), &b"pairs(16) takes the arms expected");
+    assert(ors_agree(), &b"ors(12) takes the arms expected");
+    assert(nested_agree(), &b"the nested or-pattern takes the arms and binds the values expected");
 }
 
 fn print(s: *const [u8]) {

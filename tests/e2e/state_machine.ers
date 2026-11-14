@@ -79,7 +79,7 @@ fn run(events: *const [u8]) -> State {
 }
 
 comptime {
-    assert(run(EVENTS) == State::Running, &raw const b"the events end in `running`");
+    assert(run(EVENTS) == State::Running, &b"the events end in `running`");
     assert(run(&raw const b"sx") == State::Done);
     assert(run(&raw const b"") == State::Idle);
 }

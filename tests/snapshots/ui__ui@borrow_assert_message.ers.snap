@@ -1,0 +1,44 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_assert_message.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot borrow `buf` while it is borrowed as mutable
+    ╭─[borrow_assert_message.ers:11:27]
+  8 │ fn borrow_then_write(x: u32, mut buf: [u8; 4]) {
+  9 │     let w: &mut [u8; 4] = &mut buf;
+    ·                           ────┬───
+    ·                               ╰── `buf` is borrowed as mutable here
+ 10 │     assert(x < 10, {
+ 11 │         let q: &[u8; 4] = &buf;
+    ·                           ──┬─
+    ·                             ╰── borrowed here
+ 12 │         w[0] = 1;
+    ·         ────┬───
+    ·             ╰── the borrow is used later here
+ 13 │         q
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `buf[_.._]` while it is borrowed as mutable
+    ╭─[borrow_assert_message.ers:20:24]
+ 17 │ fn slice_then_write(x: u32, mut buf: [u8; 4]) {
+ 18 │     let w: &mut [u8] = &mut buf[0..2];
+    ·                        ───────┬──────
+    ·                               ╰── `buf[_.._]` is borrowed as mutable here
+ 19 │     assert(x < 10, {
+ 20 │         let q: &[u8] = &buf[1..3];
+    ·                        ─────┬────
+    ·                             ╰── borrowed here
+ 21 │         w[0] = 1;
+    ·         ────┬───
+    ·             ╰── the borrow is used later here
+ 22 │         q
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

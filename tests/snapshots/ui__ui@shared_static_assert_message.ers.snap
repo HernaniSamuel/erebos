@@ -1,0 +1,35 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_assert_message.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `TEXT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_assert_message.ers:15:20]
+ 10 │ interrupt fn tick() at Vector::MachineTimer {
+ 11 │     TEXT[0] = b'x';
+    ·     ───────┬──────
+    ·            ╰── the handler `tick` reaches it here
+ 12 │ }
+ 13 │ 
+ 14 │ fn unprotected(x: u32) {
+ 15 │     assert(x < 10, &TEXT);
+    ·                    ──┬──
+    ·                      ╰── reached here, outside `critical`
+ 16 │ }
+ 17 │ 
+ 18 │ fn protected(x: u32) {
+ 19 │     critical {
+ 20 │         assert(x < 10, &TEXT);
+ 21 │     }
+ 22 │ }
+ 23 │ 
+ 24 │ entry fn main() -> ! {
+ 25 │     unprotected(3);
+    ·     ───────┬──────
+    ·            ╰── called here, outside `critical`
+ 26 │     protected(3);
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

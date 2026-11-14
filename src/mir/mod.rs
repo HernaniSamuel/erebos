@@ -1788,7 +1788,7 @@ pub enum PanicCause {
     /// An array index not below the length (ADR 0021).
     IndexOutOfBounds,
     /// `assert` with a false condition (ADR 0029), with its message if it
-    /// has one: a `*const [u8]` computed on the failing path only, and the
+    /// has one: a `&[u8]` computed on the failing path only, and the
     /// span of the expression that gave it (ADR 0031).
     AssertionFailed(Option<(Operand, Span)>),
     /// A `match` on an enum without a catch-all arm, on a value that is
