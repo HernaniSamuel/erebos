@@ -9,8 +9,8 @@ pub struct Sum {
     pub count: u32,
 }
 
-pub fn sum(text: *const [u8]) -> Sum {
-    let mut reader: digits::Reader = digits::reader(text);
+pub fn sum(text: &[u8]) -> Sum {
+    let mut reader: digits::Reader = digits::reader(text as *const [u8]);
     let mut s: Sum = Sum { total: 0, count: 0 };
     loop {
         match digits::next(&raw mut reader) {

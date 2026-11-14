@@ -2,7 +2,7 @@
 // as `&[u8]` and `&mut [u8]` (ADR 0108, 0109). Module `uart` writes the bytes
 // of a slice; module `fmt` fills, copies and formats into a `&mut [u8]`;
 // module `frame` encodes a payload as `<length>:<payload>;<checksum>` into
-// a buffer, each part through a sub-slice of it (`&mut (*out)[at..]`).
+// a buffer, each part through a sub-slice of it (`&mut out[at..]`).
 //
 // `main` lends a `[u8; 32]` as `&mut line` (converted to `&mut [u8]`), writes
 // `&line[..n]`, fills the rest of it with dots through `&mut line[n..]` and
@@ -34,7 +34,7 @@ mod uart {
     pub fn write(bytes: &[u8]) {
         let mut i: usize = 0;
         while i < len(bytes) {
-            crate::board::putc((*bytes)[i]);
+            crate::board::putc(bytes[i]);
             i += 1;
         }
     }
@@ -45,7 +45,7 @@ mod fmt {
     pub fn fill(out: &mut [u8], b: u8) {
         let mut i: usize = 0;
         while i < len(out) {
-            (*out)[i] = b;
+            out[i] = b;
             i += 1;
         }
     }
@@ -54,7 +54,7 @@ mod fmt {
     pub fn copy(dst: &mut [u8], src: &[u8]) {
         let mut i: usize = 0;
         while i < len(src) {
-            (*dst)[i] = (*src)[i];
+            dst[i] = src[i];
             i += 1;
         }
     }
@@ -66,7 +66,7 @@ mod fmt {
         let mut rest: u32 = n;
         loop {
             at -= 1;
-            (*out)[at] = b'0' + (rest % 10) as u8;
+            out[at] = b'0' + (rest % 10) as u8;
             rest /= 10;
             if rest == 0 {
                 break;
@@ -83,7 +83,7 @@ mod frame {
         let mut h: u32 = 0;
         let mut i: usize = 0;
         while i < len(bytes) {
-            h = h * 31 + (*bytes)[i] as u32;
+            h = h * 31 + bytes[i] as u32;
             i += 1;
         }
         h
@@ -94,7 +94,7 @@ mod frame {
         let mut scratch: [u8; 10] = [0; 10];
         let digits: &mut [u8] = &mut scratch;
         let start: usize = decimal(n, digits);
-        copy(out, &(*digits)[start..]);
+        copy(out, &digits[start..]);
         len(digits) - start
     }
 
@@ -102,15 +102,15 @@ mod frame {
     // checksum in decimal at the start of `out`; returns how many bytes.
     pub fn encode(payload: &[u8], out: &mut [u8]) -> usize {
         let mut at: usize = 0;
-        let digits: usize = number(len(payload) as u32, &mut (*out)[at..]);
+        let digits: usize = number(len(payload) as u32, &mut out[at..]);
         at += digits;
-        (*out)[at] = b':';
+        out[at] = b':';
         at += 1;
-        copy(&mut (*out)[at..], payload);
+        copy(&mut out[at..], payload);
         at += len(payload);
-        (*out)[at] = b';';
+        out[at] = b';';
         at += 1;
-        let digits: usize = number(checksum(payload), &mut (*out)[at..]);
+        let digits: usize = number(checksum(payload), &mut out[at..]);
         at + digits
     }
 }
@@ -147,7 +147,7 @@ entry fn main() -> ! {
         fmt::fill(r, b'a' + i as u8);
         let start: usize = fmt::decimal(i * 400 + 7, r);
         show(r);
-        show(&(*r)[start..]);
+        show(&r[start..]);
         i += 1;
     }
     exit(0)

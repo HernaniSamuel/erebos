@@ -75,7 +75,7 @@ fn print_u32(n: u32) {
 fn fill(r: &mut Ring, text: &[u8; 10]) -> usize {
     let mut i: usize = 0;
     while i < 10 {
-        if !push(r, (*text)[i]) {
+        if !push(r, text[i]) {
             return i;
         }
         i += 1;

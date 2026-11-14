@@ -53,7 +53,7 @@ fn sum(s: &[u32]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += (*s)[i];
+        total += s[i];
         i += 1;
     }
     total
@@ -62,7 +62,7 @@ fn sum(s: &[u32]) -> u32 {
 fn fill(s: &mut [u32], first: u32) {
     let mut i: usize = 0;
     while i < len(s) {
-        (*s)[i] = first + i as u32;
+        s[i] = first + i as u32;
         i += 1;
     }
 }
@@ -71,7 +71,7 @@ fn pairs_sum(s: &[Pair]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += (*s)[i].a as u32 * 100 + (*s)[i].b as u32;
+        total += s[i].a as u32 * 100 + s[i].b as u32;
         i += 1;
     }
     total
@@ -80,8 +80,8 @@ fn pairs_sum(s: &[Pair]) -> u32 {
 fn set_pairs(s: &mut [Pair], first: u16) {
     let mut i: usize = 0;
     while i < len(s) {
-        (*s)[i].a = first + i as u16;
-        (*s)[i].b = (*s)[i].a * 2;
+        s[i].a = first + i as u16;
+        s[i].b = s[i].a * 2;
         i += 1;
     }
 }
@@ -104,17 +104,17 @@ entry fn main() -> ! {
     let n: usize = 4;
     {
         let part: &mut [u32] = &mut words[n..8];
-        (*part)[2..4][1] = 7;
-        (*part)[1..][0] += 1;
+        part[2..4][1] = 7;
+        part[1..][0] += 1;
     }
     show(&b"after ", sum(&words));
     show(&b"last ", sum(&words[7..8]));
 
     // A range of a range through a reference: the elements 3 and 4.
     let all: &[u32] = &words;
-    let inner: &[u32] = &(*all)[2..7][1..3];
+    let inner: &[u32] = &all[2..7][1..3];
     show(&b"inner ", sum(inner));
-    show(&b"empty ", len(&(*all)[8..8]) as u32);
+    show(&b"empty ", len(&all[8..8]) as u32);
 
     // Two `u16` in each element: (5, 10) and (6, 12) in the middle.
     let mut pairs: [Pair; 4] = [Pair { a: 0, b: 0 }; 4];

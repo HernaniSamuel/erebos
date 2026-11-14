@@ -10,7 +10,7 @@ mod board;
 use board::{exit, putc};
 
 fn show(s: &[u8], i: usize) {
-    putc(b'0' + (*s)[i]);
+    putc(b'0' + s[i]);
     putc(b'\n');
 }
 

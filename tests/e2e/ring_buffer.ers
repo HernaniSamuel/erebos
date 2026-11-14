@@ -38,9 +38,9 @@ fn pop(ring: *mut Ring, byte: *mut u8) -> bool {
     true
 }
 
-fn push_all(ring: *mut Ring, text: *const u8, n: usize) {
+fn push_all(ring: *mut Ring, text: &[u8]) {
     let mut i: usize = 0;
-    while i < n {
+    while i < len(text) {
         if !push(ring, text[i]) {
             let full: [u8; 8] = [b'f', b'u', b'l', b'l', b' ', b'a', b't', b' '];
             let mut j: usize = 0;
@@ -71,12 +71,12 @@ entry fn main() -> ! {
     let r: *mut Ring = &raw mut ring;
 
     let hello: [u8; 5] = [b'h', b'e', b'l', b'l', b'o'];
-    push_all(r, &raw const hello as *const u8, 5);
+    push_all(r, &hello);
     pop_some(r, 3);
 
     // Wraps around the end of the array, then overflows.
     let more: [u8; 7] = [b',', b' ', b'r', b'i', b'n', b'g', b'!'];
-    push_all(r, &raw const more as *const u8, 7);
+    push_all(r, &more);
     pop_some(r, 100);
 
     let mut byte: u8 = 0;

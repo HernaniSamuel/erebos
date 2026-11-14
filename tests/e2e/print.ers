@@ -29,19 +29,19 @@ static GREETING: *const [u8] = &raw const b"hello from erebos";
 static MESSAGES: [*const [u8]; 3] = [part(TOPICS, 0, 7), part(TOPICS, 9, 12), part(TOPICS, 23, 6)];
 
 // The length of the longest message, computed from the static table.
-fn widest(table: *const [*const [u8]]) -> usize {
+fn widest(table: &[*const [u8]]) -> usize {
     let mut most: usize = 0;
     let mut i: usize = 0;
     while i < len(table) {
-        if len((*table)[i]) > most {
-            most = len((*table)[i]);
+        if len(table[i]) > most {
+            most = len(table[i]);
         }
         i += 1;
     }
     most
 }
 
-const WIDEST: usize = widest(&raw const MESSAGES);
+const WIDEST: usize = widest(&MESSAGES);
 
 comptime {
     assert(WIDEST == 12, &b"the widest message is `byte strings`");
@@ -96,7 +96,7 @@ entry fn main() -> ! {
     print(&b"\n");
 
     let mut i: usize = 0;
-    while i < len(&raw const MESSAGES) {
+    while i < len(&MESSAGES) {
         print(&*MESSAGES[i]);
         print(&b" ");
         print_u32(len(MESSAGES[i]) as u32);

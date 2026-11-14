@@ -1,5 +1,5 @@
 // Arrays on the stack (ADR 0021): literals, `[v; N]`, indexing, copies and
-// elements reached through pointers.
+// elements reached through references.
 // expect-output: 15
 // expect-output: 1 2 3 4 5 8 9
 // expect-output: 1 1 1
@@ -17,15 +17,15 @@ fn print_u32(n: u32) {
     putc(b'0' + (n % 10) as u8);
 }
 
-fn sort(a: *mut [u32; 7]) {
+fn sort(a: &mut [u32; 7]) {
     let mut i: usize = 0;
     while i < 7 {
         let mut j: usize = 0;
         while j + 1 < 7 - i {
-            if (*a)[j] > (*a)[j + 1] {
-                let t: u32 = (*a)[j];
-                (*a)[j] = (*a)[j + 1];
-                (*a)[j + 1] = t;
+            if a[j] > a[j + 1] {
+                let t: u32 = a[j];
+                a[j] = a[j + 1];
+                a[j + 1] = t;
             }
             j += 1;
         }
@@ -50,7 +50,7 @@ entry fn main() -> ! {
     putc(b'\n');
 
     let mut b: [u32; 7] = [9, 4, 1, 8, 5, 3, 2];
-    sort(&raw mut b);
+    sort(&mut b);
     i = 0;
     while i < 7 {
         if i > 0 {

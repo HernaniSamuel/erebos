@@ -106,15 +106,15 @@ entry fn main() -> ! {
 
     // A call as scrutinee runs once, whichever arm is taken, and the
     // first arm that matches wins over a later catch-all.
-    let arm: *const [u8] = match next() {
-        0 => &raw const b"zero",
-        1 => &raw const b"one",
-        let n: u8 => &raw const b"later",
+    let arm: &[u8] = match next() {
+        0 => &b"zero",
+        1 => &b"one",
+        let n: u8 => &b"later",
     };
     print(&b"once: ");
     putc(b'0' + CALLS);
     print(&b" call, arm ");
-    print(&*arm);
+    print(arm);
     putc(b'\n');
     let bound: u8 = match next() {
         1 => 10,

@@ -128,7 +128,7 @@ fn run(out: *mut u8) -> u32 {
 entry fn main() -> ! {
     let mut out: [u8; 16] = [0; 16];
     let polls: u32 = run(&raw mut out as *mut u8);
-    print(&*slice(&raw const out as *const u8, 11));
+    print(&out[0..11]);
     putc(b'\n');
     print(&b"polls ");
     print_u32(polls);

@@ -62,12 +62,12 @@ interrupt fn transmitted() at Interrupt::Uart0Tx {
 }
 
 // Queues `text`, a part at a time when the ring is full.
-fn send(text: *const [u8]) {
+fn send(text: &[u8]) {
     let mut i: usize = 0;
     while i < len(text) {
         critical {
             while i < len(text) && HEAD - TAIL < SLOTS {
-                QUEUE[HEAD % SLOTS] = (*text)[i];
+                QUEUE[HEAD % SLOTS] = text[i];
                 HEAD += 1;
                 i += 1;
             }
@@ -90,7 +90,7 @@ entry fn main() -> ! {
     core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
     core::arch::enable_interrupts();
 
-    send(&raw const b"uart tx by interrupt\n");
+    send(&b"uart tx by interrupt\n");
 
     // The last byte is sent when its interrupt has been served.
     loop {

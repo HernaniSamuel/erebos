@@ -44,7 +44,7 @@ mod uart {
     pub fn write(u: &mut Cmsdk, s: &[u8]) {
         let mut i: usize = 0;
         while i < len(s) {
-            putc(u, (*s)[i]);
+            putc(u, s[i]);
             i += 1;
         }
     }

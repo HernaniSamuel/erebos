@@ -32,14 +32,14 @@ static mut FILLED: usize = 0;
 static mut SEQ: u32 = 0;
 
 fn push(s: &mut [u32; 8], at: usize, v: u32) {
-    (*s)[at] = v;
+    s[at] = v;
 }
 
 fn sum(s: &[u32]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += (*s)[i];
+        total += s[i];
         i += 1;
     }
     total
@@ -49,8 +49,8 @@ fn max(s: &[u32; 8]) -> u32 {
     let mut top: u32 = 0;
     let mut i: usize = 0;
     while i < 8 {
-        if (*s)[i] > top {
-            top = (*s)[i];
+        if s[i] > top {
+            top = s[i];
         }
         i += 1;
     }
@@ -60,7 +60,7 @@ fn max(s: &[u32; 8]) -> u32 {
 fn clear(s: &mut [u32]) {
     let mut i: usize = 0;
     while i < len(s) {
-        (*s)[i] = 0;
+        s[i] = 0;
         i += 1;
     }
 }

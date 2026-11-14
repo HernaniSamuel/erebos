@@ -18,12 +18,12 @@ use fmt::print_u32;
 
 // The second group has no reading, so its average divides by zero above.
 entry fn main() -> ! {
-    report(&raw const b"12, 30, 18");
-    report(&raw const b"none");
+    report(&b"12, 30, 18");
+    report(&b"none");
     exit(0)
 }
 
-fn report(text: *const [u8]) {
+fn report(text: &[u8]) {
     let s: Sum = parse::sum(text);
     let mean: u32 = average(s);
     print_u32(s.count);
@@ -35,15 +35,15 @@ fn report(text: *const [u8]) {
 // Prints `<reason> at <file>:<line>` from the information the compiler
 // placed for the check that failed (ADR 0053), then stops QEMU.
 panic fn on_panic(info: &PanicInfo) -> ! {
-    let reason: *const [u8] = match info.reason {
-        PanicReason::DivisionByZero => &raw const b"division by zero",
-        PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
-        PanicReason::AssertionFailed => &raw const b"assertion failed",
-        PanicReason::NoVariant => &raw const b"enum value is no variant",
-        PanicReason::FieldOutOfRange => &raw const b"value does not fit its field",
-        PanicReason::UnhandledVector => &raw const b"vector not handled",
+    let reason: &[u8] = match info.reason {
+        PanicReason::DivisionByZero => &b"division by zero",
+        PanicReason::IndexOutOfBounds => &b"index out of bounds",
+        PanicReason::AssertionFailed => &b"assertion failed",
+        PanicReason::NoVariant => &b"enum value is no variant",
+        PanicReason::FieldOutOfRange => &b"value does not fit its field",
+        PanicReason::UnhandledVector => &b"vector not handled",
     };
-    print(&*reason);
+    print(reason);
     print(&b" at ");
     print(&*info.file);
     print(&b":");

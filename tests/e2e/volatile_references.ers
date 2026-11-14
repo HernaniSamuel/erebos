@@ -57,7 +57,7 @@ fn sum(s: &volatile [u32]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += (*s)[i];
+        total += s[i];
         i += 1;
     }
     total
@@ -66,7 +66,7 @@ fn sum(s: &volatile [u32]) -> u32 {
 fn bump(s: &mut volatile [u32]) {
     let mut i: usize = 0;
     while i < len(s) {
-        (*s)[i] += 1;
+        s[i] += 1;
         i += 1;
     }
 }

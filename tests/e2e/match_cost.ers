@@ -178,12 +178,12 @@ fn ors_arm(q: Q) -> u8 {
     }
 }
 
-fn digit(digits: *const [u8; 12], i: usize) -> u8 {
-    (*digits)[i] - b'0'
+fn digit(digits: &[u8; 12], i: usize) -> u8 {
+    digits[i] - b'0'
 }
 
 // The value whose positions are the decimal digits of `digits`.
-fn ors_input(digits: *const [u8; 12]) -> Q {
+fn ors_input(digits: &[u8; 12]) -> Q {
     Q::A(
         digit(digits, 0), digit(digits, 1), digit(digits, 2), digit(digits, 3),
         digit(digits, 4), digit(digits, 5), digit(digits, 6), digit(digits, 7),
@@ -193,20 +193,20 @@ fn ors_input(digits: *const [u8; 12]) -> Q {
 
 static ORS: [Q; 11] = [
     // The first arm.
-    ors_input(&raw const b"111111111111"),
-    ors_input(&raw const b"123123123123"),
-    ors_input(&raw const b"333333333333"),
+    ors_input(&b"111111111111"),
+    ors_input(&b"123123123123"),
+    ors_input(&b"333333333333"),
     // The second arm.
-    ors_input(&raw const b"321321321324"),
-    ors_input(&raw const b"111111111114"),
+    ors_input(&b"321321321324"),
+    ors_input(&b"111111111114"),
     // Neither: at the first position, a middle one, the last one, and at
     // the last position but one, where both arms want `1 | 2 | 3`.
-    ors_input(&raw const b"011111111111"),
-    ors_input(&raw const b"411111111111"),
-    ors_input(&raw const b"111110111111"),
-    ors_input(&raw const b"111111111110"),
-    ors_input(&raw const b"111111111115"),
-    ors_input(&raw const b"222222222244"),
+    ors_input(&b"011111111111"),
+    ors_input(&b"411111111111"),
+    ors_input(&b"111110111111"),
+    ors_input(&b"111111111110"),
+    ors_input(&b"111111111115"),
+    ors_input(&b"222222222244"),
 ];
 
 const ORS_ARMS: [u8; 11] = [0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2];
@@ -268,7 +268,7 @@ const NESTED_TAKEN: [Taken; 13] = [
 
 fn pairs_agree() -> bool {
     let mut i: usize = 0;
-    while i < len(&raw const PAIRS) {
+    while i < len(&PAIRS) {
         if pairs_arm(PAIRS[i]) != PAIRS_ARMS[i] {
             return false;
         }
@@ -279,7 +279,7 @@ fn pairs_agree() -> bool {
 
 fn ors_agree() -> bool {
     let mut i: usize = 0;
-    while i < len(&raw const ORS) {
+    while i < len(&ORS) {
         if ors_arm(ORS[i]) != ORS_ARMS[i] {
             return false;
         }
@@ -290,7 +290,7 @@ fn ors_agree() -> bool {
 
 fn nested_agree() -> bool {
     let mut i: usize = 0;
-    while i < len(&raw const NESTED) {
+    while i < len(&NESTED) {
         let taken: Taken = nested_arm(NESTED[i]);
         if taken.arm != NESTED_TAKEN[i].arm || taken.x != NESTED_TAKEN[i].x {
             return false;
@@ -322,8 +322,8 @@ fn print_u32(value: u32) {
 }
 
 // `<name> <index>: arm <arm>`, without the end of the line.
-fn print_taken(name: *const [u8], index: usize, arm: u8) {
-    print(&*name);
+fn print_taken(name: &[u8], index: usize, arm: u8) {
+    print(name);
     print(&b" ");
     print_u32(index as u32);
     print(&b": arm ");
@@ -332,23 +332,23 @@ fn print_taken(name: *const [u8], index: usize, arm: u8) {
 
 entry fn main() -> ! {
     let mut i: usize = 0;
-    while i < len(&raw const PAIRS) {
-        print_taken(&raw const b"pairs", i, pairs_arm(PAIRS[i]));
+    while i < len(&PAIRS) {
+        print_taken(&b"pairs", i, pairs_arm(PAIRS[i]));
         print(&b"\n");
         i += 1;
     }
 
     i = 0;
-    while i < len(&raw const ORS) {
-        print_taken(&raw const b"ors", i, ors_arm(ORS[i]));
+    while i < len(&ORS) {
+        print_taken(&b"ors", i, ors_arm(ORS[i]));
         print(&b"\n");
         i += 1;
     }
 
     i = 0;
-    while i < len(&raw const NESTED) {
+    while i < len(&NESTED) {
         let taken: Taken = nested_arm(NESTED[i]);
-        print_taken(&raw const b"nested", i, taken.arm);
+        print_taken(&b"nested", i, taken.arm);
         print(&b", x ");
         print_u32(taken.x as u32);
         print(&b"\n");

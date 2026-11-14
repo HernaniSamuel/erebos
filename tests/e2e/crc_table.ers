@@ -29,10 +29,10 @@ fn crc_table(polynomial: u32) -> [u32; TABLE_SIZE] {
     table
 }
 
-fn crc32(data: *const u8, n: usize) -> u32 {
+fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFF_FFFF;
     let mut i: usize = 0;
-    while i < n {
+    while i < len(data) {
         crc = CRC_TABLE[((crc ^ data[i] as u32) & 0xFF) as usize] ^ (crc >> 8);
         i += 1;
     }
@@ -60,7 +60,7 @@ fn print_u32(n: u32) {
 
 entry fn main() -> ! {
     let message: [u8; 9] = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
-    let crc: u32 = crc32(&raw const message as *const u8, MESSAGE_LEN);
+    let crc: u32 = crc32(&message[0..MESSAGE_LEN]);
     putc(b'c'); putc(b'r'); putc(b'c'); putc(b' ');
     print_u32(crc);
     putc(b'\n');

@@ -64,8 +64,8 @@ fn in_range(address: usize, start: usize, end: usize) -> bool {
 }
 
 // Prints `<what> ok`, or `<what> at <address>` and counts a failure.
-fn check(what: *const [u8], fine: bool, address: usize) -> u32 {
-    print(&*what);
+fn check(what: &[u8], fine: bool, address: usize) -> u32 {
+    print(what);
     if fine {
         print(&b" ok\n");
         0
@@ -88,19 +88,19 @@ entry fn main() -> ! {
     let local: u32 = 7;
     let at: usize = &raw const local as usize;
     let fine: bool = in_range(at, STACK_ORIGIN, STACK_END) && local == 7;
-    failures += check(&raw const b"stack", fine, at);
+    failures += check(&b"stack", fine, at);
 
     let rodata: usize = &raw const GREETING as usize;
     let at: usize = &raw const COUNTER as usize;
     let fine: bool = in_range(at, RAM_ORIGIN, RAM_END) && at > rodata && COUNTER == 0x1234_5678;
-    failures += check(&raw const b"data", fine, at);
+    failures += check(&b"data", fine, at);
 
     let at: usize = &raw const ZEROED as usize;
-    failures += check(&raw const b"bss", in_range(at, RAM_ORIGIN, RAM_END) && ZEROED == 0, at);
+    failures += check(&b"bss", in_range(at, RAM_ORIGIN, RAM_END) && ZEROED == 0, at);
 
     let fine: bool =
         in_range(rodata, RAM_ORIGIN, RAM_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
-    failures += check(&raw const b"rodata", fine, rodata);
+    failures += check(&b"rodata", fine, rodata);
 
     exit(failures)
 }

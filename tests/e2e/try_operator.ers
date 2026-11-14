@@ -20,11 +20,11 @@ enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
 
 static mut CALLS: u32 = 0;
 
-fn digit(s: *const [u8]) -> Result(u32, ParseError) {
+fn digit(s: &[u8]) -> Result(u32, ParseError) {
     if len(s) == 0 {
         return .Err(.Empty);
     }
-    let c: u8 = (*s)[0];
+    let c: u8 = s[0];
     if c < b'0' || c > b'9' {
         return .Err(.BadDigit(c));
     }
@@ -32,15 +32,15 @@ fn digit(s: *const [u8]) -> Result(u32, ParseError) {
 }
 
 // Each passes the error of the one it calls on.
-fn level3(s: *const [u8]) -> Result(u32, ParseError) {
+fn level3(s: &[u8]) -> Result(u32, ParseError) {
     .Ok(digit(s)? * 10)
 }
 
-fn level2(s: *const [u8]) -> Result(u32, ParseError) {
+fn level2(s: &[u8]) -> Result(u32, ParseError) {
     .Ok(level3(s)? + 2)
 }
 
-fn level1(s: *const [u8]) -> Result(u32, ParseError) {
+fn level1(s: &[u8]) -> Result(u32, ParseError) {
     let v: u32 = level2(s)?;
     .Ok(v)
 }
@@ -122,9 +122,9 @@ fn show_quarter(o: Option(u32)) {
 }
 
 entry fn main() -> ! {
-    show_chain(level1(&raw const b"4"));
-    show_chain(level1(&raw const b"x"));
-    show_chain(level1(&raw const b""));
+    show_chain(level1(&b"4"));
+    show_chain(level1(&b"x"));
+    show_chain(level1(&b""));
     show_sum(sum(true));
     show_sum(sum(false));
     show_quarter(quarter(12));

@@ -19,9 +19,9 @@ fn print_u32(n: u32) {
     putc(b'0' + (n % 10) as u8);
 }
 
-fn print(buf: *const u8, n: usize) {
+fn print(buf: &[u8]) {
     let mut i: usize = 0;
-    while i < n {
+    while i < len(buf) {
         putc(buf[i]);
         i += 1;
     }
@@ -42,18 +42,18 @@ entry fn main() -> ! {
     a[4] = b'o';
     let b: *mut u8 = &raw mut a[16];
     core::memcpy(b, a, 5);
-    print(b, 5);
+    print(&*slice(b, 5));
 
     // Overlapping, destination above the source: copies backwards.
     core::memmove(&raw mut b[1], b, 5);
-    print(b, 6);
+    print(&*slice(b, 6));
 
     // Overlapping, destination below the source.
     core::memmove(b, &raw const b[2], 4);
-    print(b, 4);
+    print(&*slice(b, 4));
 
     core::memset(b, 0x178, 5);
-    print(b, 5);
+    print(&*slice(b, 5));
 
     // A fill loop, which `-O` turns into a call to `memset`.
     let big: *mut u8 = &raw mut a[1024];

@@ -96,8 +96,8 @@ fn field(n: u64) {
     print_u64(n);
 }
 
-fn option(name: *const [u8], present: bool, value: u64) {
-    print(&*name);
+fn option(name: &[u8], present: bool, value: u64) {
+    print(name);
     if present {
         print(&b" some");
         field(value);
@@ -109,22 +109,22 @@ fn option(name: *const [u8], present: bool, value: u64) {
 
 fn show_u8(x: Option(u8)) {
     match x {
-        .Some(let v: u8) => option(&raw const b"u8", true, v as u64),
-        .None => option(&raw const b"u8", false, 0),
+        .Some(let v: u8) => option(&b"u8", true, v as u64),
+        .None => option(&b"u8", false, 0),
     }
 }
 
 fn show_u32(x: Option(u32)) {
     match x {
-        .Some(let v: u32) => option(&raw const b"u32", true, v as u64),
-        .None => option(&raw const b"u32", false, 0),
+        .Some(let v: u32) => option(&b"u32", true, v as u64),
+        .None => option(&b"u32", false, 0),
     }
 }
 
 fn show_u64(x: Option(u64)) {
     match x {
-        .Some(let v: u64) => option(&raw const b"u64", true, v),
-        .None => option(&raw const b"u64", false, 0),
+        .Some(let v: u64) => option(&b"u64", true, v),
+        .None => option(&b"u64", false, 0),
     }
 }
 
@@ -144,9 +144,9 @@ fn show_result(x: Result(u32, Fault)) {
 }
 
 // What C saw: the tag and the payload value it read from its union.
-fn seen(name: *const [u8], tag: u8, value: u64) {
+fn seen(name: &[u8], tag: u8, value: u64) {
     print(&b"c sees ");
-    print(&*name);
+    print(name);
     field(tag as u64);
     field(value);
     putc(b'\n');
@@ -173,29 +173,29 @@ entry fn main() -> ! {
     let mut tag: u8 = 0;
     let mut value: u64 = 0;
     c_sees_u8(1, 5, &raw mut tag, &raw mut value);
-    seen(&raw const b"u8", tag, value);
+    seen(&b"u8", tag, value);
     c_sees_u8(1, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"u8", tag, value);
+    seen(&b"u8", tag, value);
     c_sees_u8(0, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"u8", tag, value);
+    seen(&b"u8", tag, value);
     c_sees_u32(1, 1_000_000_000, &raw mut tag, &raw mut value);
-    seen(&raw const b"u32", tag, value);
+    seen(&b"u32", tag, value);
     c_sees_u32(1, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"u32", tag, value);
+    seen(&b"u32", tag, value);
     c_sees_u32(0, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"u32", tag, value);
+    seen(&b"u32", tag, value);
     c_sees_u64(1, 0x1_0000_0001, &raw mut tag, &raw mut value);
-    seen(&raw const b"u64", tag, value);
+    seen(&b"u64", tag, value);
     c_sees_u64(1, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"u64", tag, value);
+    seen(&b"u64", tag, value);
     c_sees_u64(0, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"u64", tag, value);
+    seen(&b"u64", tag, value);
     c_sees_result(0, 500, &raw mut tag, &raw mut value);
-    seen(&raw const b"result", tag, value);
+    seen(&b"result", tag, value);
     c_sees_result(0, 0, &raw mut tag, &raw mut value);
-    seen(&raw const b"result", tag, value);
+    seen(&b"result", tag, value);
     c_sees_result(1, 7, &raw mut tag, &raw mut value);
-    seen(&raw const b"result", tag, value);
+    seen(&b"result", tag, value);
     exit(0)
 }
 

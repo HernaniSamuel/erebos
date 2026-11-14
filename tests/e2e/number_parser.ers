@@ -54,14 +54,14 @@ fn shift_in(acc: u32, d: u32) -> Option(u32) {
     checked_add(checked_mul10(acc)?, d)
 }
 
-fn parse(s: *const [u8]) -> Result(u32, ParseError) {
+fn parse(s: &[u8]) -> Result(u32, ParseError) {
     if len(s) == 0 {
         return .Err(.Empty);
     }
     let mut value: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        let d: u32 = digit((*s)[i])?;
+        let d: u32 = digit(s[i])?;
         value = match shift_in(value, d) {
             .Some(let v: u32) => v,
             .None => return .Err(.Overflow),
@@ -73,49 +73,49 @@ fn parse(s: *const [u8]) -> Result(u32, ParseError) {
 
 comptime {
     assert(
-        match parse(INPUTS[0]) {
+        match parse(&*INPUTS[0]) {
             .Ok(0) => true,
             _ => false,
         },
         &b"\"0\" is 0",
     );
     assert(
-        match parse(INPUTS[1]) {
+        match parse(&*INPUTS[1]) {
             .Ok(42) => true,
             _ => false,
         },
         &b"\"42\" is 42",
     );
     assert(
-        match parse(INPUTS[2]) {
+        match parse(&*INPUTS[2]) {
             .Ok(4_294_967_295) => true,
             _ => false,
         },
         &b"\"4294967295\" is the largest u32",
     );
     assert(
-        match parse(INPUTS[3]) {
+        match parse(&*INPUTS[3]) {
             .Err(.Overflow) => true,
             _ => false,
         },
         &b"\"4294967296\" overflows",
     );
     assert(
-        match parse(INPUTS[4]) {
+        match parse(&*INPUTS[4]) {
             .Err(.Overflow) => true,
             _ => false,
         },
         &b"\"4294967300\" overflows",
     );
     assert(
-        match parse(INPUTS[5]) {
+        match parse(&*INPUTS[5]) {
             .Err(.Empty) => true,
             _ => false,
         },
         &b"\"\" is empty",
     );
     assert(
-        match parse(INPUTS[6]) {
+        match parse(&*INPUTS[6]) {
             .Err(.BadDigit(b'a')) => true,
             _ => false,
         },
@@ -139,9 +139,9 @@ fn print_u32(value: u32) {
 }
 
 // Prints `s` in quotes, then what `parse` makes of it, on one line.
-fn show(s: *const [u8]) {
+fn show(s: &[u8]) {
     print(&b"\"");
-    print(&*s);
+    print(s);
     print(&b"\" -> ");
     match parse(s) {
         .Ok(let v: u32) => print_u32(v),
@@ -158,8 +158,8 @@ fn show(s: *const [u8]) {
 
 entry fn main() -> ! {
     let mut i: usize = 0;
-    while i < len(&raw const INPUTS) {
-        show(INPUTS[i]);
+    while i < len(&INPUTS) {
+        show(&*INPUTS[i]);
         i += 1;
     }
     exit(0)

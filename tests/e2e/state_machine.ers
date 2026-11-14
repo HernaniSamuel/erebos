@@ -68,20 +68,20 @@ fn step(state: State, event: Event) -> State {
 }
 
 // The state after all of `events`, from `State::Idle`.
-fn run(events: *const [u8]) -> State {
+fn run(events: &[u8]) -> State {
     let mut state: State = State::Idle;
     let mut i: usize = 0;
     while i < len(events) {
-        state = step(state, decode((*events)[i]));
+        state = step(state, decode(events[i]));
         i += 1;
     }
     state
 }
 
 comptime {
-    assert(run(EVENTS) == State::Running, &b"the events end in `running`");
-    assert(run(&raw const b"sx") == State::Done);
-    assert(run(&raw const b"") == State::Idle);
+    assert(run(&*EVENTS) == State::Running, &b"the events end in `running`");
+    assert(run(&b"sx") == State::Done);
+    assert(run(&b"") == State::Idle);
 }
 
 static mut STATE: State = State::Idle;
@@ -132,7 +132,7 @@ entry fn main() -> ! {
     print(&b"state ");
     print(&*state_name(STATE));
     print(&b"\n");
-    exit(if STATE == run(EVENTS) { 0 } else { 2 })
+    exit(if STATE == run(&*EVENTS) { 0 } else { 2 })
 }
 
 panic fn on_panic() -> ! {

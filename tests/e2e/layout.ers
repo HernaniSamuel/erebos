@@ -16,9 +16,9 @@ fn print_u32(n: u32) {
     putc(b'0' + (n % 10) as u8);
 }
 
-fn print(text: *const u8, n: usize) {
+fn print(text: &[u8]) {
     let mut i: usize = 0;
-    while i < n {
+    while i < len(text) {
         putc(text[i]);
         i += 1;
     }
@@ -30,7 +30,7 @@ fn check(id: u32, actual: usize, expected: usize) {
         let failed: [u8; 13] = [
             b'c', b'h', b'e', b'c', b'k', b' ', b'f', b'a', b'i', b'l', b'e', b'd', b' ',
         ];
-        print(&raw const failed as *const u8, 13);
+        print(&failed);
         print_u32(id);
         putc(b'\n');
         exit(2);
@@ -86,7 +86,7 @@ entry fn main() -> ! {
     check(72, offset_of(Mixed, tail), 8);
     check(80, size_of([Descriptor; 3]), 192);
     let layout: [u8; 9] = [b'l', b'a', b'y', b'o', b'u', b't', b' ', b'o', b'k'];
-    print(&raw const layout as *const u8, 9);
+    print(&layout);
     putc(b'\n');
 
     // A packed header at an odd address, in the board's scratch RAM: its
@@ -98,7 +98,7 @@ entry fn main() -> ! {
     (*header).tag = 0xBEEF;
     let copy: Header = *header;
     let packed: [u8; 7] = [b'p', b'a', b'c', b'k', b'e', b'd', b' '];
-    print(&raw const packed as *const u8, 7);
+    print(&packed);
     print_u32(copy.len);
     putc(b' ');
     print_u32(copy.kind as u32);
@@ -116,7 +116,7 @@ entry fn main() -> ! {
     check(101, (&raw const other as usize) % 64, 0);
     check(102, (&raw const other[1] as usize) % 64, 0);
     let aligned: [u8; 10] = [b'a', b'l', b'i', b'g', b'n', b'e', b'd', b' ', b'o', b'k'];
-    print(&raw const aligned as *const u8, 10);
+    print(&aligned);
     putc(b'\n');
     exit(0)
 }

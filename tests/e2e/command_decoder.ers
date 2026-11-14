@@ -74,11 +74,11 @@ fn decode_mode(byte: u8) -> Mode {
 }
 
 // The message at the start of `bytes`.
-fn decode(bytes: *const [u8]) -> Decoded {
+fn decode(bytes: &[u8]) -> Decoded {
     if len(bytes) == 0 {
         return Decoded::Done;
     }
-    let code: u8 = (*bytes)[0];
+    let code: u8 = bytes[0];
     // The bytes the message takes, its command byte included.
     let size: usize = match code {
         NOP => 1,
@@ -90,44 +90,44 @@ fn decode(bytes: *const [u8]) -> Decoded {
         return Decoded::Bad(code, len(bytes));
     }
     let cmd: Cmd = match code {
-        LED => Cmd::Led((*bytes)[1] != 0),
-        WRITE => Cmd::Write((*bytes)[1], (*bytes)[2] as u16 | ((*bytes)[3] as u16) << 8),
-        SET_MODE => Cmd::SetMode(decode_mode((*bytes)[1])),
-        CLEAR => Cmd::Clear((*bytes)[1]),
+        LED => Cmd::Led(bytes[1] != 0),
+        WRITE => Cmd::Write(bytes[1], bytes[2] as u16 | (bytes[3] as u16) << 8),
+        SET_MODE => Cmd::SetMode(decode_mode(bytes[1])),
+        CLEAR => Cmd::Clear(bytes[1]),
         _ => Cmd::Nop,
     };
     Decoded::Cmd(cmd, size)
 }
 
 // The bytes of `s` from `start` on, where `start` may be `len(s)`.
-fn rest(s: *const [u8], start: usize) -> *const [u8] {
+fn rest(s: &[u8], start: usize) -> *const [u8] {
     slice(&raw const (s as *const u8)[start], len(s) - start)
 }
 
 comptime {
     assert(
-        match decode(&raw const b"\x02\x10\x34\x12\xff") {
+        match decode(&b"\x02\x10\x34\x12\xff") {
             Decoded::Cmd(Cmd::Write(0x10, 0x1234), 4) => true,
             _ => false,
         },
         &b"a write of 0x1234 to 0x10 takes four bytes",
     );
     assert(
-        match decode(&raw const b"\x03\x07") {
+        match decode(&b"\x03\x07") {
             Decoded::Cmd(Cmd::SetMode(Mode::Off), 2) => true,
             _ => false,
         },
         &b"an unknown mode is `off`",
     );
     assert(
-        match decode(rest(&raw const b"\x00\x09", 1)) {
+        match decode(&*rest(&b"\x00\x09", 1)) {
             Decoded::Bad(0x09, 1) => true,
             _ => false,
         },
         &b"0x09 is no command",
     );
     assert(
-        match decode(rest(&raw const b"\x01", 1)) {
+        match decode(&*rest(&b"\x01", 1)) {
             Decoded::Done => true,
             _ => false,
         },
@@ -209,7 +209,7 @@ entry fn main() -> ! {
     loop {
         print_u32(at as u32);
         print(&b": ");
-        match decode(rest(&raw const STREAM, at)) {
+        match decode(&*rest(&STREAM, at)) {
             Decoded::Done => {
                 print(&b"done\n");
                 break;
@@ -236,7 +236,7 @@ entry fn main() -> ! {
         Cmd::Led(false) => true,
         _ => false,
     };
-    exit(if at == len(&raw const STREAM) && last_ok { 0 } else { 2 })
+    exit(if at == len(&STREAM) && last_ok { 0 } else { 2 })
 }
 
 panic fn on_panic() -> ! {

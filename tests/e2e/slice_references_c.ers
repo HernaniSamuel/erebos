@@ -31,7 +31,7 @@ fn erebos_sum(s: &[u32]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += (*s)[i];
+        total += s[i];
         i += 1;
     }
     total
@@ -40,7 +40,7 @@ fn erebos_sum(s: &[u32]) -> u32 {
 // Called from C.
 #[export]
 fn erebos_first_plus_len(s: &[u8]) -> u32 {
-    (*s)[0] as u32 + len(s) as u32
+    s[0] as u32 + len(s) as u32
 }
 
 fn print_u32(value: u32) {
