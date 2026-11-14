@@ -1,6 +1,6 @@
 # 0110. References to statics, peripherals and volatile places
 
-- Status: Accepted
+- Status: Accepted; amended by 0115 (a borrow of a peripheral names it)
 - Date: 2026-11-12
 - Amends: 0023 (volatility flows from a volatile reference too), 0058 (a
   peripheral and a cluster may be borrowed; `volatile` on a reference to a

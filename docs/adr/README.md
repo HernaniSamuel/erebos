@@ -87,7 +87,7 @@ Do not write one for local implementation details that the code already explains
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
 | 0057 | [Memory maps](0057-memory-maps.md) | Accepted, amended by 0083, 0090 |
-| 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061, 0064, 0066, 0110 |
+| 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061, 0064, 0066, 0110, 0115 |
 | 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted, amended by 0062, 0065 |
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted, amended by 0064 |
@@ -107,7 +107,7 @@ Do not write one for local implementation details that the code already explains
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
 | 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088 |
-| 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted, amended by 0093 |
+| 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted, amended by 0093, 0115 |
 | 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083, 0084 |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
 | 0081 | [Fences](0081-fences.md) | Accepted |
@@ -122,8 +122,8 @@ Do not write one for local implementation details that the code already explains
 | 0090 | [The thumbv7m table with the chip's interrupts](0090-the-thumbv7m-table-with-the-chips-interrupts.md) | Accepted |
 | 0091 | [Enabling and dispatching external interrupts](0091-enabling-and-dispatching-external-interrupts.md) | Accepted |
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
-| 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted, amended by 0110, 0112 |
-| 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted, amended by 0110 |
+| 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted, amended by 0110, 0112, 0115 |
+| 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted, amended by 0110, 0115 |
 | 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107, 0109, 0112 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
 | 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103, 0105 |
@@ -139,8 +139,9 @@ Do not write one for local implementation details that the code already explains
 | 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109, 0112 |
 | 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110 |
 | 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted, amended 2026-11-12, amended by 0112 |
-| 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted |
+| 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted, amended by 0115 |
 | 0111 | [Borrows of statics and peripherals, across calls](0111-borrows-of-statics-and-peripherals-across-calls.md) | Accepted |
 | 0112 | [Borrows of statics, peripherals and volatile places in MIR](0112-borrows-of-statics-in-mir-and-the-analyses.md) | Accepted |
 | 0113 | [Functions of a type](0113-functions-of-a-type.md) | Accepted |
 | 0114 | [Method calls, and places through a reference](0114-method-calls-and-places-through-references.md) | Accepted |
+| 0115 | [Peripherals owned by contexts](0115-peripherals-owned-by-contexts.md) | Accepted |

@@ -1,6 +1,6 @@
 # 0078. Concurrency with interrupt handlers
 
-- Status: Accepted; amended by 0093 (a `&raw` evaluated at compile time names no static)
+- Status: Accepted; amended by 0093 (a `&raw` evaluated at compile time names no static), 0115 (peripherals are seen by the check)
 - Date: 2026-11-03
 
 ## Context
