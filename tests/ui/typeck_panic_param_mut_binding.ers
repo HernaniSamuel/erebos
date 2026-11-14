@@ -1,0 +1,5 @@
+// emit: typeck
+// Like any parameter of a reference type, the panic function's may not be
+// `mut`: `ty::reference-position`, not `ty::panic-param` (ADR 0105, 0116).
+entry fn main() -> ! { loop {} }
+panic fn on_panic(mut info: &core::PanicInfo) -> ! { loop {} }

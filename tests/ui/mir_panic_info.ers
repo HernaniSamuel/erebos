@@ -1,5 +1,5 @@
 // emit: mir
-// With a panic function that takes a `*const core::PanicInfo`, each check
+// With a panic function that takes a `&core::PanicInfo`, each check
 // passes the address of read-only data of its own, holding its reason and
 // where it is: the line and column of the token that performs it, the
 // operator of `/`, `%`, `/=` and `%=`, the `[` of an index, `assert`,
@@ -37,7 +37,7 @@ fn messages(x: u32, m: *const [u8]) -> u32 {
 }
 
 entry fn main() -> ! { loop {} }
-panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }
 
 // In parentheses, a check is still located at the token that performs it,
 // not at the `(` or the `)` around it.

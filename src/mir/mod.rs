@@ -1746,7 +1746,7 @@ pub enum Terminator {
     /// Control never reaches the end of this block.
     Unreachable,
     /// A check failed: calls the panic function (ADR 0014), which never
-    /// returns. When the panic function takes a `*const core::PanicInfo`,
+    /// returns. When the panic function takes a `&core::PanicInfo`,
     /// with where the check is, whose information the call passes
     /// (ADR 0053).
     Panic(PanicCause, Option<PanicSite>),

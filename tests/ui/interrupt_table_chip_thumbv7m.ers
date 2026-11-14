@@ -2,7 +2,7 @@
 // emit: llvm-ir
 // opt: both
 // The vector table with the chip's list (ADR 0090), and a panic function that
-// takes `*const core::PanicInfo`: the table has `16 + m + 1` words, 21 for the
+// takes `&core::PanicInfo`: the table has `16 + m + 1` words, 21 for the
 // largest value 4; the word `16 + n` holds the handler at the variant of value
 // `n`, or the default handler `__erebos_unhandled_irq_<variant>`, whose
 // information is `UnhandledVector` and the variant's bare name; a line the list
@@ -33,4 +33,4 @@ mod drivers {
 
 entry fn main() -> ! { loop {} }
 
-panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }

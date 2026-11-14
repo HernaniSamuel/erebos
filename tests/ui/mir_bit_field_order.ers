@@ -29,4 +29,4 @@ fn literal() -> Counter {
 }
 
 entry fn main() -> ! { loop {} }
-panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }

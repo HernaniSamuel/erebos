@@ -1,0 +1,33 @@
+// emit: mir
+// The panic function's parameter is a reference (ADR 0116), and the exemption
+// of ADR 0111 holds for the call a check makes, not for one written by name:
+// `on_panic(&INFO)` is followed as any call, so the panic function's write of
+// `INFO` conflicts with the borrow the call passes, while a check in a
+// function holding a borrow of `INFO` is not followed to the panic function.
+static mut INFO: core::PanicInfo = core::PanicInfo {
+    file: &raw const b"info.ers",
+    line: 1,
+    column: 1,
+    reason: core::PanicReason::AssertionFailed,
+    message: &raw const b"by name",
+};
+static ZERO: u32 = 0;
+
+fn by_name() -> ! {
+    on_panic(&INFO)
+}
+
+fn by_check() {
+    let held: &core::PanicInfo = &INFO;
+    let x: u32 = 1 / ZERO;
+    let line: u32 = held.line;
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    INFO.line = 0;
+    loop {}
+}

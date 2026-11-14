@@ -17,7 +17,7 @@ pub mod arch;
 
 // --- Panic information (ADR 0053) -------------------------------------------
 //
-// A panic function declared `panic fn on_panic(info: *const core::PanicInfo)`
+// A panic function declared `panic fn on_panic(info: &core::PanicInfo)`
 // learns where and why the program panicked. For the compiler's own checks,
 // `info` points to read-only data the compiler fills in, one per check, or,
 // for an `assert` with a message, to a `PanicInfo` in the failing function's

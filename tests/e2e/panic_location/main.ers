@@ -36,8 +36,8 @@ fn report(text: *const [u8]) {
 
 // Prints `<reason> at <file>:<line>` from the information the compiler
 // placed for the check that failed (ADR 0053), then stops QEMU.
-panic fn on_panic(info: *const PanicInfo) -> ! {
-    let reason: *const [u8] = match (*info).reason {
+panic fn on_panic(info: &PanicInfo) -> ! {
+    let reason: *const [u8] = match info.reason {
         PanicReason::DivisionByZero => &raw const b"division by zero",
         PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
         PanicReason::AssertionFailed => &raw const b"assertion failed",
@@ -47,9 +47,9 @@ panic fn on_panic(info: *const PanicInfo) -> ! {
     };
     print(reason);
     print(&raw const b" at ");
-    print((*info).file);
+    print(info.file);
     print(&raw const b":");
-    print_u32((*info).line);
+    print_u32(info.line);
     print(&raw const b"\n");
     exit(1)
 }

@@ -65,18 +65,18 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
 
 // Prints `<reason>[: <message>] at <file>:<line>:<column>`; the message of
 // these checks is empty (ADR 0053).
-panic fn on_panic(info: *const core::PanicInfo) -> ! {
-    print(reason((*info).reason));
-    if len((*info).message) > 0 {
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    print(reason(info.reason));
+    if len(info.message) > 0 {
         print(&raw const b": ");
-        print((*info).message);
+        print(info.message);
     }
     print(&raw const b" at ");
-    print((*info).file);
+    print(info.file);
     print(&raw const b":");
-    print_u32((*info).line);
+    print_u32(info.line);
     print(&raw const b":");
-    print_u32((*info).column);
+    print_u32(info.column);
     print(&raw const b"\n");
     exit(1)
 }

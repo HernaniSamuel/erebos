@@ -1003,7 +1003,7 @@ fn thumbv7m_vector_table() {
         (15, "SysTick"),
     ];
     const RESERVED: [usize; 5] = [7, 8, 9, 10, 13];
-    const WITH_INFO: &str = "panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }\n";
+    const WITH_INFO: &str = "panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }\n";
     const WITHOUT_INFO: &str = "panic fn on_panic() -> ! { loop {} }\n";
     const HANDLERS: &str = "
 use core::arch::Vector;
@@ -1181,7 +1181,7 @@ mod drivers {
 }
 entry fn main() -> ! { loop {} }
 ";
-    const WITH_INFO: &str = "panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }\n";
+    const WITH_INFO: &str = "panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }\n";
     const WITHOUT_INFO: &str = "panic fn on_panic() -> ! { loop {} }\n";
 
     let target = erebos::target::by_name("thumbv7m-none-eabi").unwrap();
@@ -1321,7 +1321,7 @@ fn riscv32_trap_table() {
         (23, "MachineTimer"),
         (27, "MachineExternal"),
     ];
-    const WITH_INFO: &str = "panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }\n";
+    const WITH_INFO: &str = "panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }\n";
     const WITHOUT_INFO: &str = "panic fn on_panic() -> ! { loop {} }\n";
     const HANDLERS: &str = "
 use core::arch::Vector;

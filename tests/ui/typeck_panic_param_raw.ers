@@ -1,0 +1,6 @@
+// emit: typeck
+// A `*const core::PanicInfo`, the parameter of ADR 0053, is no longer
+// accepted: it is `ty::panic-param`, whose help names the reference
+// (ADR 0116).
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

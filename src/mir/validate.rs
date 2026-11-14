@@ -1084,14 +1084,14 @@ impl<'a> Checker<'a> {
             (false, Some(site), true) => {
                 if let PanicInfoAt::Local(local) = site.info
                     && let Some(have) = self.local_ty(local)
-                    && let Some(Ty::Ptr(param)) = panic.locals.get(1).map(|decl| decl.ty)
-                    && have != *param.pointee
+                    && let Some(Ty::Ref(param)) = panic.locals.get(1).map(|decl| decl.ty)
+                    && have != *param.referent
                 {
                     self.violation(
                         "P8",
                         format!(
-                            "the site is in `{local}` of type `{have}`, but the panic function's parameter points to `{}`",
-                            param.pointee
+                            "the site is in `{local}` of type `{have}`, but the panic function's parameter refers to `{}`",
+                            param.referent
                         ),
                     );
                 }
@@ -1913,9 +1913,12 @@ impl Rules<'_> {
             Role::Panic if params > 1 => {
                 wrong.push(format!("{what} takes {params} parameters, not none or one"));
             }
-            Role::Panic if params == 1 && !matches!(first, Some(Ty::Ptr(ptr)) if thin(&ptr)) => {
+            Role::Panic
+                if params == 1
+                    && !matches!(first, Some(Ty::Ref(r)) if !matches!(r.referent, Ty::Slice(_))) =>
+            {
                 wrong.push(format!(
-                    "{what} takes a parameter of type `{}`, not a thin pointer",
+                    "{what} takes a parameter of type `{}`, not a thin reference",
                     first.map_or("?".to_owned(), |ty| ty.to_string())
                 ));
             }
@@ -6031,12 +6034,12 @@ mod tests {
         }
     }
 
-    /// `program` whose panic function takes a `*const Info`, and `caller` has
+    /// `program` whose panic function takes a `&Info`, and `caller` has
     /// a local `_4: Info`; the type `Info`.
     fn with_panic_info() -> (Mir, Ty) {
         let mut mir = program();
         let info = Ty::Struct(pair());
-        mir.bodies[PANIC] = fun("panic", &[ptr(false, false, info)], Ty::Never, &[]);
+        mir.bodies[PANIC] = fun("panic", &[reference(false, info)], Ty::Never, &[]);
         mir.bodies[CALLER].locals.push(decl(info));
         (mir, info)
     }
@@ -6378,7 +6381,7 @@ mod tests {
         let u = u32_ty();
         let (_, info) = with_panic_info();
         type Change = fn(&mut Mir, Ty, Ty);
-        let cases: [(&str, Change); 11] = [
+        let cases: [(&str, Change); 13] = [
             ("entry returns u32", |mir, u, _| {
                 mir.bodies[ENTRY] = fun("entry", &[], u, &[]);
             }),
@@ -6401,6 +6404,13 @@ mod tests {
                     false,
                     Ty::Slice(Box::leak(Box::new(Ty::Int(IntTy::U8)))),
                 );
+                mir.bodies[PANIC] = fun("panic", &[slice], Ty::Never, &[]);
+            }),
+            ("panic takes a raw pointer", |mir, _, info| {
+                mir.bodies[PANIC] = fun("panic", &[ptr(false, false, info)], Ty::Never, &[]);
+            }),
+            ("panic takes a reference to a slice", |mir, _, _| {
+                let slice = reference(false, Ty::Slice(Box::leak(Box::new(Ty::Int(IntTy::U8)))));
                 mir.bodies[PANIC] = fun("panic", &[slice], Ty::Never, &[]);
             }),
             ("a handler takes a parameter", |mir, u, _| {
@@ -6431,7 +6441,7 @@ mod tests {
             );
         }
         // The shapes that are allowed: a panic function with no parameter or
-        // one thin pointer, and a `reset` of any shape.
+        // one thin reference, and a `reset` of any shape.
         let (mir, _) = with_panic_info();
         assert!(check_program(&mir).is_empty());
         let mut mir = program();
@@ -6520,7 +6530,7 @@ mod tests {
         program_breaks_only(&mir, "P8");
 
         // A function that takes one: a runtime body carries a site, in data
-        // or in a local of the type the parameter points to.
+        // or in a local of the type the parameter refers to.
         let (mut mir, _) = with_panic_info();
         panics(&mut mir, false, None);
         program_breaks_only(&mir, "P8");

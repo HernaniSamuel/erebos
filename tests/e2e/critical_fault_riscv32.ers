@@ -27,13 +27,13 @@ fn print(s: *const [u8]) {
     }
 }
 
-panic fn on_panic(info: *const core::PanicInfo) -> ! {
-    match (*info).reason {
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    match info.reason {
         .UnhandledVector => print(&raw const b"vector not handled"),
         _ => exit(3),
     }
     print(&raw const b": ");
-    print((*info).message);
+    print(info.message);
     let mut mstatus: u32 = 0;
     asm("csrr {}, mstatus", out(reg) mstatus, options(nostack, preserves_flags));
     // `MIE` is bit 3 and `MPIE` bit 7.

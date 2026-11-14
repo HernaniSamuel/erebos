@@ -728,7 +728,7 @@ impl Checker<'_, '_> {
 
     /// Parameters carry values, so `()` and `!` make no sense there; the entry
     /// function is called by no one and takes none, and the panic function
-    /// takes none or one `*const core::PanicInfo` (ADR 0053).
+    /// takes none or one `&core::PanicInfo` (ADR 0053, 0116).
     fn params(&mut self, f: &Fn) {
         if f.kind == FnKind::Entry
             && let Some(first) = f.params().first()
@@ -830,8 +830,8 @@ impl Checker<'_, '_> {
 
     /// The panic function takes no parameter, or one through which it
     /// learns where and why the program panicked: exactly a
-    /// `*const core::PanicInfo`, since the information is read-only
-    /// (ADR 0053).
+    /// `&core::PanicInfo`, since the information is read-only (ADR 0053,
+    /// 0116).
     fn panic_params(&mut self, f: &Fn) {
         let label = match f.params() {
             [] => return,
@@ -839,10 +839,10 @@ impl Checker<'_, '_> {
                 let ty = self.norm(param.ty);
                 let info = self.q.hir.panic_info;
                 match ty {
-                    Ty::Ptr(Ptr {
+                    Ty::Ref(Ref {
                         mutable: false,
                         volatile: false,
-                        pointee: Ty::Struct(s),
+                        referent: Ty::Struct(s),
                     }) if s.id == info => return,
                     // Reported where the type is written, or as a
                     // parameter's type below.
@@ -855,11 +855,11 @@ impl Checker<'_, '_> {
         self.q.diags.push(
             Diagnostic::error(
                 "ty::panic-param",
-                "the panic function takes no parameter or one `*const core::PanicInfo`",
+                "the panic function takes no parameter or one `&core::PanicInfo`",
             )
             .label(label.0, label.1)
             .help(
-                "declare it `panic fn on_panic() -> !`, or `panic fn on_panic(info: *const core::PanicInfo) -> !` to learn where and why the program panicked, from read-only data (ADR 0053)",
+                "declare it `panic fn on_panic() -> !`, or `panic fn on_panic(info: &core::PanicInfo) -> !` to learn where and why the program panicked, from read-only data (ADR 0053, 0116)",
             ),
         );
     }

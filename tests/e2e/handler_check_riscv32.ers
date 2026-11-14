@@ -50,8 +50,8 @@ fn print_hex(value: u32) {
     }
 }
 
-panic fn on_panic(info: *const core::PanicInfo) -> ! {
-    match (*info).reason {
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    match info.reason {
         .DivisionByZero => print(&raw const b"division by zero"),
         _ => exit(3),
     }

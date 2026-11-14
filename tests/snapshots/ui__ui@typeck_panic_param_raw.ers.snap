@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_panic_param_raw.ers
+---
+--- errors ---
+ty::panic-param
+
+  × the panic function takes no parameter or one `&core::PanicInfo`
+   ╭─[typeck_panic_param_raw.ers:6:19]
+ 5 │ entry fn main() -> ! { loop {} }
+ 6 │ panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+   ·                   ──┬─
+   ·                     ╰── has type `*const core::PanicInfo`
+   ╰────
+  help: declare it `panic fn on_panic() -> !`, or `panic fn on_panic(info: &core::PanicInfo) -> !`
+        to learn where and why the program panicked, from read-only data (ADR 0053, 0116)

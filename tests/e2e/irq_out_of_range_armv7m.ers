@@ -41,8 +41,8 @@ entry fn main() -> ! {
     exit(4)
 }
 
-panic fn on_panic(info: *const core::PanicInfo) -> ! {
-    match (*info).reason {
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    match info.reason {
         .AssertionFailed => print(&raw const b"assertion failed"),
         _ => exit(5),
     }

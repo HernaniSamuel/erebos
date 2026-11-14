@@ -2,7 +2,7 @@
 // emit: llvm-ir
 // opt: both
 // The vector table of ARMv7-M and the default handlers (ADR 0085), with a panic
-// function that takes `*const core::PanicInfo`: 16 words; a handler's word
+// function that takes `&core::PanicInfo`: 16 words; a handler's word
 // holds its symbol, the dotted path of one in a module and the name alone of an
 // `#[export]` one; every other exception has a default handler of its own,
 // `__erebos_unhandled_<variant>`, whose information is `UnhandledVector`, an
@@ -27,4 +27,4 @@ mod drivers {
 
 entry fn main() -> ! { loop {} }
 
-panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }

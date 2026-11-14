@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_panic_param_mut_binding.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` parameter
+   ╭─[typeck_panic_param_mut_binding.ers:5:29]
+ 4 │ entry fn main() -> ! { loop {} }
+ 5 │ panic fn on_panic(mut info: &core::PanicInfo) -> ! { loop {} }
+   ·                             ────────┬───────
+   ·                                     ╰── `&core::PanicInfo` is a reference
+   ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one

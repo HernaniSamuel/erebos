@@ -221,7 +221,7 @@ pub struct Queries<'h> {
     byte_strings: Vec<StaticRef>,
     /// Whether each byte string is `core`'s (ADR 0052).
     byte_strings_in_core: Vec<bool>,
-    /// When the panic function takes a `*const core::PanicInfo`, the name of
+    /// When the panic function takes a `&core::PanicInfo`, the name of
     /// each source file, by id, as a byte string its checks point to
     /// (ADR 0053); the first byte strings, made before any body is built,
     /// so that their numbers do not depend on the order bodies are built.
@@ -317,7 +317,7 @@ impl<'h> Queries<'h> {
     }
 
     /// Whether the panic function takes a parameter, through which the
-    /// compiler's checks pass a `*const core::PanicInfo` (ADR 0053); one of
+    /// compiler's checks pass a `&core::PanicInfo` (ADR 0053); one of
     /// another type was reported.
     pub fn takes_panic_info(&self) -> bool {
         self.hir.fn_(self.hir.panic).param_count == 1

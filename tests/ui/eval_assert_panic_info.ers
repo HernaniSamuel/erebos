@@ -12,4 +12,4 @@ const FINE: u32 = checked(3);
 const LARGE: u32 = checked(12);
 
 entry fn main() -> ! { loop {} }
-panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }

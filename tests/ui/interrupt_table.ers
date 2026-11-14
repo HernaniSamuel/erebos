@@ -1,7 +1,7 @@
 // emit: llvm-ir
 // opt: both
 // The trap table of riscv32 and the default handlers (ADR 0085), with a panic
-// function that takes `*const core::PanicInfo`: 33 words in the section
+// function that takes `&core::PanicInfo`: 33 words in the section
 // `.rodata.__erebos_trap_table`, the exceptions, then the interrupts, then the
 // word of any other cause; a handler's word holds its symbol, the dotted path of
 // one in a module and the name alone of an `#[export]` one; every vector with a
@@ -34,4 +34,4 @@ mod drivers {
 
 entry fn main() -> ! { loop {} }
 
-panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! { loop {} }

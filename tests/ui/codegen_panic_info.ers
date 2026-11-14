@@ -20,10 +20,10 @@ fn checked(x: u32, m: *const [u8]) {
     assert(x < 10, &*m);
 }
 
-extern fn report(info: *const core::PanicInfo);
+extern fn report(info: &core::PanicInfo);
 
 entry fn main() -> ! { loop {} }
-panic fn on_panic(info: *const core::PanicInfo) -> ! {
+panic fn on_panic(info: &core::PanicInfo) -> ! {
     report(info);
     loop {}
 }

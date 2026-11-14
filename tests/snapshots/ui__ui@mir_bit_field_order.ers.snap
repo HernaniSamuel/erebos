@@ -190,9 +190,9 @@ entry fn main() -> ! {
     }
 }
 
-panic fn on_panic(_1: *const core::PanicInfo) -> ! {
+panic fn on_panic(_1: &core::PanicInfo) -> ! {
     let _0: !;
-    let _1: *const core::PanicInfo; // info
+    let _1: &core::PanicInfo; // info
 
     bb0: {
         goto -> bb1;

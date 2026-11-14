@@ -1,0 +1,35 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_panic_explicit_call.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `INFO` is borrowed during this call, and the callee writes `INFO.line`
+    ╭─[borrow_panic_explicit_call.ers:17:5]
+ 16 │ fn by_name() -> ! {
+ 17 │     on_panic(&INFO)
+    ·     ───────┬───────┬
+    ·            │       ╰── `INFO` is borrowed here
+    ·            ╰── `on_panic` reaches `INFO.line` while `INFO` is borrowed
+ 18 │ }
+ 19 │ 
+ 20 │ fn by_check() {
+ 21 │     let held: &core::PanicInfo = &INFO;
+ 22 │     let x: u32 = 1 / ZERO;
+ 23 │     let line: u32 = held.line;
+ 24 │ }
+ 25 │ 
+ 26 │ entry fn main() -> ! {
+ 27 │     loop {}
+ 28 │ }
+ 29 │ 
+ 30 │ panic fn on_panic(info: &core::PanicInfo) -> ! {
+ 31 │     INFO.line = 0;
+    ·     ──────┬──────
+    ·           ╰── `INFO.line` is written here
+ 32 │     loop {}
+    ╰────
+  help: pass the reference on instead of naming `INFO` in the callee, or end the borrow before the
+        call

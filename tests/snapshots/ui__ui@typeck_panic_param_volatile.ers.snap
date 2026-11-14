@@ -6,12 +6,12 @@ input_file: tests/ui/typeck_panic_param_volatile.ers
 --- errors ---
 ty::panic-param
 
-  × the panic function takes no parameter or one `*const core::PanicInfo`
+  × the panic function takes no parameter or one `&core::PanicInfo`
    ╭─[typeck_panic_param_volatile.ers:5:19]
  4 │ entry fn main() -> ! { loop {} }
- 5 │ panic fn on_panic(info: *const volatile core::PanicInfo) -> ! { loop {} }
+ 5 │ panic fn on_panic(info: &volatile core::PanicInfo) -> ! { loop {} }
    ·                   ──┬─
-   ·                     ╰── has type `*const volatile core::PanicInfo`
+   ·                     ╰── has type `&volatile core::PanicInfo`
    ╰────
-  help: declare it `panic fn on_panic() -> !`, or `panic fn on_panic(info: *const core::PanicInfo)
-        -> !` to learn where and why the program panicked, from read-only data (ADR 0053)
+  help: declare it `panic fn on_panic() -> !`, or `panic fn on_panic(info: &core::PanicInfo) -> !`
+        to learn where and why the program panicked, from read-only data (ADR 0053, 0116)

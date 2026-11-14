@@ -1,14 +1,13 @@
 // emit: typeck
-// The panic function may take a `*const core::PanicInfo` (ADR 0053), in any
-// module, naming the struct through `use` (ADR 0049, 0052), its parameter
-// `mut` as any parameter may be. Called explicitly, it takes what its
-// signature asks for: the caller builds the `PanicInfo`.
+// The panic function may take a `&core::PanicInfo` (ADR 0053, 0116), in any
+// module, naming the struct through `use` (ADR 0049, 0052). Called
+// explicitly, it takes a reference to a `PanicInfo` the caller built.
 mod handler {
     use core::PanicInfo;
     use core::PanicReason;
 
-    panic fn on_panic(mut info: *const PanicInfo) -> ! {
-        info = info;
+    panic fn on_panic(info: &PanicInfo) -> ! {
+        let line: u32 = info.line;
         loop {}
     }
 
@@ -20,7 +19,7 @@ mod handler {
             reason: PanicReason::AssertionFailed,
             message: &raw const b"failed on purpose",
         };
-        on_panic(&raw const info)
+        on_panic(&info)
     }
 }
 
