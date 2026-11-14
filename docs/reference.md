@@ -1,4 +1,4 @@
-# Erebos language reference (M5.4c)
+# Erebos language reference (M5.6)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -679,7 +679,8 @@ extern static crc_lookup: [u32; 256];
   handler and the code it interrupts may share one; the ordinary access is
   then a race unless it is inside a `critical` block, and the compiler
   rejects the program otherwise (`analysis::unprotected-static`,
-  `analysis::unmaskable-static`; see "Shared statics").
+  `analysis::unmaskable-static`; see "Shared statics"). A context that is the
+  only one to reach a `static mut` owns it and needs nothing written.
 - **A static is read where the read is written**, like a read through a
   pointer, never deferred: in `TICKS + bump()`, where `bump` changes
   `TICKS`, `TICKS` is read before the call.
@@ -2540,9 +2541,11 @@ through it a program reaches registers as through a pointer to `T`.
 - The borrow check follows a peripheral inside a function and across calls
   (see "The borrow check"): `putc(&mut UART0, &mut UART0)` and a `&mut` of a
   cluster in use while a register of the same peripheral is written are errors.
-  What it does not do is check which context reaches a peripheral: a borrow of
-  one names no static, and sharing peripherals between contexts is left to M5.6
-  (ADR 0078).
+  Which context reaches a peripheral is the business of the check of shared
+  statics, which counts a borrow of a peripheral, or of a cluster of one, as a
+  place that names it, where the borrow is taken (see "Shared statics"); a use
+  of the reference names nothing. The reference is the handle to a peripheral
+  inside its context (ADR 0115).
 - At compile time a borrow of a peripheral is what `&raw` of it is, and a
   register access through it is `eval::volatile-access`.
 
@@ -5508,9 +5511,9 @@ A program runs in machine mode (ADR 0010) with **one priority level**
 (ADR 0078): a maskable handler never preempts another, and preempts the thread
 that runs the entry function anywhere outside a `critical` block. A program
 that changes priorities, or enables interrupts inside a handler, leaves this
-model, and nothing checks it. Sharing a `static mut` between a handler and the
-thread needs a `critical` block around the thread's access, and the compiler
-checks that rule over the call graph (see "Shared statics").
+model, and nothing checks it. Sharing a `static mut` or a peripheral between a
+handler and the thread needs a `critical` block around the thread's access, and
+the compiler checks that rule over the call graph (see "Shared statics").
 
 ### Handlers (ADR 0084)
 
@@ -5917,7 +5920,7 @@ integer type are patterns) or with `==`. A program without that handler
 reaches the panic function with the name `MachineExternal`. The PLIC and its
 dispatch are never in `core`; a board's module may have them.
 
-### Shared statics (ADR 0078, 0093)
+### Shared statics (ADR 0078, 0093, 0115)
 
 ```
 use core::arch::Vector;
@@ -5946,7 +5949,9 @@ The compiler checks the rule of ADR 0078 on the MIR of the whole program, `core`
 included, after it is built and before any dump of it: a `static mut` that the
 thread and a handler both reach must be accessed in the thread only inside
 `critical`, and one that an unmaskable handler reaches must be reached by no
-other context. There is no attribute that silences it.
+other context. There is no attribute that silences it. Peripherals obey the
+same rule, as devices (see "Peripherals in the rule" below); the text up to
+there speaks of statics.
 
 **Contexts.** The **thread context** starts at the entry function. The **handler
 context** starts at every handler of a maskable vector: `Vector`'s maskable
@@ -5954,7 +5959,7 @@ variants, and the variants of the chip's list (ADR 0089). Each handler of an
 unmaskable vector of `Vector` (`NMI`, `SVCall` and the faults, ADR 0084) is a
 **context of its own**. A context reaches what its functions call, and what their checks may call.
 `_start` is no context (it runs before the entry function, with interrupts masked,
-and names no `static mut`), nor is a default handler (ADR 0085), a `comptime` body,
+and names no `static mut` and no peripheral), nor is a default handler (ADR 0085), a `comptime` body,
 a function nothing calls, or one that only C or assembly calls.
 
 **What is a call.** A call statement reaches its callee. A check that may fail
@@ -5967,8 +5972,8 @@ Nothing else is an edge:
 - an `extern fn` has no body to follow;
 - the calls that code generation or LLVM inserts (`memcpy`, `__udivdi3`,
   `__aeabi_uldivmod`, `__critical_enter`) are not in MIR. The functions of `core`
-  that they reach contain no check and name no `static mut`; a test fails if that
-  stops being so.
+  that they reach contain no check and name no `static mut` and no peripheral; a
+  test fails if that stops being so.
 
 **What names a static.** A **place** is a statement of a reachable block that holds
 an operand naming a `static mut` or an `extern static mut`: a read, a write, a
@@ -6070,6 +6075,99 @@ when an unmaskable handler has one it cannot be protected, so a fault handler th
 may fail a check reaches only what no other context names. A panic function in a
 program with no handler is in no shared context.
 
+**Peripherals in the rule (ADR 0115).** The two rules above hold for a
+peripheral as they do for a `static mut`, with "peripheral" for "static". A
+place is a statement of a reachable block that holds the peripheral's address:
+a read, a write or a compound assignment of a register, of a field of one, of an
+element of a register array, in a cluster or not; `&P` and `&mut P` and the
+borrows of a cluster (ADR 0110); `&raw` of a peripheral or of a cluster; and a
+method called on one (ADR 0114). A statement that names one peripheral twice is
+one place; one that names a static and a peripheral, or two peripherals, is one
+place for each. A **use** of a reference or of a pointer names nothing:
+`(*u).thr = b` and `self.thr = b` through a parameter are no places, and the
+place is where the reference was made. Peripherals come after statics in the
+places of a statement.
+
+The **whole peripheral** is the unit: a context that reaches one register of
+`UART0` reaches `UART0`, and registers and clusters of one peripheral are not
+told apart. Peripherals whose bytes meet are **one device**: a peripheral is
+shared with a context when that context reaches it, or reaches another whose
+range `[address, address + extent)` shares a byte with its own, as happens with
+a peripheral `over` another (see "Peripherals over others"). A peripheral of
+extent 0 has no byte and meets no other, wherever it lies; it is still shared
+with a context that reaches it by its own name. The relation is not transitive:
+with `B` over the first half of a device `A` and `C` over its second half, `B`
+and `C` do not meet, and a context reaching `B` and another reaching `C` share
+nothing unless one of them also reaches `A`. (The borrow check compares
+peripherals' bytes with the same function, see "The borrow check".)
+
+The errors are `analysis::unprotected-peripheral` (rule 1) and
+`analysis::unmaskable-peripheral` (rule 2), one per place and per code, with the
+labels of the errors for statics: the place, the calls on the path, and one place
+of the other context. The title names the peripheral of the primary place. When
+the other context never names it and reaches only peripherals that meet it, the
+title says so, and the label of the other place names that peripheral and says
+whose bytes it meets; when the other context reaches it by its own name, the title
+says "reaches it too", even if the place chosen for the label is a meeting
+peripheral's, and that label then names it. Among the places of the other
+context, the choice is that of statics, by body, block and statement; within one
+statement that names several of the peripherals, the first declared is chosen. The errors of peripherals follow those of statics for the same rule.
+The help of rule 1 is "put the access, or one call on the path to it, in a
+`critical` block, or leave the device to one context", that of rule 2 "leave the
+device to this handler, or reach it through a pointer from a `const`". In
+`main.ers` for riscv32, where `software` and `external` are the handlers of
+`Vector::MachineSoftware` and `Vector::MachineExternal` and the first of them sets
+`UART0` up, the thread's write after the queue is reported as:
+
+```
+analysis::unprotected-peripheral
+
+  × `UART0` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[main.ers:66:5]
+ 46 │         UART0.ier = Ier { .. };
+    ·         ───────────┬──────────
+    ·                    ╰── the handler `software` reaches it here
+ 47 │         READY = true;
+ ...
+ 57 │ fn send(byte: u8) {
+ 58 │     critical {
+ ...
+ 65 │     }
+ 66 │     UART0.ier.thri = true;
+    ·     ──────────┬──────────
+    ·               ╰── reached here, outside `critical`
+ 67 │ }
+ ...
+ 73 │     send(b'x');
+    ·     ─────┬────
+    ·          ╰── called here, outside `critical`
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context
+```
+
+**Owning.** A context **owns** a peripheral, or a `static mut`, when it is the
+only one that reaches it (and, for a peripheral, reaches none whose bytes meet
+it). Ownership is not declared, is not a value and is checked by nothing of its
+own: it is the name for what the rules leave alone, read off the call graph.
+What one context owns needs nothing written, in the thread or in the handlers; a
+UART that only handlers name is owned by the handler context, and the thread
+that sends through it queues bytes in a `static mut` inside `critical` and raises
+an interrupt (see `tests/e2e/uart_owned_riscv32/` and `uart_owned_armv7m/`).
+What two contexts reach is **shared**, and the thread's access to it goes inside
+`critical`. There is no token type, no peripheral taken once and no flag checked
+at run time: the **handle** to a peripheral inside a context is a reference to
+it or to a cluster of it (`&mut UART0`, `&mut PLIC.ctx[0]`), passed down as a
+parameter or a receiver, and the borrow check makes its uses exclusive (see
+"The borrow check"). A value that stands for a configured device is made by the
+functions of the module that defines its type, whose private fields keep other
+modules from making one; the language does not check that it is made once.
+What a static holds is owned by the context that alone reaches the static; there
+is no hand-off, so a value that the thread makes and a handler uses is shared
+through a static, assigned whole in `critical` by the thread. Nothing moves out
+of a static, a static of a linear type stays `ty::linear-static`, and a value
+does not move from one context to another.
+
 **When it runs.** The check needs a program without errors: a run with a type error
 reports it first, and these only on the next run. `--emit=typeck` and the stages
 before it stop before the check; `--emit=mir`, `--emit=linker-script`,
@@ -6078,10 +6176,14 @@ no dump. MIR is the same at both optimization levels, so the verdict does not
 depend on `-O`. The check changes no generated code: a program it accepts compiles
 to what it did before.
 
-**What it does not see.** Only a `static mut` and an `extern static mut` named in
-the program are checked. A raw pointer to one, a peripheral, assembly and a call
-through an address are not followed: raw pointers wait for the ownership of M5
-(ADR 0078), and there are no function pointers yet. A reference is not
+**What it does not see.** Only a `static mut`, an `extern static mut` and a
+peripheral named in the program are checked. A raw pointer to one (made at
+compile time, or cast from an integer, `0x1000_0000 as *mut Uart16550`, at run
+time or not), assembly and a call through an address are not followed, and there
+are no function pointers yet. Code outside the program, C and assembly, is
+unchecked. Two values standing for one configured device, made in one context,
+are no error: the module that defines their type keeps that with private fields,
+not the language. A reference is not
 followed by this check: the borrow is the place, and what the reference is
 used for is the business of the borrow check (see "The borrow check"). The
 check does not accept an access before `enable_interrupts` or after the last
@@ -6090,7 +6192,10 @@ interrupt: those need `critical` too, which costs two or three instructions at
 which leave the one-level model (ADR 0078).
 
 **The way out.** What the rule cannot express is written visibly, with the pointer
-made at compile time, from a `const` and not one taken in a function:
+made at compile time, from a `const` and not one taken in a function. For a
+peripheral it is `const CONSOLE: *mut Uart16550 = &raw mut UART0;` or a pointer
+cast from the integer, used in every context; no code using it names `UART0`. For
+a static:
 
 ```
 use core::arch::Vector;
@@ -6741,8 +6846,8 @@ without `volatile` as a pointer to one is: `&volatile Uart16550` is
 `ty::volatile-peripheral`, and is then taken as `&Uart16550`. The registers
 reached through a reference are accessed volatile because of the type, written
 only through a `&mut` (`ty::write-through-const` for a `&`), and the access
-mode is checked as through a pointer. Which contexts reach a peripheral stays
-unchecked until M5.6 (ADR 0078): a borrow of one names no static.
+mode is checked as through a pointer. A borrow of a peripheral names it for
+the check of shared statics, as a register access does (see "Shared statics").
 
 **At compile time.**
 
@@ -6879,9 +6984,9 @@ constant address, the peripheral's plus the register's offset, with no
 symbol, storage or indirection for the peripheral; one reached through a
 pointer, at the pointer plus the offset. An element of a register array or
 a cluster array is at that address plus `i * step`, `i` being checked
-against the length first (see "Register arrays and clusters"). Until M5, any code that can name
-a peripheral reaches it, as with a `static mut`; ownership of peripherals
-is M5's.
+against the length first (see "Register arrays and clusters"). Any code that
+can name a peripheral reaches it, as with a `static mut`; which contexts reach
+one is checked over the whole program (see "Shared statics").
 
 ## Peripherals from SVD (ADR 0070 to 0072, 0092)
 

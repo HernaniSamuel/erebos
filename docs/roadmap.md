@@ -109,7 +109,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.4b** ✅ Slices behind references | `&[T]`, `&mut [T]`, `len`, `(*s)[i]`, arrays to slices, sub-slices | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
 | **M5.4c** ✅ References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and clusters (a register keeps no address) | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
 | **M5.5** ✅ Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
-| **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
+| **M5.6** ✅ Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** Fewer raw pointers | `core` and the tests moved to references where they can; what stays raw, measured | the e2e programs with references, the same output |
 
 Decisions already agreed for the later steps (ADR 0094 holds them):
@@ -1240,6 +1240,36 @@ Documentation owed:
   hand-written ui and e2e programs only; the harness of ADR 0069 now counts
   `exit` among the functions that do not finish, since the seeded places moved
   when the programs were added.
-- **Next: M5.6** (ownership of peripherals), the sixth step of M5 (moves,
-  ownership, references and methods), whose steps and model are above (ADR
-  0094).
+- **M5.6 done.** A context owns a peripheral, or a `static mut`, when it is the
+  only one that reaches it; nothing is declared and nothing is a value (ADR
+  0115). The check of shared statics now reads peripherals: a place naming a
+  peripheral (a register access, a borrow of it or of a cluster, `&raw`, a
+  method call) in the thread context outside `critical`, when the handler
+  context reaches it, is `analysis::unprotected-peripheral`; in an unmaskable
+  handler, when any other context reaches it, `analysis::unmaskable-peripheral`.
+  The unit is the whole peripheral, and peripherals whose bytes meet (a
+  peripheral `over` another) are one device, so the title and the label name the
+  other one; a peripheral of extent 0 meets no other. The handle to a peripheral
+  is a reference to it, with no token and nothing taken once; a value two
+  contexts use is shared through a `static mut` assigned in `critical`, with no
+  transfer of ownership. The borrow check had counted an empty peripheral
+  strictly inside another's range as meeting it, against ADR 0111; it now
+  shares one comparison, `meet` in `src/analysis/bits.rs`, with the new check.
+  The three programs that shared a peripheral (`uart_interrupt_riscv32/`,
+  `uart_interrupt_armv7m/`, `uart_loopback_riscv32.ers`) put the thread's
+  accesses in `critical`, and the riscv32 one exits through `board::exit`, with
+  the same output. `tests/e2e/uart_owned_armv7m/` and `uart_owned_riscv32/` send
+  a message through a UART that only handlers name, with the thread queueing in
+  `critical` and raising an interrupt (`nvic_pend` on armv7m, the CLINT's `msip`
+  on riscv32), at both levels; their generated modules are compared by
+  `tests/svd.rs`. The wrong uses are ui tests (`shared_peripheral_*`, the UART
+  written outside `critical` included); the two codes are exempt from
+  `tests/rejected.rs`, as those of ADR 0093 are. `PANICS` is unchanged. Left
+  open, for the planner: registers and clusters of one peripheral as separate
+  units of the rule, `replace` on statics and any move of a value between
+  contexts, and an `impl` outside the module of its type are not scheduled, as
+  above (ADR 0115); priorities and several cores are not in M5 (ADR 0094,
+  0115); a device set up by the thread before interrupts are enabled still
+  needs `critical`, as for statics.
+- **Next: M5.7** (fewer raw pointers), the last step of M5 (moves, ownership,
+  references and methods), whose steps and model are above (ADR 0094).
