@@ -38,7 +38,7 @@ The evidence the roadmap waited for:
   and 8), 53 are reason 8 without the two fields of `core::PanicInfo`, 89.8
   percent, above the 60 percent at which ADR 0117 opens this ADR. The plan of
   M5.7 (step 7, Decisions) and the roadmap ("After M5") record what the 53
-  are, and that the number overstates what the idea as written would remove:
+  are:
 
   | Sites of reason 8 | Count | What they are |
   |-------------------|------:|---------------|
@@ -49,13 +49,29 @@ The evidence the roadmap waited for:
   | a field, a local | 2 | `Reader.text` of `panic_location`, one local |
   | operands of `slice(..)` | 3 | in `rest`, `part` and `erebos_skip` |
 
-  Reason 2 (an analysis rejected the reference) has no case. So the idea as
-  the roadmap defines it, a result tied to the one reference parameter,
-  removes the 3 sub-slice functions and what goes with them, a handful of
-  the 53. The 29 functions have no reference parameter to tie a result to:
-  what they return is static data, which a reference tied to nothing would
-  state. The 12 `const`s and `static`s and the field are references
-  **stored**, which ADR 0094 leaves to written lifetimes or regions.
+  Reason 2 (an analysis rejected the reference) has no case.
+
+**What the 89.8 percent measures.** ADR 0117's share counts every site of
+reason 8, but the idea it was measured for, a result tied to the one
+reference parameter, removes only a few of them: `rest`'s return type and
+its `slice(..)` operand (`&s[start..]`, which ADR 0108 allows at `start ==
+len(s)`), 2 sites; and, if its callers, which store the results in a raw
+static table, cast them back (`part(&*TOPICS, 0, 7) as *const [u8]`),
+`part`'s return type, its parameter and its `slice(..)` operand, 3 more;
+`erebos_skip` belongs to a program whose subject is raw slices returned to C,
+and stays raw under reason 1. About **2 to 5 of the 53**.
+Measured against that idea alone, the share would not have opened this ADR.
+The 29 functions have no reference parameter to tie a result to: what they
+return is static data. The 12 `const`s and `static`s and the field are
+references **stored**, which ADR 0094 leaves to written lifetimes or regions.
+
+So choosing more than the tied form, as this ADR does (see "Options"), is a
+decision to build a larger feature than the one measured, not something the
+measurement asked for. And what the larger feature gives those 29 sites is
+readability and a checked signature, not safety: `&raw const b"off"` is the
+address of read-only data and always valid, and `&*reason(..)` at the call is
+sound today. The gain is that the signature says what the result is, the
+callers drop `&*`, and a body that returned something else would be rejected.
 
 Where the compiler stands:
 
@@ -67,13 +83,15 @@ Where the compiler stands:
   never a `Ty::Ref` (ADR 0107).
 - The borrow analysis (`src/analysis/borrows.rs`, ADR 0107, 0109, 0112)
   computes, for every local of a reference type, the set of borrow sites it
-  may hold, and which of those locals are live. A call's argument of a
+  may hold (`State`, one set per such local, with no record of where a site
+  came from), and which of those locals are live. A call's argument of a
   reference type is a whole local (R1), collected per call; the write of a
   call's result to a local of a reference type "sets it to nothing", because
   no call returns a reference (`Flow::def_of`). `Terminator::Return` reads
   nothing, since `_0` is never a reference. Each site has a path rooted at a
   local, a static (byte strings are read-only statics in MIR) or a
-  peripheral; a borrow through a raw pointer is no site.
+  peripheral; a borrow through a raw pointer is no site. Parameters hold no
+  site at the start of the body.
 - The analysis runs on one body before evaluation (ADR 0094, 0099); the
   conflicts across calls (`src/analysis/call_borrows.rs`, ADR 0111, 0112)
   read the per-body fixed points at each call, over the assembled program.
@@ -90,37 +108,43 @@ What other languages do:
   several, `&self` or `&mut self` wins; otherwise a lifetime must be written.
   With none, a returned reference needs `'static` written. A `&T` result of a
   `&mut self` method keeps `self` mutably borrowed while it lives.
-- **Hylo, Swift**: references are not returned; projections (`subscript`,
-  `yield`) lend a part of an argument to the caller for the duration of an
-  access, which is a coroutine, not a value.
+- **Languages with second-class references** (Hylo, Swift's `inout`) do not
+  return references as values; what they offer in their place for accessors
+  is a different mechanism, outside the scope of this comparison.
 
 ## Options
 
-The question this ADR must answer first is how far to go, given that the
-measured sites are mostly not the shape the idea names.
-
 | | What it allows | Removes, of the 53 | Cost |
 |---|---|---|---|
-| **(a) Elision alone** | a function with exactly one reference parameter returns a reference tied to it | 2 to 3 return types (`rest`; `part`, whose results still go into a raw table; `erebos_skip`, which may stay raw as the test's subject, reason 1), 2 parameters, 3 `slice(..)` operands: about 5 to 8 | the rule in type checking; a call's result in the borrow analysis; the check of what a body returns, with its diagnostic; R1 and a new validator rule; the ABI of a returned reference |
-| **(b) Elision, and read-only static data** | (a), and a function with no reference parameter returns a `&T` that borrows only read-only static data: a `static` or `extern static` without `mut`, a byte string, or a part of one | (a) and the 29 functions returning a byte string chosen by a value: about 34 to 37 | (a), and one more case in each of its rules: which roots a returned reference may borrow (the check of (a) must decide immutable statics anyway), and a signature with no reference parameter |
-| **(c) A static reference type** | a written `&static T`, first-class: in fields, arrays, `const`s, `static`s, `PanicInfo.file`, made only from read-only static data | (b), the 9 tables and slices of byte strings, `widest`'s parameter, `Reader.text` and `reader`'s parameter: about 46 to 49, by the plan's list (not counted site by site) | a new type form through every layer; constants and statics whose value is a reference, against ADR 0105 ("a value computed at compile time is never a reference"); R1 rewritten; a lifetime written, against ADR 0094 ("No lifetime is ever written") |
+| **(a) Elision alone** | a function with exactly one reference parameter returns a reference tied to it | about 2 to 5 (above) | the rule in type checking; a call's result in the borrow analysis; the check of what a body returns, with its diagnostic; R1 and the rule R5; the ABI of a returned reference |
+| **(b) Elision, and read-only static data** | (a), and a function with no reference parameter returns a `&T` that borrows only read-only static data: a `static` or `extern static` without `mut`, a byte string, or a part of one | (a) and the 29 functions returning a byte string chosen by a value: about 31 to 34 | (a), and: a row of the signature rule in type checking; a clause of R5; the classification of a returned site's root (statics without `mut` accepted, others refused); the promise an `extern fn` without reference parameters makes; and a permanent meaning (below) |
+| **(c) A static reference type** | a written `&static T`, first-class: in fields, arrays, `const`s, `static`s, `PanicInfo.file`, made only from read-only static data | (b), the 9 slices and tables of byte strings, `widest`'s parameter, `Reader.text` and `reader`'s parameter: roughly 43 to 46, by the plan's list (not counted site by site) | a new type form through every layer; constants and statics whose value is a reference, against ADR 0105 ("a value computed at compile time is never a reference"); R1 rewritten; a lifetime written, against ADR 0094 ("No lifetime is ever written") |
+| **(d) A return-only `&static T`** | (a), and a function may declare `-> &static T`, a spelling allowed only at the top of a return type and converting to `&T` at the call; no first-class type, no constant of reference type | as (b): about 31 to 34 | as (b), and a new spelling in the parser and type checking; it writes a lifetime, against ADR 0094 |
 
-**Recommended: (b).** It is the idea ADR 0094 anticipated, with the one case
-the measurement shows to be the common one, at almost no cost over (a): once a
-body's returned borrows are checked, the immutable statics are a root to
-accept or refuse, and accepting them is sound, since a borrow of a place that
-is never written conflicts with nothing (ADR 0106's table: only writes, moves
-and `&mut` borrows conflict with a shared borrow, and none reaches such a
-place). A function without reference parameters then means, by its signature
-alone, "the result borrows static data", which is what the 29 functions are.
-(a) alone builds the whole mechanism for a few sites and leaves the common
-shape raw. (c) removes most of the rest but writes a lifetime, which ADR 0094
-rules out and the roadmap's rule for M5.7 ("if the safe form needs a written
-lifetime or region, leave it raw") treats as the boundary; it would need its
-own ADR superseding that part of ADR 0094, and nothing in (b) closes the way
-to it (see "Open questions").
+**Decided: (b).** It is the one option that removes the common measured shape
+without writing a lifetime. Its costs over (a), stated plainly:
 
-The rest of this ADR is (b).
+- **A permanent meaning.** Once programs rely on it, "a reference result with
+  no reference parameter borrows read-only static data" cannot be
+  reinterpreted (as tied to something else, or as needing a written
+  `&static`) without breaking them. Every later design of stored or static
+  references inherits it.
+- **The extra pieces**: the row of the signature rule, the clause of R5, the
+  classification of roots in the return check (which (a) must also decide,
+  since a tied function may return a byte string too), and the promise an
+  `extern fn` makes (below). Each is small; together they are a second
+  feature beside elision, not a free addition to it.
+- **What it buys**: about 29 more sites, for readability and checked
+  signatures rather than safety (see "Context").
+
+(d) removes the same sites with an explicit spelling, and would let a
+function with a reference parameter return static data without keeping its
+argument borrowed. It is not chosen because it writes a lifetime, which ADR
+0094 rules out, and because if (c) ever came, `&static T` at a return would be
+a second spelling with a narrower meaning than the first-class type. (c)
+removes most of the rest, at the cost of a lifetime written and constants of
+reference type; it needs its own ADR superseding those parts of ADR 0094 and
+0105. Both stay open questions.
 
 ## Decision
 
@@ -147,6 +171,12 @@ source: the caller's check reads only the signature, and the callee's body is
 checked against it. Nothing is inferred (ADR 0008): the return type is
 written, and which parameter it is tied to is fixed by a rule on the written
 parameter types, as the receiver's type is fixed by its `impl` (ADR 0113).
+
+**Read-only static data** is a `static` or an `extern static` without `mut`,
+a byte string, or a field, element or sub-slice of one. A `static` without
+`mut` and a byte string are never written; an `extern static` without `mut`
+is written by nothing in the program, and whether C writes it is C's to vouch
+for, as for every `extern` item (ADR 0026, 0030).
 
 ```
 fn first(s: &[u8]) -> &u8 { &s[0] }                     // tied to `s`
@@ -178,6 +208,11 @@ checking decides what it can produce: no reference converts between volatile
 and not (ADR 0110), and a `&mut` is reached only through a `&mut` (ADR 0105),
 so the table's errors are the cases no body could satisfy except through a
 raw pointer.
+
+**Several reference parameters** are an error, not Rust's `&self` rule and
+not the union of what they hold: the narrow rule can be widened later without
+breaking programs, and either widening would need the tied argument written
+on the MIR call, which R5 avoids today.
 
 ### What a call's result borrows
 
@@ -225,34 +260,64 @@ buf[0] = 1;        // accepted: `b` is not used after its read
 
 ### What a body may return
 
-The returned value of a function with a reference result (its tail, and the
-value of each `return`) may hold only:
+The check of a body with a reference result follows from what the borrow
+analysis already computes, with one invariant:
 
-- **borrows through a reference**: a borrow whose place is reached through
-  the `*` of a reference (the tied parameter, a copy of it, a `let` holding
-  a reborrow of it, the result of a call tied to one of these), with what that
-  reference held. Fields, elements, sub-slices and clusters through it are
-  parts of the parameter: `&r.buf[i]`, `&s[a..b]`, `&mut self.ch[1]`, each
-  with its checks (ADR 0105, 0108, 0110). The tied parameter itself returned
-  (`self` in the chain above) is one of these;
-- **borrows of read-only static data**: a `static` or an `extern static`
-  without `mut`, a byte string, or a field, element or sub-slice of one;
-- **references made through a raw pointer**, `&*p`, which the borrow check
-  holds nothing for (ADR 0105, 0106): the program's word, as everywhere.
+1. **Parameters hold nothing** at the start of the body: what the tied
+   parameter refers to was borrowed by the caller, and the caller's check
+   holds it.
+2. **Every borrow the body makes is a site** with a path rooted where it
+   borrows: a local (a variable, a parameter that is not a reference, a value
+   the compiler keeps), a static, a peripheral, or the `Deref` of a local of
+   a reference type. The only borrows without a site are those through a raw
+   pointer (ADR 0106).
+3. **Sets are closed under what a reference was made from**: a copy or move
+   of a reference takes its set, a reborrow `&(*q).f` takes `q`'s set and its
+   own site, and a call's result takes its tied argument's set (above). So the
+   set a local holds is the transitive union of every site on every chain of
+   copies, reborrows and tied calls that produced its value.
 
-Anything else is `analysis::returned-borrow`, at the borrow:
+At each `return` (each `Terminator::Return` that `bb0` reaches), every site
+in the set of `_0` is classified by its root:
 
-- a borrow of a **local**: a variable, a parameter that is not a reference
-  (`self` by value included), or a value the compiler keeps for `&f()`,
-  `&CONST` or `&Config { .. }` (ADR 0105): the local is gone when the
-  function returns. A `const` is a value with no address of its own; the
-  help says to declare a `static` to return a reference to it;
-- a borrow of a **`static mut` or `extern static mut`**: the reference would
-  outlive the protection the borrow was taken in (ADR 0094, 0110), and the
-  caller's check could not see that it reaches the static;
-- a borrow of a **peripheral or a cluster**: each call would give a `&mut` to
-  one device that the caller's check sees as holding nothing, so two of them
-  could be in use together; the handle to a peripheral is a reference passed
+- rooted at the **`Deref` of a local of a reference type**: accepted. It
+  borrows through a reference, and whatever that reference holds is itself in
+  the set, by 3, and classified on its own;
+- rooted at a **static without `mut`** (byte strings included): accepted;
+- rooted at a **local** without a `Deref`, at a **`static mut` or `extern
+  static mut`**, or at a **peripheral** (a cluster included):
+  `analysis::returned-borrow`.
+
+What a program may return is the consequence, not a second rule:
+
+- **parts of the tied parameter**: `&r.buf[i]`, `&s[a..b]`, `&mut
+  self.ch[1]`, the parameter itself (`self` in the chain above), a copy of it,
+  a reborrow of it held in a `let`, a call's result tied to it; each part with
+  its checks (ADR 0105, 0108, 0110). Their sites are rooted at a `Deref`, and
+  the parameter holds nothing (1);
+- **read-only static data**;
+- **references made through a raw pointer**, `&*p`, which have no site (2).
+
+And what it may not: a value whose chain reaches a borrow of the body's own
+memory, of a `static mut`, or of a peripheral, however it gets there. `let t:
+&[u8; 4] = &local; &t[1..]` is rejected (the reborrow's set holds the site of
+`&local`), and so is `first(&local)` returned (the result holds that site).
+
+- **A local** (a variable, a parameter that is not a reference, `self` by
+  value, a value the compiler keeps for `&f()`, `&CONST` or `&Config { .. }`,
+  ADR 0105) is gone when the function returns. A `const` is a value with no
+  address of its own; the help says to declare a `static` to return a
+  reference to it.
+- **A `static mut` or `extern static mut`**: the caller's check holds
+  nothing for the result (or only the tied argument's borrows), so it cannot
+  see which static the result reaches. Two results of such a function could
+  be in use together, one `&mut`, with no conflict found, and a direct access
+  of the static beside the result would conflict with nothing; in a static
+  shared with handlers, the reference would also outlive the protection it
+  was taken in (ADR 0094, 0110).
+- **A peripheral or a cluster of a named peripheral**, for the same reason:
+  each call would give a `&mut` to one device that the caller's check sees as
+  independent of the others. The handle to a peripheral is a reference passed
   down (ADR 0115), and the help says to borrow it in the caller and pass it
   in.
 
@@ -263,9 +328,33 @@ what its argument holds, by the signature, as any call's does:
 
 ```
 fn last(s: &[u8]) -> &u8 {
-    if len(s) == 1 { &s[0] } else { last(&s[1..]) }   // a reborrow of `*s`
+    if len(s) <= 1 { &s[0] } else { last(&s[1..]) }   // `&s[0]` panics on an empty `s`
 }
 ```
+
+**A reference made through a raw pointer may be returned** (`&*p`), as the
+program's word, as ADR 0105 lets it be made and lent: refusing it would need
+the analysis to track where references without a site come from, and the raw
+pointer already says the program vouches. Its reach is wider than inside one
+body: the signature grants its meaning once for every caller. `fn counter()
+-> &u32 { &*(&raw const COUNT) }`, with `COUNT` a `static mut`, has no
+reference parameter, so every call's result is "read-only static data that
+holds nothing". As written it compiles only when one context owns `COUNT`
+(ADR 0115): if a handler also reaches it, naming it there outside `critical`
+is `analysis::unprotected-static` (ADR 0093). The shared case names it inside
+a block and leaves with the raw pointer, since no reference leaves `critical`:
+
+```
+fn counter() -> &u32 {
+    let p: *const u32 = critical { &raw const COUNT };
+    &*p
+}
+```
+
+Then every caller reads `*counter()` outside any protection while a handler
+may write `COUNT`. In both forms that is the program's word, given once in
+`counter`, in its signature, for every caller; the rule of shared statics sees
+the `&raw const COUNT`, but not the uses of the result.
 
 ### `critical` blocks and contexts
 
@@ -280,7 +369,8 @@ carry a reference. `?` still cannot: `Option` and `Result` hold no reference.
   is `ty::reference-position` at the value, with the label "the value of a
   `return` out of a `critical` block" and the help of the `break` case. As
   for `break`, type checking does not know what the reference holds, and the
-  rule holds for any reference.
+  rule holds for any reference, so that ADR 0094's argument rests on type
+  checking alone.
 - Independently, no returned reference holds a borrow of a `static mut`
   (above), so a reference to a static never leaves the function that
   borrowed it by a return either.
@@ -296,8 +386,9 @@ does not concern.
 - **`extern fn`** may return a reference under the same table; C vouches for
   what it returns, as it vouches for reference parameters (ADR 0105) and for
   linear values (ADR 0101). An `extern fn` with no reference parameter that
-  returns a `&T` promises read-only data for the whole run; a program that
-  cannot promise that returns a raw pointer and writes `&*p` at the call.
+  returns a `&T` promises read-only data for the whole run, as an `extern
+  static` without `mut` does; a program that cannot promise that returns a
+  raw pointer and writes `&*p` at the call.
 - **`#[export]`** functions may return one; their body is checked as any
   body, and C receives a pointer or the C struct of a slice (ADR 0108).
 - **`#[naked]`** functions may declare one; their body is the assembly,
@@ -343,27 +434,48 @@ rather than misleading the analysis.
 
 ### The borrow analysis
 
-`src/analysis/borrows.rs` changes in three places:
+`src/analysis/borrows.rs` changes in four places:
 
-- **A call's result.** The write of a call's result to a local of a reference
-  type sets it to what the call's reference argument held before the call
-  (`Holds::Copy` of that argument), or to nothing when the call has none.
-- **Liveness.** `Terminator::Return` reads `_0` when `_0` has a reference
-  type, so a borrow held by the return place is in use until the function
-  returns.
-- **What a body returns.** After the fixed points, at each `Return` reachable
-  from `bb0`, each site `_0` may hold is checked: a site whose path starts
-  with the `Deref` of a local of a reference type is accepted (what that
-  local held is in the set too, and checked on its own), a site rooted at a
-  static without `mut` is accepted, and every other site, rooted at a local
-  without a `Deref`, at a `static mut` or at a peripheral, is
-  `analysis::returned-borrow`.
+1. **A call's result.** The write of a call's result to a local of a
+   reference type sets it to what the call's reference argument held before
+   the call (`Holds::Copy` of that argument), or to nothing when the call has
+   none.
+2. **Liveness.** `Terminator::Return` reads `_0` when `_0` has a reference
+   type, so a borrow held by the return place is in use until the function
+   returns. This is mainly for completeness: MIR building writes `_0` last,
+   so the locals that held its value are what keep a borrow in use up to that
+   write, and the read of `_0` covers what may stand between the write and
+   the `Return` (a `critical_exit`, an `End`), and any later MIR that moves
+   the write earlier. A unit test over hand-built MIR covers it.
+3. **What a body returns**, the classification above, after the fixed
+   points, at each reachable `Return`.
+4. **The call that holds a borrow**, for the extra label of
+   `analysis::borrow-conflict` (below). `State` keeps a set of sites per local
+   with no provenance, so the label is found after the fixed points, only for
+   an error: from the later use, the analysis walks backwards over the
+   definitions of the local it reads (`Def`), following only definitions
+   whose value holds the site at the fixed point: a copy to the local copied,
+   a reborrow to the local it was made through, a call's result to the call's
+   reference argument, recording that call. The walk goes from the later use
+   backwards, so the first call met is the nearest one, and it is labelled:
+   when one block defines the local twice, the later definition is the one
+   that reaches the use. It keeps a set of the definitions visited, since
+   loops make the graph of definitions cyclic, and visits each once. Where
+   the walk forks (a join, or several definitions reaching one read), each
+   branch is followed, and of the calls met first on them the one with the
+   lowest block, then statement index, is labelled, so that the label does
+   not depend on the order of visits (ADR 0028). In `let b: &u8 = if c {
+   first(&buf) } else { other(&buf) };` the two `&buf` are two sites, each
+   held only through its own call, so an error on the site of the first
+   labels `first` and one on the second labels `other`. A walk that reaches
+   the site's own `Ref` without a call adds no label.
 
 The analysis still runs only on a body with at least one site: a body with
 none returns only its tied parameter's borrow or references made through raw
-pointers. Its cost is unchanged but for one pass over the returns. The check
-of shared statics, `call_borrows` and the analyses of moves and linearity are
-unchanged; `_0 = move self` is a move like any other (ADR 0098).
+pointers. Its cost is unchanged but for one pass over the returns, and the
+walk of item 4 only on error. The check of shared statics, `call_borrows` and
+the analyses of moves and linearity are unchanged; `_0 = move self` is a move
+like any other (ADR 0098).
 
 ### Code generation and the ABI
 
@@ -384,9 +496,11 @@ is given to a returned reference that a raw pointer lacks (`nonnull`,
   expression; the receiver is borrowed for the whole chain.
 - **Peripherals** (ADR 0110, 0115): a method of a peripheral type may return a
   reference to one of its clusters, `fn ctx(&mut self, i: usize) -> &mut
-  PlicContext`. A register keeps no address (`ty::register-address`,
-  unchanged), so no getter returns one. No function returns a reference to a
-  named peripheral (`&mut UART0`): `analysis::returned-borrow`.
+  PlicContext { &mut self.ctx[i] }`: a reborrow through the receiver, which
+  the caller borrowed where it named the peripheral. A register keeps no
+  address (`ty::register-address`, unchanged), so no getter returns one. No
+  function returns a reference to a named peripheral (`&mut UART0`):
+  `analysis::returned-borrow`.
 - `x.get().set(1)` with `get(&mut self) -> &mut Part` is a call on the
   result, borrowed as any receiver (ADR 0114); there is still no two-phase
   borrow, so `v.slot(v.len())` stays a conflict.
@@ -400,8 +514,9 @@ is given to a returned reference that a raw pointer lacks (`nonnull`,
 | `ty::reference-position` (changed) | the return type is no longer a case of its own; a reference below the top of a return type (`-> Option(&T)`, `-> [&T; 2]`, `-> *const &T`, `-> &&T`) is the case of its inner position; new cases: `&` of a call returning a reference, and a `return` with a reference out of a `critical` block |
 | `analysis::borrow-conflict` (changed) | when a site in conflict is held through a call's result, an extra label at that call |
 
-`ty::reference-return` is at the return type, with a label at each reference
-parameter, and a help by case: "a returned reference is tied to the one
+`ty::reference-return` applies to every function that declares a return
+type, `extern fn` and `#[export]` functions included. It is at the return
+type, with a label at each reference parameter, and a help by case: "a returned reference is tied to the one
 reference parameter: pass one reference, or return an index or a copy" for
 several; "make the parameter `&mut`, or return a `&`" for a `&mut` result of a
 `&` parameter; "with no reference parameter, a returned reference borrows
@@ -410,9 +525,12 @@ pointer" for the last case.
 
 `analysis::returned-borrow` has its primary label at the borrow ("`x` is
 borrowed here"), a label at the expression that writes the return place
-("returned here"), and the help of its case (above). One error per site and
-return; ordered and deduplicated as the borrow analysis's errors are
-(ADR 0107).
+("returned here"), and the help of its case (above). There is one error per
+site and return: a site reaching two `return`s is two errors, at the same
+borrow with different "returned here" labels. They are ordered by the span
+of the borrow, then of the return, and deduplicated as the borrow analysis's
+errors are (ADR 0107), so that one site reaching one return through two paths
+is one error.
 
 ```
 error[analysis::returned-borrow]: cannot return a reference to `total`, a local of this function
@@ -428,9 +546,9 @@ error[analysis::returned-borrow]: cannot return a reference to `total`, a local 
 ```
 
 In `analysis::borrow-conflict`, a site held through a result gains a label at
-the call, "the result of `first` holds this borrow"; when several calls chain
-it, the one nearest the later use is labelled. The texts are snapshots and may
-be reworded without a new ADR; the codes and what each error labels may not.
+the call found by item 4, "the result of `first` holds this borrow". The texts
+are snapshots and may be reworded without a new ADR; the codes and what each
+error labels may not.
 
 ### What stays out
 
@@ -438,10 +556,10 @@ be reworded without a new ADR; the codes and what each error labels may not.
   `Result` (`-> Option(&T)` included), a `const` or a `static`: it needs
   written lifetimes or regions (ADR 0094). `PanicInfo`'s fields, tables of
   slices and the device pointers stay raw (ADR 0116, 0117).
-- **Written lifetimes or regions**, `&static T` among them (option (c)).
+- **Written lifetimes or regions**, `&static T` among them (options (c) and
+  (d)).
 - **A result tied to several parameters**, by Rust's `&self` rule or as the
-  union of what they hold: an error now, which a later step may relax without
-  breaking programs.
+  union of what they hold.
 - **`split_at_mut`**: two `&mut` halves in use together need two results, and
   the language has no tuples and no binding of two references at once
   (ADR 0108). A program takes the halves one after the other.
@@ -456,31 +574,50 @@ be reworded without a new ADR; the codes and what each error labels may not.
   table: `&T` and `&mut T` tied to a parameter, to `&self` and `&mut self`,
   to the one reference beside `self` by value or a raw pointer; slices and
   sub-slices; a volatile result of a volatile parameter; a `&T` with no
-  reference parameter returning a byte string, an immutable `static` and an
-  element of one; an `extern fn`, a `#[export]`, a `#[naked]` and a
-  `comptime` function; chaining; recursion; `*f(&mut x) = 1`, `f(&x).field`,
-  `f(&x)[i]`; `len(rest(&B, 1))` in a `const`.
-- **ui, rejected:** each case of `ty::reference-return`; each case of
+  reference parameter returning a byte string, an immutable `static`, an
+  element of one, and an `extern static` without `mut`; an `extern fn`, a
+  `#[export]`, a `#[naked]` and a `comptime` function; chaining; recursion;
+  a peripheral type's method returning a cluster (`fn ctx(&mut self, i:
+  usize) -> &mut PlicContext`); `*f(&mut x) = 1`, `f(&x).field`, `f(&x)[i]`;
+  `len(rest(&B, 1))` in a `const`; `counter` returning `&*(&raw const
+  COUNT)` for a `static mut` one context owns, and the form of a shared one
+  that takes the pointer inside `critical` (the program's word), with
+  `&*(&raw const COUNT)` outside `critical` for a shared `COUNT` rejected as
+  `analysis::unprotected-static`.
+- **ui, rejected:** each case of `ty::reference-return`, on a function with a
+  body, an `extern fn` and a `#[export]` function; each case of
   `analysis::returned-borrow` (a variable, a by-value parameter and `self`,
   `&f()`, `&CONST` with its help, a `static mut`, an `extern static mut`, a
   peripheral, a cluster of a named peripheral, one branch of an `if` among
-  two, through a copy into a `let`); `-> Option(&T)`, `-> &&T`, `&f(&x)`,
-  a `return` of a reference inside `critical`, `comptime` of a call returning
-  a reference (`ty::reference-position`).
+  two, through a copy into a `let`, `let t: &[u8; 4] = &local; &t[1..]`,
+  `first(&local)`); one site reaching two `return`s (two errors, in order)
+  and one return reached by two paths (one error); `-> Option(&T)`, `-> &&T`,
+  `-> *const &T`, `&f(&x)`, a `return` of a reference inside `critical`,
+  `comptime` of a call returning a reference (`ty::reference-position`).
 - **Analysis snapshots:** a write of the argument's place while the result is
   used later (`analysis::borrow-conflict`, with the label at the call) and
-  after its last use (accepted); a read of `*r` while a `&mut` result of `r`
-  lives; a `&T` result of a `&mut self` method held while the receiver is
-  read; a chain; a result lent to a call; a result holding a `&mut` of a
-  `static mut` inside `critical` during a call whose callee writes it
-  (`analysis::borrow-conflict-in-call`); a result of a function with no
-  reference parameter held across a write of everything else (accepted).
+  after its last use (accepted); the join of two calls, each site labelled at
+  its own call; a read of `*r` while a `&mut` result of `r` lives; a `&T`
+  result of a `&mut self` method held while the receiver is read; a callee
+  writing what it then returns (`let x: &mut u32 = &mut self.a; self.a = 1;
+  x` rejected, because `x` is read afterwards, and `self.b = 1` accepted, two
+  fields; the read of `_0` at the `Return` is covered by the unit tests); a
+  chain; a result lent to a call; a
+  result holding a `&mut` of a `static mut` inside `critical` during a call
+  whose callee writes it (`analysis::borrow-conflict-in-call`); a result of a
+  function with no reference parameter held across a write of everything
+  else (accepted).
 - **Unit tests of the borrow analysis** over hand-built MIR: a call's result
   takes its argument's sites, and none without a reference argument; the
-  `Return` read of `_0`; the return check for each root; the fixed points
-  unchanged by the order of blocks.
+  `Return` read of `_0`; the return check for each root, a reborrow of a
+  local's borrow and a call result tied to one; the walk of item 4, through a
+  copy, a reborrow and a join, with the tie broken by block and statement;
+  the fixed points unchanged by the order of blocks.
 - **Unit tests of the validator:** R1 accepting `_0: &T` and rejecting `_0`
   reaching a reference below the top; R5 for each of its clauses.
+- **At compile time:** a reference made through a raw pointer to a local of a
+  call that has returned, returned and read in a `const`
+  (`eval::dangling-pointer`).
 - **The catalog of `tests/rejected.rs`** gains a snippet for each new code
   (ADR 0069).
 - **LLVM IR snapshots** at both levels: a returned `&u32` is a `ptr`, a
@@ -490,12 +627,18 @@ be reworded without a new ADR; the codes and what each error labels may not.
   i) -> &mut u8`, a UART configured by a chain of `&mut self -> &mut Self`,
   a decoder walking a buffer with `rest(s, n) -> &[u8]`, panic reasons
   printed through `fn reason(r) -> &[u8]`; and a `#[export]` function
-  returning a `&[u8]` called from C.
+  returning a `&[u8]` called from C. The peripheral getter needs a device
+  with a cluster, which only the riscv32 programs declare today (the PLIC's
+  contexts): the step adds one on thumbv7m too, as a device the program
+  declares under ADR 0077's reason for its own devices or in the thumbv7m
+  board module (the plan chooses, the NVIC's register groups being the
+  candidate), so that a driver reaching a cluster through a getter runs on
+  both targets.
 - **The migration** (ADR 0117): in the same step, the raw pointers of reason
   8 that this ADR lets a program state as references move to them (the 29
   functions and their callers' `&*reason(..)`, `rest`, `part`'s return and
-  parameter, `erebos_skip` unless it stays under reason 1), and the counts of
-  the roadmap are taken again, the same way.
+  parameter if its table allows it; `erebos_skip` stays under reason 1), and
+  the counts of the roadmap are taken again, the same way.
 
 ### Where it lands
 
@@ -506,10 +649,25 @@ reference results only later. It depends on M5.4a to M5.4c (the borrow
 analysis, its roots at statics and peripherals, `call_borrows`), M5.5 (methods
 and receivers) and M5.7 (ADR 0117's rule and measurement, which the step
 applies again); it depends on nothing of M6. It delivers the rule, the
-analysis, the diagnostics, the reference updated (`docs/reference.md`,
-"References" and "Functions of a type and methods"), the migration and the
-program above. It is about the size of M5.5's ADR 0114 in the compiler, with
-most of the work in the analysis's return check and its diagnostics.
+analysis, the diagnostics, the migration with its recount, the program above,
+and `docs/reference.md` updated where it says references are not returned:
+
+- "Where a reference may be": the example `fn returns(r: &u32) -> &u32 { r }`
+  marked `ty::reference-position`, the list of positions naming "a return
+  type", and "`&f(&x)` is not one of these: no function returns a
+  reference";
+- "Slices behind references": "A reference to a slice is never returned";
+- "Signatures and the ABI" of references: "No function returns a reference";
+- "The borrow check": "no call returns a reference, so nothing holds it
+  afterwards";
+- "References in MIR": R1's "nor a body's return type", and R5 added;
+- "Functions of a type and methods", "Getters": "References are not
+  returned";
+- the table of diagnostic codes: `ty::reference-position`'s "a return type",
+  and the two new codes.
+
+It is about the size of M5.5's ADR 0114 in the compiler, with most of the work
+in the analysis's return check and its diagnostics.
 
 ## Amends / conflicts
 
@@ -541,42 +699,21 @@ changes, each named in the status lines when accepted:
 - **ADR 0117**: reason 8 covers what this ADR cannot return, and the counts
   change with the migration.
 
-**Option (c) would conflict** with ADR 0094 ("No lifetime is ever written")
-and ADR 0105 ("a value computed at compile time is never a reference"). It is
-not recommended here; choosing it would need its own ADR superseding those
-parts.
+**Options (c) and (d) would conflict** with ADR 0094 ("No lifetime is ever
+written"), and (c) also with ADR 0105 ("a value computed at compile time is
+never a reference"). Neither is chosen; either would need its own ADR
+superseding those parts.
 
-## Decisions for the user
+## Decided with the user
 
-1. **Scope: (a), (b) or (c).** Recommended: **(b)**, for the reasons under
-   "Options". (a) is the roadmap's idea as written and removes about 5 to 8
-   of the 53 measured sites; (b) about 34 to 37; (c) about 46 to 49 but writes
-   a lifetime.
-2. **Several reference parameters: error, Rust's `&self` rule, or the
-   union.** Recommended: **an error** (`ty::reference-return`), narrow and
-   widened later without breaking programs. Rust's rule ties to `self` when
-   there are others; the union (the result holds what every reference
-   argument holds, as an `if` of two borrows does in ADR 0106) is sound and
-   needs no error, but keeps every argument borrowed. Either would need the
-   tied argument written on the MIR call, which R5 avoids today.
-3. **A `return` of a reference inside a `critical` block: an error, or
-   allowed.** Recommended: **an error**, as `break` is (ADR 0110), so that the
-   argument of ADR 0094 rests on type checking alone; the analysis's refusal
-   of `static mut` borrows would make it sound to allow, and it can be
-   relaxed later.
-4. **A reference made through a raw pointer may be returned** (`&*p`), as the
-   program's word. Recommended: **yes**, as ADR 0105 lets it be made and lent;
-   refusing it would need the analysis to track where references without a
-   site come from, and the raw pointer already says the program vouches.
-5. **`extern fn` returning a reference with no reference parameter** (C
-   promising read-only data). Recommended: **allowed**, by the same table: it
-   is what `-> *const [u8]` and `&*p` at the call state today, unchecked
-   either way.
-6. **Where it lands: M5.8, after M5.7, before M6**, with the migration of the
-   measured sites in the same step. Recommended as stated; the alternative is
-   to fold it into M6, which has nothing it depends on.
-7. **The names of the two codes**, `ty::reference-return` and
-   `analysis::returned-borrow`.
+The user decided, on the draft's questions: scope (b); several reference
+parameters an error, `ty::reference-return`; a `return` of a reference inside
+`critical` an error, as `break`; `&*p` may be returned, as the program's word;
+an `extern fn` with no reference parameter may return a `&T`, C vouching for
+read-only data, as for an `extern static` without `mut`; the step is M5.8,
+after M5.7 and before M6, with the migration and a recount; the codes are
+`ty::reference-return` and `analysis::returned-borrow`. Each is stated in the
+Decision above.
 
 ## Consequences
 
@@ -585,7 +722,11 @@ parts.
   stated cost of second-class references shrinks to storing them.
 - The functions that return a static name or message by value read as they
   mean, `fn reason(r: core::PanicReason) -> &[u8]`, and their callers drop
-  `&*`; about two thirds of the measured sites of reason 8 go.
+  `&*`; about 29 of the measured sites of reason 8 go, for readability and a
+  checked signature, not safety, since their raw form was already sound.
+- "A reference result with no reference parameter borrows read-only static
+  data" is a meaning fixed for good; later designs of static or stored
+  references must keep it.
 - A function's result can keep its argument borrowed after the call; the
   borrow check's errors gain a label at the call that explains why. A `&T`
   result of a `&mut` parameter keeps the mutable borrow, as in Rust; programs
@@ -595,11 +736,16 @@ parts.
   otherwise); a function that only selects static data by a value should not
   take a reference.
 - A function with no reference parameter whose result is a reference can
-  return only read-only static data: no getter of a `static mut` or of a
-  peripheral exists; those are borrowed where they are named.
+  return only read-only static data, or what a raw pointer vouches for: no
+  getter of a `static mut` or of a peripheral exists unless the program
+  writes the raw pointer that grants it, once, for every caller.
+- The rule on `critical` forbids even a harmless `return first(&self.buf)`
+  inside a `critical` block, whose result holds only the caller's borrow; the
+  program computes the value inside the block and returns after it.
 - The validator gains R5 and R1 changes; the analysis gains a pass over the
-  returns; MIR, the evaluator and code generation change only by allowing a
-  reference where a raw pointer already works.
+  returns and, on error, a walk for the call's label; MIR, the evaluator and
+  code generation change only by allowing a reference where a raw pointer
+  already works.
 - Stored references, `Option(&T)` results and `split_at_mut` stay raw or
   index-based; reasons 7 and 8 of ADR 0117 keep the sites that need them.
 
@@ -608,6 +754,16 @@ parts.
 - **Status quo, raw pointers for returns** — no work, but 32 measured return
   types and every getter of a non-copy part stay unchecked, and `&*f(..)` at
   every call says nothing the signature could not.
+- **Elision alone, option (a)** — the roadmap's idea exactly, but it removes
+  about 2 to 5 of the measured sites and leaves the common shape, static data
+  chosen by a value, raw.
+- **A static reference type, option (c)** — removes most of what remains, but
+  writes a lifetime and makes constants and fields of reference type, against
+  ADR 0094 and 0105.
+- **A return-only `&static T`, option (d)** — the sites of (b), with the
+  meaning written at the return and no tie to a parameter that is present;
+  but it writes a lifetime, against ADR 0094, and would be a second spelling
+  beside a first-class `&static T` if (c) ever came.
 - **Returning indices or handles instead** — `fn find(&self, k) -> usize`
   and `self.buf[i]` at the use is safe today and stays the answer where a
   result would be stored; but it does not express a static name, a sub-slice
@@ -621,16 +777,13 @@ parts.
   one function, and recursion would need a fixed point over the call graph),
   and the signature would no longer say what a result borrows, against
   ADR 0008's intent.
-- **Elision alone, option (a)** — the roadmap's idea exactly, but it removes a
-  handful of the measured sites and leaves the common shape, static data
-  chosen by a value, raw, for a difference of one case in rules (a) builds
-  anyway.
-- **A static reference type, option (c)** — removes most of what remains, but
-  writes a lifetime and makes constants and fields of reference type; a
-  separate decision (see "Open questions").
-- **Projections, as Hylo's `yield`** — lends a part for the duration of an
-  access without returning a value; it needs coroutines or a new form of
-  call, much more than a reference result.
+- **Rust's `&self` rule, or the union, for several reference parameters** —
+  each accepts more programs; both can come later without breaking any, and
+  both need the tied argument recorded on the MIR call.
+- **Allowing a `return` of a reference out of `critical`** — sound, since no
+  returned reference holds a `static mut` borrow, but the argument of ADR 0094
+  would then rest on the analysis instead of type checking; relaxing the rule
+  later breaks no program.
 - **Allowing `&mut` results with no `&mut` parameter, unchecked** — a getter of
   a singleton (`fn uart() -> &mut Uart`) would give two `&mut` of one device
   that the check sees as independent; a raw pointer, with `&mut *p` written
@@ -645,9 +798,10 @@ parts.
 - **Downgrading** a `&T` result of a `&mut` parameter to a shared borrow
   after the call: sound for plain data, but a shared access to a peripheral's
   registers can have effects (a read that pops a FIFO), so it is left out.
-- **A `&static T`** (option (c)) for tables of byte strings, `PanicInfo.file`
-  and slices of slices: if it is ever added, a signature of (b) with no
-  reference parameter would read as returning one, and the two spellings
-  would need one meaning.
+- **A `&static T`**, return-only (d) or first-class (c), for a function with a
+  reference parameter that returns static data, tables of byte strings,
+  `PanicInfo.file` and slices of slices. Either writes a lifetime (ADR 0094).
+  If one is ever added, a signature of (b) with no reference parameter must
+  keep its meaning, and the two spellings need one.
 - **LLVM attributes** on returned references (`nonnull`, `dereferenceable`),
   with those on parameters, once the check is trusted (ADR 0105).

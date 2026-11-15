@@ -309,7 +309,9 @@ Agreed as useful, not yet scheduled:
     the 60 percent that ADR 0117 sets, so this idea is now a pending decision
     (see "After M5" below), with the caveat that 29 of those sites are
     functions returning a static byte string chosen by a value, not a
-    sub-slice of an argument. Designed in ADR 0118 (Proposed).
+    sub-slice of an argument. Designed in ADR 0118 (Proposed): the scope
+    is decided (the tied result, and a result with no reference parameter
+    borrowing read-only static data), to land as M5.8.
   The same step would let a `&mut [T]` be split in two halves in use
   together, as Rust's `split_at_mut`, which ADR 0108 leaves out because the
   two references could be neither returned nor bound in pairs.
@@ -558,7 +560,9 @@ ADRs:
     without `PanicInfo`'s fields, 89.8 percent, which is above the 60 percent
     that ADR 0117 sets, so this is a pending decision: open its own
     `Proposed` ADR, reviewed first, as the deferred idea says: ADR 0118
-    (Proposed). Not built in M5.7. What the 53 are: 32 return types, 12 `const`s and `static`s of
+    (Proposed; its scope decided with the user, a step of its own, M5.8,
+    after M5.7 and before M6, with the migration and a recount). Not built
+    in M5.7. What the 53 are: 32 return types, 12 `const`s and `static`s of
     slices, 4 parameters, 1 field, 1 local and 3 operands of `slice(..)`.
     Of the 32 return types, 29 return a byte string in static memory chosen
     by an enum, an integer or a `bool` (`reason`, `name`, `state_name`): they
