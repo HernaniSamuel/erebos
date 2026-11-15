@@ -537,7 +537,8 @@ ADRs:
     program uses one struct per state.
   - M5.8: settled by ADR 0118 (a returned reference, tied to the one reference
     parameter or borrowing read-only static data; `ty::reference-return` and
-    `analysis::returned-borrow`). Its plan is written when it starts.
+    `analysis::returned-borrow`). Its plan is `.claude/plans/M5.8.md`: the
+    cluster on thumbv7m is the CMSDK dual timer, declared by its program.
   - Not in M5: references stored in structs (ADR 0094); function
     pointers; priorities and several cores, to which ADR 0094 says how it
     extends.
