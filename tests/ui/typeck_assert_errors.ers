@@ -3,7 +3,9 @@
 // one (ADR 0116). The raw slice of ADR 0031 does not: a message of a raw byte
 // slice, or a raw pointer to an array of bytes, that is not volatile gets the
 // reference to write instead, from what was written; a volatile one gets no
-// help, since no reference that is not volatile can be made from it.
+// help, since no reference that is not volatile can be made from it. The help
+// also follows the value of a block, an `if` or a `match` that is the message,
+// to the tail or branch that is wrong.
 fn errors(
     x: u32,
     w: &[u16],
@@ -29,6 +31,9 @@ fn errors(
     assert(x == 12, &raw const buf[0..2]);
     assert(x == 13, &*p);
     assert(x == 14, &*r);
+    assert(x == 15, { p });
+    assert(x == 16, if x == 0 { p } else { q });
+    assert(x == 17, match x { 0 => p, _ => &raw const b"raw" });
 }
 
 entry fn main() -> ! { loop {} }

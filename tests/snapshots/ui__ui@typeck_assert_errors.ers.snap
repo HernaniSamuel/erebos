@@ -7,123 +7,111 @@ input_file: tests/ui/typeck_assert_errors.ers
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_assert_errors.ers:17:12]
- 16 │ ) {
- 17 │     assert(x);
+    ╭─[typeck_assert_errors.ers:19:12]
+ 18 │ ) {
+ 19 │     assert(x);
     ·            ┬
     ·            ╰── expected `bool`, found `u32`
- 18 │     assert(x == 1, false);
-    ╰────
-ty::mismatched-types
-
-  × mismatched types
-    ╭─[typeck_assert_errors.ers:18:20]
- 17 │     assert(x);
- 18 │     assert(x == 1, false);
-    ·                    ──┬──
-    ·                      ╰── expected `&[u8]`, found `bool`
- 19 │     assert(x == 2, w);
-    ╰────
-ty::mismatched-types
-
-  × mismatched types
-    ╭─[typeck_assert_errors.ers:19:20]
- 18 │     assert(x == 1, false);
- 19 │     assert(x == 2, w);
-    ·                    ┬
-    ·                    ╰── expected `&[u8]`, found `&[u16]`
- 20 │     assert(x == 3, v);
+ 20 │     assert(x == 1, false);
     ╰────
 ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:20:20]
- 19 │     assert(x == 2, w);
- 20 │     assert(x == 3, v);
-    ·                    ┬
-    ·                    ╰── expected `&[u8]`, found `&volatile [u8]`
- 21 │     assert(x == 4, m);
+ 19 │     assert(x);
+ 20 │     assert(x == 1, false);
+    ·                    ──┬──
+    ·                      ╰── expected `&[u8]`, found `bool`
+ 21 │     assert(x == 2, w);
     ╰────
-  help: a volatile reference never becomes one that is not, nor the other way: it would hide
-        whether accesses are volatile (ADR 0110)
 ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:21:20]
- 20 │     assert(x == 3, v);
- 21 │     assert(x == 4, m);
+ 20 │     assert(x == 1, false);
+ 21 │     assert(x == 2, w);
     ·                    ┬
-    ·                    ╰── expected `&[u8]`, found `&mut volatile [u8]`
- 22 │     assert(x == 5, p);
+    ·                    ╰── expected `&[u8]`, found `&[u16]`
+ 22 │     assert(x == 3, v);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:22:20]
+ 21 │     assert(x == 2, w);
+ 22 │     assert(x == 3, v);
+    ·                    ┬
+    ·                    ╰── expected `&[u8]`, found `&volatile [u8]`
+ 23 │     assert(x == 4, m);
     ╰────
   help: a volatile reference never becomes one that is not, nor the other way: it would hide
         whether accesses are volatile (ADR 0110)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_assert_errors.ers:22:20]
- 21 │     assert(x == 4, m);
- 22 │     assert(x == 5, p);
-    ·                    ┬
-    ·                    ╰── expected `&[u8]`, found `*const [u8]`
- 23 │     assert(x == 6, q);
-    ╰────
-  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
-        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
-ty::mismatched-types
-
-  × mismatched types
     ╭─[typeck_assert_errors.ers:23:20]
- 22 │     assert(x == 5, p);
- 23 │     assert(x == 6, q);
+ 22 │     assert(x == 3, v);
+ 23 │     assert(x == 4, m);
     ·                    ┬
-    ·                    ╰── expected `&[u8]`, found `*mut [u8; 2]`
- 24 │     assert(x == 7, r);
+    ·                    ╰── expected `&[u8]`, found `&mut volatile [u8]`
+ 24 │     assert(x == 5, p);
     ╰────
-  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
-        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
 ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:24:20]
- 23 │     assert(x == 6, q);
- 24 │     assert(x == 7, r);
+ 23 │     assert(x == 4, m);
+ 24 │     assert(x == 5, p);
     ·                    ┬
-    ·                    ╰── expected `&[u8]`, found `*const volatile [u8]`
- 25 │     assert(x == 8, &raw const b"raw");
+    ·                    ╰── expected `&[u8]`, found `*const [u8]`
+ 25 │     assert(x == 6, q);
     ╰────
+  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
+        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
 ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:25:20]
- 24 │     assert(x == 7, r);
- 25 │     assert(x == 8, &raw const b"raw");
+ 24 │     assert(x == 5, p);
+ 25 │     assert(x == 6, q);
+    ·                    ┬
+    ·                    ╰── expected `&[u8]`, found `*mut [u8; 2]`
+ 26 │     assert(x == 7, r);
+    ╰────
+  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
+        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:26:20]
+ 25 │     assert(x == 6, q);
+ 26 │     assert(x == 7, r);
+    ·                    ┬
+    ·                    ╰── expected `&[u8]`, found `*const volatile [u8]`
+ 27 │     assert(x == 8, &raw const b"raw");
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:27:20]
+ 26 │     assert(x == 7, r);
+ 27 │     assert(x == 8, &raw const b"raw");
     ·                    ────────┬────────
     ·                            ╰── expected `&[u8]`, found `*const [u8; 3]`
- 26 │     assert(x == 9, &raw const buf);
+ 28 │     assert(x == 9, &raw const buf);
     ╰────
   help: an `assert` message is a `&[u8]`: write `&b"..."` for `&raw const b"..."` (ADR 0116)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_assert_errors.ers:26:20]
- 25 │     assert(x == 8, &raw const b"raw");
- 26 │     assert(x == 9, &raw const buf);
+    ╭─[typeck_assert_errors.ers:28:20]
+ 27 │     assert(x == 8, &raw const b"raw");
+ 28 │     assert(x == 9, &raw const buf);
     ·                    ───────┬──────
     ·                           ╰── expected `&[u8]`, found `*const [u8; 4]`
- 27 │     assert(x == 10, &raw mut buf);
-    ╰────
-  help: an `assert` message is a `&[u8]`: borrow the place with `&p` instead of `&raw const p` or
-        `&raw mut p` (ADR 0116)
-ty::mismatched-types
-
-  × mismatched types
-    ╭─[typeck_assert_errors.ers:27:21]
- 26 │     assert(x == 9, &raw const buf);
- 27 │     assert(x == 10, &raw mut buf);
-    ·                     ──────┬─────
-    ·                           ╰── expected `&[u8]`, found `*mut [u8; 4]`
- 28 │     assert(x == 11, &buf[0..2]);
+ 29 │     assert(x == 10, &raw mut buf);
     ╰────
   help: an `assert` message is a `&[u8]`: borrow the place with `&p` instead of `&raw const p` or
         `&raw mut p` (ADR 0116)
@@ -131,11 +119,11 @@ ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:29:21]
- 28 │     assert(x == 11, &buf[0..2]);
- 29 │     assert(x == 12, &raw const buf[0..2]);
-    ·                     ──────────┬─────────
-    ·                               ╰── expected `&[u8]`, found `*const [u8]`
- 30 │     assert(x == 13, &*p);
+ 28 │     assert(x == 9, &raw const buf);
+ 29 │     assert(x == 10, &raw mut buf);
+    ·                     ──────┬─────
+    ·                           ╰── expected `&[u8]`, found `*mut [u8; 4]`
+ 30 │     assert(x == 11, &buf[0..2]);
     ╰────
   help: an `assert` message is a `&[u8]`: borrow the place with `&p` instead of `&raw const p` or
         `&raw mut p` (ADR 0116)
@@ -143,11 +131,82 @@ ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:31:21]
- 30 │     assert(x == 13, &*p);
- 31 │     assert(x == 14, &*r);
+ 30 │     assert(x == 11, &buf[0..2]);
+ 31 │     assert(x == 12, &raw const buf[0..2]);
+    ·                     ──────────┬─────────
+    ·                               ╰── expected `&[u8]`, found `*const [u8]`
+ 32 │     assert(x == 13, &*p);
+    ╰────
+  help: an `assert` message is a `&[u8]`: borrow the place with `&p` instead of `&raw const p` or
+        `&raw mut p` (ADR 0116)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:33:21]
+ 32 │     assert(x == 13, &*p);
+ 33 │     assert(x == 14, &*r);
     ·                     ─┬─
     ·                      ╰── expected `&[u8]`, found `&volatile [u8]`
- 32 │ }
+ 34 │     assert(x == 15, { p });
     ╰────
   help: a volatile reference never becomes one that is not, nor the other way: it would hide
         whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:34:23]
+ 33 │     assert(x == 14, &*r);
+ 34 │     assert(x == 15, { p });
+    ·                       ┬
+    ·                       ╰── expected `&[u8]`, found `*const [u8]`
+ 35 │     assert(x == 16, if x == 0 { p } else { q });
+    ╰────
+  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
+        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:35:33]
+ 34 │     assert(x == 15, { p });
+ 35 │     assert(x == 16, if x == 0 { p } else { q });
+    ·                                 ┬
+    ·                                 ╰── expected `&[u8]`, found `*const [u8]`
+ 36 │     assert(x == 17, match x { 0 => p, _ => &raw const b"raw" });
+    ╰────
+  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
+        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:35:44]
+ 34 │     assert(x == 15, { p });
+ 35 │     assert(x == 16, if x == 0 { p } else { q });
+    ·                                            ┬
+    ·                                            ╰── expected `&[u8]`, found `*mut [u8; 2]`
+ 36 │     assert(x == 17, match x { 0 => p, _ => &raw const b"raw" });
+    ╰────
+  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
+        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:36:36]
+ 35 │     assert(x == 16, if x == 0 { p } else { q });
+ 36 │     assert(x == 17, match x { 0 => p, _ => &raw const b"raw" });
+    ·                                    ┬
+    ·                                    ╰── expected `&[u8]`, found `*const [u8]`
+ 37 │ }
+    ╰────
+  help: an `assert` message is a `&[u8]`: make a reference from it with `&*msg`, which a raw slice
+        or a pointer to an array that is not volatile allows (ADR 0108, 0116)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_assert_errors.ers:36:44]
+ 35 │     assert(x == 16, if x == 0 { p } else { q });
+ 36 │     assert(x == 17, match x { 0 => p, _ => &raw const b"raw" });
+    ·                                            ────────┬────────
+    ·                                                    ╰── expected `&[u8]`, found `*const [u8; 3]`
+ 37 │ }
+    ╰────
+  help: an `assert` message is a `&[u8]`: write `&b"..."` for `&raw const b"..."` (ADR 0116)

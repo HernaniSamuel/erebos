@@ -84,8 +84,9 @@ instead of applying it; agents are held to it when they finish
   A program reaches its machine through `mod board;` (ADR 0077): the
   harness copies it into a work directory with the target's board module,
   `tests/boards/<target>.ers`, as `board.ers`, which holds the `memory`
-  block (ADR 0057) and offers `board::putc`, `board::exit` and
-  `board::SCRATCH`. A program that has a `board.ers` of its own is an
+  block (ADR 0057) and offers `board::print(s: &[u8])` (ADR 0117),
+  `board::putc`, `board::exit` and `board::SCRATCH`. A program that has a
+  `board.ers` of its own is an
   error; one that must declare its own devices or `memory` block says
   `// targets: <target name>` and which of ADR 0077's three reasons
   applies.

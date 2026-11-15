@@ -363,7 +363,7 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
         scrutinee: None,
         payload_depth: 0,
         nested_or: None,
-        assert_message: None,
+        assert_message: Vec::new(),
     };
     checker.fn_(f);
     checker.elsewhere
@@ -457,6 +457,36 @@ fn untyped(expr: &Expr, variants: bool) -> bool {
     }
 }
 
+/// The ids of the expressions that give the value of `expr`: `expr`
+/// itself, and the tail of a block, the branches of an `if` and the arms of
+/// a `match` that it is, recursively.
+fn value_tails(expr: &Expr, out: &mut Vec<ExprId>) {
+    out.push(expr.id);
+    match &expr.kind {
+        ExprKind::Block(block) | ExprKind::Critical(block) => {
+            if let Some(tail) = &block.tail {
+                value_tails(tail, out);
+            }
+        }
+        ExprKind::If {
+            then,
+            else_: Some(else_),
+            ..
+        } => {
+            if let Some(tail) = &then.tail {
+                value_tails(tail, out);
+            }
+            value_tails(else_, out);
+        }
+        ExprKind::Match { arms, .. } => {
+            for arm in arms {
+                value_tails(&arm.body, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// The element type an expected array type asks for.
 fn element_of(expected: Option<Ty>) -> Option<Ty> {
     match expected {
@@ -492,9 +522,10 @@ struct Checker<'a, 'h> {
     /// The outermost or-pattern nested in a payload that encloses the
     /// pattern being checked.
     nested_or: Option<Span>,
-    /// The message of the `assert` being checked: a mismatch of it that is a
-    /// raw byte slice gets the help of ADR 0116.
-    assert_message: Option<ExprId>,
+    /// The message of the `assert` being checked, and the tails of it that
+    /// are blocks, branches of an `if` or arms of a `match`: a mismatch of
+    /// one of them that is a raw byte slice gets the help of ADR 0116.
+    assert_message: Vec<ExprId>,
 }
 
 /// A `==` or `!=`: its operator and the ids of its operands, in order.
@@ -1019,7 +1050,7 @@ impl Checker<'_, '_> {
                 );
             }
         }
-        if self.assert_message == Some(expr.id)
+        if self.assert_message.contains(&expr.id)
             && let Ty::Ptr(have) = found
             && !have.volatile
             && matches!(*have.pointee, Ty::Slice(elem) | Ty::Array(elem, _) if *elem == Ty::Int(IntTy::U8))
@@ -1269,7 +1300,9 @@ impl Checker<'_, '_> {
                 // Any `&[u8]`, or what converts to one (ADR 0116).
                 if let Some(message) = message {
                     let bytes = Ty::reference(false, false, Ty::slice(Ty::Int(IntTy::U8)));
-                    let outer = self.assert_message.replace(message.id);
+                    let mut tails = Vec::new();
+                    value_tails(message, &mut tails);
+                    let outer = std::mem::replace(&mut self.assert_message, tails);
                     self.check(f, message, Some(bytes));
                     self.assert_message = outer;
                 }

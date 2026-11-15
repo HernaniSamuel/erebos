@@ -4114,7 +4114,8 @@ assert(n < 4, &buf[0..len]);
   volatile, the error has a help naming the form to write: `&b"..."` for
   `&raw const b"..."`, `&p` for `&raw const p` or `&raw mut p` of another
   place, and `&*msg` for any other expression, which makes a reference from
-  it.
+  it. When the message is a block, an `if` or a `match`, the help is on the
+  tail or the branch that is wrong, as it is on the message itself.
 - The message is a use of the reference for the borrow check: its borrow is
   in use until the panic function is called, on the failing path only. A
   message that borrows a place a `&mut` in use also reaches is
@@ -5485,8 +5486,8 @@ only for a program that declares a handler.
 `0x2000_0000` and a CMSDK UART at `0x4000_4000`) for thumbv7m. A program
 reaches its machine through `mod board;`: the harness supplies the file
 `tests/boards/<target>.ers`, which holds the machine's `memory` block and
-`putc`, `exit` and `SCRATCH`; a program for a real board writes its own the
-same way. The language has no conditional compilation, so a program that
+`print(s: &[u8])` (ADR 0117), `putc`, `exit` and `SCRATCH`; a program for a
+real board writes its own the same way. The language has no conditional compilation, so a program that
 needs one machine says it in a header, `// targets: <name>`, and runs only
 there. A program that holds one target's assembly, or names an item of
 `core::arch` specific to one target, lists only that target (ADR 0079,
