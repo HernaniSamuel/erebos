@@ -1,0 +1,157 @@
+// emit: mir
+// The borrow a call's result holds (ADR 0118): the result holds what its
+// reference argument held, and the loan of the argument itself, until its last
+// use. An access to that place while the result is used later is
+// `analysis::borrow-conflict`, with the borrow, the later use and, labelled at
+// the call, the result that holds it. A `&mut` argument is lent by a reborrow,
+// so `r` and `*r` are not used while a `&mut` result of it is; a `&` result of a
+// `&mut` parameter keeps the mutable loan; a chain borrows its receiver until
+// the last call returns; there is no two-phase borrow; a callee may not write
+// what it returns while it is held. Each function is one case, and every one is
+// rejected. `returned_reference_borrows_accepted.ers` has what is not,
+// `returned_reference_call_borrows.ers` the borrows held across calls.
+struct Ring {
+    buf: [u8; 8],
+    head: usize,
+}
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Config {
+    rate: u32,
+    parity: u8,
+}
+
+impl Ring {
+    fn top(&mut self) -> &u8 {
+        &self.buf[self.head]
+    }
+
+    fn slot(&mut self, i: usize) -> &mut u8 {
+        &mut self.buf[i]
+    }
+
+    fn count(&self) -> usize {
+        self.head
+    }
+}
+
+impl Pair {
+    // A callee writes what it then returns: `x` is read after the write.
+    fn writes_what_it_returns(&mut self) -> &mut u32 {
+        let x: &mut u32 = &mut self.a;
+        self.a = 1;
+        x
+    }
+}
+
+impl Config {
+    fn baud(&mut self, rate: u32) -> &mut Self {
+        self.rate = rate;
+        self
+    }
+
+    fn parity(&mut self, parity: u8) -> &mut Self {
+        self.parity = parity;
+        self
+    }
+
+    fn current(&self) -> u8 {
+        self.parity
+    }
+}
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+fn other(s: &[u8]) -> &u8 {
+    &s[1]
+}
+
+fn slot(r: &mut Ring, i: usize) -> &mut u8 {
+    &mut r.buf[i]
+}
+
+fn poke(a: &mut u8, b: &u8) {}
+
+// The argument's place is written while the result is used later.
+fn written_while_held(mut buf: [u8; 4]) -> u8 {
+    let b: &u8 = first(&buf);
+    buf[0] = 1;
+    *b
+}
+
+// Two calls joined: the site of each `&buf` is held through its own call.
+fn joined(c: bool, mut buf: [u8; 4]) -> u8 {
+    let b: &u8 = if c { first(&buf) } else { other(&buf) };
+    buf[0] = 1;
+    *b
+}
+
+// A `&mut` argument is lent by a reborrow: `r` is written while the result is
+// used later.
+fn written_through_the_argument(r: &mut Ring) {
+    let x: &mut u8 = slot(r, 0);
+    r.head = 1;
+    *x = 2;
+}
+
+// `*r` is read while a `&mut` result of `r` lives.
+fn read_while_a_mut_result_lives(r: &mut Ring) -> usize {
+    let x: &mut u8 = slot(r, 0);
+    let n: usize = (*r).head;
+    *x = 2;
+    n
+}
+
+// A `&` result of a `&mut` parameter is not downgraded: the receiver is read
+// while it lives.
+fn shared_result_of_a_mut_receiver(r: &mut Ring) -> usize {
+    let p: &u8 = r.top();
+    let n: usize = r.count();
+    n + *p as usize
+}
+
+// A `&mut` result of a method, held while another method reads the receiver.
+fn held_beside_a_method(r: &mut Ring) -> u8 {
+    let p: &mut u8 = r.slot(1);
+    let n: usize = r.count();
+    *p = n as u8;
+    *p
+}
+
+// A chain borrows its receiver until the last call returns: `c` is written
+// while the result of the chain is used.
+fn chain_written(c: &mut Config) {
+    let r: &mut Config = c.baud(1).parity(2);
+    c.rate = 5;
+    r.rate = 0;
+}
+
+// The second call of a chain reads the receiver in its argument while the
+// first call's result is its receiver.
+fn chain_argument_reads(c: &mut Config) {
+    c.baud(1).parity(c.current());
+}
+
+// A result lent to a call with a borrow of the same place.
+fn lent_with_a_borrow(r: &mut Ring) {
+    poke(slot(r, 0), &r.buf[1]);
+}
+
+// No two-phase borrow: the argument reads the receiver of the call.
+fn two_phase(mut ring: Ring) {
+    ring.slot(ring.count());
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

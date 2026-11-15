@@ -1,0 +1,85 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_reference_call_borrows.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `TICKS` is borrowed during this call, and the callee writes it
+    ╭─[returned_reference_call_borrows.ers:34:9]
+ 18 │ fn reset() {
+ 19 │     TICKS = 0;
+    ·     ────┬────
+    ·         ╰── `TICKS` is written here
+ 20 │ }
+ 21 │ 
+ 22 │ fn down() {
+ 23 │     reset();
+ 24 │ }
+ 25 │ 
+ 26 │ fn unrelated() {
+ 27 │     OTHER = 0;
+ 28 │ }
+ 29 │ 
+ 30 │ // The callee writes the static the result borrows.
+ 31 │ fn held_across_a_write() {
+ 32 │     critical {
+ 33 │         let r: &mut u32 = pick(&mut TICKS);
+    ·                                ─────┬────
+    ·                                     ╰── `TICKS` is borrowed `&mut` here
+ 34 │         reset();
+    ·         ───┬───
+    ·            ╰── `reset` reaches `TICKS` while it is borrowed
+ 35 │         *r = 1;
+    ·         ───┬──
+    ·            ╰── the borrow is used later here
+ 36 │     }
+    ╰────
+  help: pass the reference on instead of naming `TICKS` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `TICKS` is borrowed during this call, and the callee writes it
+    ╭─[returned_reference_call_borrows.ers:43:9]
+ 18 │ fn reset() {
+ 19 │     TICKS = 0;
+    ·     ────┬────
+    ·         ╰── `TICKS` is written here
+ 20 │ }
+ 21 │ 
+ 22 │ fn down() {
+ 23 │     reset();
+    ·     ───┬───
+    ·        ╰── `reset` is called here
+ 24 │ }
+ 25 │ 
+ 26 │ fn unrelated() {
+ 27 │     OTHER = 0;
+ 28 │ }
+ 29 │ 
+ 30 │ // The callee writes the static the result borrows.
+ 31 │ fn held_across_a_write() {
+ 32 │     critical {
+ 33 │         let r: &mut u32 = pick(&mut TICKS);
+ 34 │         reset();
+ 35 │         *r = 1;
+ 36 │     }
+ 37 │ }
+ 38 │ 
+ 39 │ // Two calls down.
+ 40 │ fn held_across_a_chain_of_calls() {
+ 41 │     critical {
+ 42 │         let r: &mut u32 = pick(&mut TICKS);
+    ·                                ─────┬────
+    ·                                     ╰── `TICKS` is borrowed `&mut` here
+ 43 │         down();
+    ·         ───┬──
+    ·            ╰── `down` reaches `TICKS` while it is borrowed
+ 44 │         *r = 1;
+    ·         ───┬──
+    ·            ╰── the borrow is used later here
+ 45 │     }
+    ╰────
+  help: pass the reference on instead of naming `TICKS` in the callee, or end the borrow before
+        the call

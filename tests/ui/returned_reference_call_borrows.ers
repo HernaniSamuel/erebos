@@ -1,0 +1,80 @@
+// emit: mir
+// A borrow held by a call's result across a call (ADR 0118, 0111): `pick` ties
+// its result to the `&mut` of a `static mut`, so the result keeps that borrow in
+// use during the calls made while it is live, and a callee that writes the
+// static, directly or two calls down, is `analysis::borrow-conflict-in-call`.
+// A call made after the result's last use, or whose callee reaches another
+// static, is accepted. The body runs in `critical` because a handler also
+// reaches the statics.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+static mut OTHER: u32 = 0;
+
+fn pick(r: &mut u32) -> &mut u32 {
+    r
+}
+
+fn reset() {
+    TICKS = 0;
+}
+
+fn down() {
+    reset();
+}
+
+fn unrelated() {
+    OTHER = 0;
+}
+
+// The callee writes the static the result borrows.
+fn held_across_a_write() {
+    critical {
+        let r: &mut u32 = pick(&mut TICKS);
+        reset();
+        *r = 1;
+    }
+}
+
+// Two calls down.
+fn held_across_a_chain_of_calls() {
+    critical {
+        let r: &mut u32 = pick(&mut TICKS);
+        down();
+        *r = 1;
+    }
+}
+
+// Accepted: the callee reaches another static, or the call comes after the
+// result's last use.
+fn held_across_another_static() {
+    critical {
+        let r: &mut u32 = pick(&mut TICKS);
+        unrelated();
+        *r = 1;
+    }
+}
+
+fn used_before_the_call() {
+    critical {
+        let r: &mut u32 = pick(&mut TICKS);
+        *r = 1;
+        reset();
+    }
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    TICKS = 0;
+}
+
+entry fn main() -> ! {
+    held_across_a_write();
+    held_across_a_chain_of_calls();
+    held_across_another_static();
+    used_before_the_call();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

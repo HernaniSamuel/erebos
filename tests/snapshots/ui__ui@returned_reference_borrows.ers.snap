@@ -1,0 +1,204 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_reference_borrows.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot assign to `(*self).a` while it is borrowed
+    ╭─[returned_reference_borrows.ers:46:9]
+ 44 │     fn writes_what_it_returns(&mut self) -> &mut u32 {
+ 45 │         let x: &mut u32 = &mut self.a;
+    ·                           ─────┬─────
+    ·                                ╰── `(*self).a` is borrowed as mutable here
+ 46 │         self.a = 1;
+    ·         ─────┬────
+    ·              ╰── assigned here
+ 47 │         x
+    ·         ┬
+    ·         ╰── the borrow is used later here
+ 48 │     }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `buf[_]` while it is borrowed
+    ╭─[returned_reference_borrows.ers:84:5]
+ 82 │ fn written_while_held(mut buf: [u8; 4]) -> u8 {
+ 83 │     let b: &u8 = first(&buf);
+    ·                  ─────┬─────┬
+    ·                       │     ╰── `buf` is borrowed here
+    ·                       ╰── the result of this call holds the borrow
+ 84 │     buf[0] = 1;
+    ·     ─────┬────
+    ·          ╰── assigned here
+ 85 │     *b
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 86 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `buf[_]` while it is borrowed
+    ╭─[returned_reference_borrows.ers:91:5]
+ 89 │ fn joined(c: bool, mut buf: [u8; 4]) -> u8 {
+ 90 │     let b: &u8 = if c { first(&buf) } else { other(&buf) };
+    ·                         ─────┬─────┬         ─────┬─────┬
+    ·                              │     │              │     ╰── `buf` is borrowed here
+    ·                              │     │              ╰── the result of this call holds the borrow
+    ·                              │     ╰── `buf` is borrowed here
+    ·                              ╰── the result of this call holds the borrow
+ 91 │     buf[0] = 1;
+    ·     ─────┬────
+    ·          ╰── assigned here
+ 92 │     *b
+    ·     ─┬┬
+    ·      ╰── the borrow is used later here
+    ·      ╰── the borrow is used later here
+ 93 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*r).head` while it is borrowed
+     ╭─[returned_reference_borrows.ers:99:5]
+  97 │ fn written_through_the_argument(r: &mut Ring) {
+  98 │     let x: &mut u8 = slot(r, 0);
+     ·                      ─────┬────┬
+     ·                           │    ╰── `r` is lent to this call
+     ·                           ╰── the result of this call holds the borrow
+  99 │     r.head = 1;
+     ·     ─────┬────
+     ·          ╰── assigned here
+ 100 │     *x = 2;
+     ·     ───┬──
+     ·        ╰── the borrow is used later here
+ 101 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `(*r).head` while it is borrowed as mutable
+     ╭─[returned_reference_borrows.ers:106:20]
+ 104 │ fn read_while_a_mut_result_lives(r: &mut Ring) -> usize {
+ 105 │     let x: &mut u8 = slot(r, 0);
+     ·                      ─────┬────┬
+     ·                           │    ╰── `r` is lent to this call
+     ·                           ╰── the result of this call holds the borrow
+ 106 │     let n: usize = (*r).head;
+     ·                    ────┬────
+     ·                        ╰── used here
+ 107 │     *x = 2;
+     ·     ───┬──
+     ·        ╰── the borrow is used later here
+ 108 │     n
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `r` to `&` while it is borrowed as mutable
+     ╭─[returned_reference_borrows.ers:115:20]
+ 113 │ fn shared_result_of_a_mut_receiver(r: &mut Ring) -> usize {
+ 114 │     let p: &u8 = r.top();
+     ·                  ┬───┬──
+     ·                  │   ╰── the result of this call holds the borrow
+     ·                  ╰── `r` is lent to this call
+ 115 │     let n: usize = r.count();
+     ·                    ┬
+     ·                    ╰── converted to `&` here
+ 116 │     n + *p as usize
+     ·         ─┬
+     ·          ╰── the borrow is used later here
+ 117 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `r` to `&` while it is borrowed as mutable
+     ╭─[returned_reference_borrows.ers:122:20]
+ 120 │ fn held_beside_a_method(r: &mut Ring) -> u8 {
+ 121 │     let p: &mut u8 = r.slot(1);
+     ·                      ┬────┬───
+     ·                      │    ╰── the result of this call holds the borrow
+     ·                      ╰── `r` is lent to this call
+ 122 │     let n: usize = r.count();
+     ·                    ┬
+     ·                    ╰── converted to `&` here
+ 123 │     *p = n as u8;
+     ·     ──────┬─────
+     ·           ╰── the borrow is used later here
+ 124 │     *p
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*c).rate` while it is borrowed
+     ╭─[returned_reference_borrows.ers:131:5]
+ 129 │ fn chain_written(c: &mut Config) {
+ 130 │     let r: &mut Config = c.baud(1).parity(2);
+     ·                          ┬─────────┬────────
+     ·                          │         ╰── the result of this call holds the borrow
+     ·                          ╰── `c` is lent to this call
+ 131 │     c.rate = 5;
+     ·     ─────┬────
+     ·          ╰── assigned here
+ 132 │     r.rate = 0;
+     ·     ─────┬────
+     ·          ╰── the borrow is used later here
+ 133 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `c` to `&` while it is borrowed as mutable
+     ╭─[returned_reference_borrows.ers:138:22]
+ 137 │ fn chain_argument_reads(c: &mut Config) {
+ 138 │     c.baud(1).parity(c.current());
+     ·     ┬──────────────┬─────────────┬┬
+     ·     │              │             │╰── converted to `&` here
+     ·     │              │             ╰── the result of this call holds the borrow
+     ·     │              ╰── the borrow is used later here
+     ·     ╰── `c` is lent to this call
+ 139 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `(*r).buf[_]` while it is borrowed as mutable
+     ╭─[returned_reference_borrows.ers:143:22]
+ 142 │ fn lent_with_a_borrow(r: &mut Ring) {
+ 143 │     poke(slot(r, 0), &r.buf[1]);
+     ·     ─────────────┬─────────────┬┬┬
+     ·                  │             ││╰── borrowed here
+     ·                  │             │╰── `r` is lent to this call
+     ·                  │             ╰── the result of this call holds the borrow
+     ·                  ╰── the borrow is used later here
+ 144 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `ring` while it is borrowed as mutable
+     ╭─[returned_reference_borrows.ers:148:15]
+ 147 │ fn two_phase(mut ring: Ring) {
+ 148 │     ring.slot(ring.count());
+     ·     ──┬──────────┬─────────┬
+     ·       │          │         ╰── borrowed here
+     ·       │          ╰── the borrow is used later here
+     ·       ╰── `ring` is borrowed as mutable here
+ 149 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

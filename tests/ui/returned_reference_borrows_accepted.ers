@@ -1,0 +1,163 @@
+// emit: mir
+// What the borrow check accepts of a call's result (ADR 0118): a result is
+// held until its last use and not longer, so the argument's place is written
+// after it; a `&mut` result is used before the reference it was made from; a
+// callee that writes one field and returns another; a `&` result of a `&mut`
+// receiver once it is no longer used; a chain, which leaves its receiver
+// usable after the last call; a result lent to a call; two calls joined, with
+// the write after the last use; and a result of a function with no reference
+// parameter, which holds nothing and is held across a write of everything
+// else. `returned_reference_borrows.ers` has the rejected cases.
+static TABLE: [u8; 4] = [1, 2, 3, 4];
+
+struct Ring {
+    buf: [u8; 8],
+    head: usize,
+}
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Config {
+    rate: u32,
+    parity: u8,
+}
+
+impl Ring {
+    fn top(&mut self) -> &u8 {
+        &self.buf[self.head]
+    }
+
+    fn slot(&mut self, i: usize) -> &mut u8 {
+        &mut self.buf[i]
+    }
+
+    fn count(&self) -> usize {
+        self.head
+    }
+}
+
+impl Pair {
+    // Two fields: the write is not to what is returned.
+    fn writes_the_other(&mut self) -> &mut u32 {
+        let x: &mut u32 = &mut self.a;
+        self.b = 1;
+        x
+    }
+}
+
+impl Config {
+    fn baud(&mut self, rate: u32) -> &mut Self {
+        self.rate = rate;
+        self
+    }
+
+    fn parity(&mut self, parity: u8) -> &mut Self {
+        self.parity = parity;
+        self
+    }
+
+    fn current(&self) -> u8 {
+        self.parity
+    }
+}
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+fn other(s: &[u8]) -> &u8 {
+    &s[1]
+}
+
+fn slot(r: &mut Ring, i: usize) -> &mut u8 {
+    &mut r.buf[i]
+}
+
+fn table() -> &[u8; 4] {
+    &TABLE
+}
+
+fn poke(a: &mut u8) {}
+
+// The write comes after the last use of the result.
+fn written_after_the_last_use(mut buf: [u8; 4]) -> u8 {
+    let b: &u8 = first(&buf);
+    let n: u8 = *b;
+    buf[0] = 1;
+    n
+}
+
+fn joined_then_written(c: bool, mut buf: [u8; 4]) -> u8 {
+    let b: &u8 = if c { first(&buf) } else { other(&buf) };
+    let n: u8 = *b;
+    buf[0] = 1;
+    n
+}
+
+// The statements swapped: the result is used first.
+fn used_before_the_write(r: &mut Ring) {
+    let x: &mut u8 = slot(r, 0);
+    *x = 2;
+    r.head = 1;
+}
+
+fn read_after_the_result(r: &mut Ring) -> usize {
+    let x: &mut u8 = slot(r, 0);
+    *x = 2;
+    (*r).head
+}
+
+// A `&` result of a `&mut` receiver, used before the receiver is read.
+fn shared_result_then_read(r: &mut Ring) -> usize {
+    let p: &u8 = r.top();
+    let n: u8 = *p;
+    r.count() + n as usize
+}
+
+// The length first: no two-phase borrow is needed.
+fn length_first(mut ring: Ring) {
+    let n: usize = ring.count();
+    ring.slot(n);
+}
+
+// A chain leaves its receiver usable after the last call.
+fn chain(c: &mut Config) -> u8 {
+    c.baud(1).parity(2);
+    c.rate = 5;
+    c.baud(9600).baud(1200).parity(0);
+    c.current()
+}
+
+fn chain_with_a_value_first(c: &mut Config) {
+    let p: u8 = c.current();
+    c.baud(1).parity(p);
+}
+
+// A result lent to a call, with nothing else of the place used in the call.
+fn lent(r: &mut Ring) {
+    poke(slot(r, 0));
+    r.head = 1;
+    poke(slot(r, 1));
+}
+
+// A result of a function with no reference parameter holds nothing: it is held
+// across a write of everything else.
+fn no_parameter(mut buf: [u8; 4], mut x: u32) -> u8 {
+    let t: &[u8; 4] = table();
+    buf[0] = 1;
+    x = 2;
+    let r: &mut u32 = &mut x;
+    *r = 3;
+    t[0] + buf[0]
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
