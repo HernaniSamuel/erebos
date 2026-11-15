@@ -10,7 +10,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** ✅ | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
-| **M5** | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`). |
+| **M5** ✅ | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
 
 ## M2 steps
@@ -111,16 +111,16 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.5** ✅ Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** ✅ Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** ✅ Fewer raw pointers | `assert` takes a `&[u8]` message and the panic function a `&core::PanicInfo` (ADR 0116); `core` and the tests moved to references where they can; what stays raw, measured (ADR 0117) | the e2e programs with references, the same output |
-| **M5.8** Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
+| **M5.8** ✅ Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
 
 Decisions already agreed for the later steps (ADR 0094 holds them):
 
 - Types are affine by default; linear is opt-in, by marking a type (M5.3).
 - Copy is opt-in, with `#[copy]` on a struct or an enum with payloads; scalars,
   raw pointers, slices and arrays of copy types are copy.
-- References are second-class: parameters and `let` without `mut`, never in
-  fields, returns (ADR 0118 lets a function return one, as M5.8), statics or
-  `Option`; no lifetime is written; the analyses
+- References are second-class: parameters and `let` without `mut`, and the
+  result of a function tied to its one reference parameter (ADR 0118, M5.8);
+  never in fields, statics or `Option`; no lifetime is written; the analyses
   are the compiler's own, with no dependency.
 - The analyses of one body run before compile-time evaluation runs it.
 - A `const` or `comptime` value of a non-copy type is an error; a static of
@@ -298,8 +298,8 @@ Agreed as useful, not yet scheduled:
   on `&mut self` with no lifetime ever written. ADR 0094 leaves it out of
   M5 to keep the first checker small, and says it breaks no program when
   added; the borrow analysis of ADR 0107 already tracks which borrows a
-  local may hold, so a call's result would take the set of its argument.
-  Not scheduled, but not to be forgotten: the evidence for it is
+  local may hold, so a call's result takes the set of its argument. Built as
+  M5.8 (ADR 0118); the evidence for it was
   - M5.5, where a method `&self -> &T` is the same shape; ADR 0113 says a
     getter returns a copy until this exists;
   - M5.7, where the references that stay raw pointers are counted. If most
@@ -313,16 +313,17 @@ Agreed as useful, not yet scheduled:
     functions returning a static byte string chosen by a value, not a
     sub-slice of an argument. Designed in ADR 0118 (Accepted): the scope
     is decided (the tied result, and a result with no reference parameter
-    borrowing read-only static data), to land as M5.8. Recounted after its
+    borrowing read-only static data), and built as M5.8. Recounted after its
     migration (the commands of M5.7): of the 53 sites of reason 8, 34 are now
     references and 19 remain: 12 slices or pointers stored in a `const` or
     `static`, 4 that hold or carry a stored slice (the field and the parameter
     of `Reader`, the local that reads the field, `widest`'s table), and the 3
     sites of `erebos_skip` (see "After M5" below). A reference that is
     stored is what still holds them.
-  The same step would let a `&mut [T]` be split in two halves in use
-  together, as Rust's `split_at_mut`, which ADR 0108 leaves out because the
-  two references could be neither returned nor bound in pairs.
+  Splitting a `&mut [T]` in two halves in use together, as Rust's
+  `split_at_mut`, is not part of M5.8 (ADR 0118, "What stays out"): ADR 0108
+  leaves it out because the two references could be neither returned nor bound
+  in pairs, and a function returns one reference.
 - Effects in function types ("reads MMIO", "disables interrupts", "may
   panic"), for example to forbid some calls inside interrupt handlers.
   A type-system feature of its own; not scheduled. Revisit after M6.
@@ -544,7 +545,9 @@ ADRs:
   - M5.8: settled by ADR 0118 (a returned reference, tied to the one reference
     parameter or borrowing read-only static data; `ty::reference-return` and
     `analysis::returned-borrow`). Its plan is `.claude/plans/M5.8.md`: the
-    cluster on thumbv7m is the CMSDK dual timer, declared by its program.
+    cluster on thumbv7m is the CMSDK dual timer, declared by its program, and
+    the programs on QEMU are one portable program and one per target for what
+    needs a device. The counts are under "After M5" below.
   - Not in M5: references stored in structs (ADR 0094); function
     pointers; priorities and several cores, to which ADR 0094 says how it
     extends.
@@ -1383,5 +1386,68 @@ Documentation owed:
   still says T8's message is a `*const [u8]` and P5's parameter "one thin
   pointer": the ADR is immutable and ADR 0116 names T8 only, so the table is
   read with ADR 0116 and the reference says what the validator checks.
-- **Next: M5.8** (returned references), the last step of M5 (moves, ownership,
-  references and methods), whose steps and model are above (ADR 0094, 0118).
+- **M5.8 done.** A function may return a reference (ADR 0118): `-> &T`, `&mut
+  T`, `&[T]`, `&mut [T]` and the volatile forms, at the top of the return type,
+  tied by the signature to its one reference parameter (`&self` and `&mut self`
+  included), or, with none, to read-only static data (a byte string, a `static`
+  or an `extern static` without `mut`, or a part of one). A `&mut` result needs
+  a `&mut` parameter; two or more reference parameters, a `&mut` result of a
+  `&` parameter and a `&mut` or volatile result with none are
+  `ty::reference-return`, at the return type with a label at each reference
+  parameter, on any function that declares a return type. At a call, the result
+  holds what its reference argument held and the loan of the argument itself
+  until its last use, so `analysis::borrow-conflict` gains a label at the call,
+  "the result of this call holds the borrow" (it names no function: the analysis
+  of one body knows a callee by an id only, ADR 0093, 0099); a `&T` result of a
+  `&mut` parameter keeps the mutable loan; a chain `cfg.baud(1).parity(2)`
+  borrows its receiver until the last call returns. A body may return parts of
+  its tied parameter, the parameter, read-only static data and a reference made
+  through a raw pointer; a borrow of a local, a `static mut` or a peripheral
+  that reaches the returned value is the new `analysis::returned-borrow`, at the
+  borrow with a "returned here" label and a help by case, one error per borrow
+  and `return`. A `return` of a reference inside a `critical` block is
+  `ty::reference-position`, as a `break` is; so is `&f(&x)` with `f` returning
+  a reference, and a return type holding a reference below its top is reported
+  at the inner one. The validator allows `_0: &T` (R1) and gains R5, the
+  signature rule for MIR. A reference is returned as the raw pointer, or the
+  raw slice, of its mutability, with no LLVM attribute, so the evaluator, MIR
+  building (but for the span of the write of `_0`) and code generation did not
+  change. Getters of non-copy parts, chaining on `&mut self -> &mut Self` and a
+  peripheral method returning a cluster are written with references.
+  `tests/e2e/returned_references.ers` (a ring buffer with `peek`, `slot` and a
+  getter, a decoder walking a buffer with `rest`, panic reasons from `reason`),
+  `uart_chain_riscv32.ers` and `uart_chain_armv7m.ers` (a UART configured by a
+  chain, and a getter of a cluster: the PLIC's contexts, and the CMSDK dual
+  timer, which the program declares) and `returned_references_c.ers` (an
+  `#[export]` function returning a `&[u8]` called from C) run at both levels;
+  the ui tests cover the signature rule, the returned borrows, what callers
+  see, compile time and the LLVM IR on both targets, and `tests/rejected.rs`
+  has a snippet for each new code. The migration moved 31 return types in 23
+  files of `tests/e2e/` (the 29 that return a byte string chosen by a value,
+  and `rest` and `part`) to references, and `&*f(..)` at their callers to
+  `f(..)`. Recounted as M5.7 counted, with the same commands: 729 lines in 77
+  files and 351 sites (886, 89 and 385 after M5.7); only reason 8 moved, to 21
+  sites (47 lines) from 55 (204), 34 sites and 157 lines net, all in
+  `tests/e2e/`; the four new programs write no raw pointer. Of the candidate
+  sites of ADR 0117 (reasons 2, 6, 7, 8, without `PanicInfo`), 25 remain
+  against 59, 19 of them reason 8: stored references (constants and statics
+  holding slices or pointers, `Reader` and `widest`'s table) and the 3 sites
+  of `erebos_skip`, which is called from C. Two gaps the tests showed were fixed before the step that
+  found them: a returned `&CONST` of an aggregate was told as a temporary, and
+  the label "the borrow is used later here" of a callee that writes what it
+  returns pointed at the whole body. `PANICS` is unchanged. Left open, for the
+  planner: references stored in a field, an element, a payload, a `const` or a
+  `static` (`-> Option(&T)` included), written lifetimes and `&static T`, a
+  result tied to several parameters, `split_at_mut`, a reference moved forward
+  in a loop, two-phase borrows, downgrading a `&T` result of a `&mut`
+  parameter, and LLVM attributes on returned references are not scheduled (ADR
+  0118, "What stays out" and "Open questions"); marking the dereference of a
+  raw pointer waits for the user, with the counts under "After M5"; `&CONST` of
+  a scalar constant is told as a temporary and not as a constant, and an error
+  that joins two calls repeats its "used later" label (both in
+  `docs/open-findings.md`); ADR 0095's status line does not name P5 (the user's,
+  from M5.7).
+- **Next: M6** (types as values and `comptime` parameters: generics in the Zig
+  model, monomorphized, ADR 0027), after M5 (moves, ownership, references,
+  returned references and methods), whose steps and model are above. What M6
+  must settle is listed under "M6" in the pending decisions.

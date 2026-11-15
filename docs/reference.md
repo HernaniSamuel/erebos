@@ -1,4 +1,4 @@
-# Erebos language reference (M5.6)
+# Erebos language reference (M5.8)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -237,6 +237,9 @@ fn add(a: u32, mut b: u32) -> u32 {
 - Arguments are checked against parameter types with no conversion other
   than the pointer conversions of "Typing".
 - Parameters cannot have type `()` or `!`.
+- The return type may be a reference, `-> &T`, tied by the signature to the
+  function's one reference parameter, or to read-only static data when it has
+  none (see "Returning a reference").
 - A function may belong to a struct, an enum or a peripheral type, written in
   an `impl` block and called `Rect::new(...)`; one whose first parameter is
   `self`, `&self` or `&mut self` is a method, called `r.area()` (see
@@ -296,8 +299,9 @@ layout; C, which has no arrays by value, wraps them in a struct. A slice
 passes like the C struct `struct { const T *ptr; size_t len; }`: on riscv32
 in a register pair, and returned in `a0`, `a1` (ADR 0031); on thumbv7m as
 two words, and returned through memory. A reference to a slice passes exactly
-as the slice of its mutability does, as an argument (no function returns a
-reference; ADR 0108, see "Slices behind references"). An enum with payloads passes by its
+as the slice of its mutability does, as an argument and as a result (ADR 0108,
+0118, see "Slices behind references" and "Returning a reference"). An enum
+with payloads passes by its
 size and alignment, as its C twin, a union, does (see "Enums"); it is
 never of size 0, since its tag has a size. Enums without payloads and
 bit-field structs are not aggregates: they pass as their integer type
@@ -2309,10 +2313,12 @@ reference to a slice, `&[T]` or `&mut [T]`, is a slice, 8 bytes (see "Slices
 behind references"). What
 the compiler adds is a check that, while a reference is used, the place it
 refers to is used only in ways that cannot disagree with it (see "The borrow
-check"). References are **second-class** (ADR 0094): they are held by a
-parameter or a `let` and lent to calls, and they are never stored in a field,
-returned, or held in a variable that changes, so none outlives the function
-that made it and no lifetime is ever written. A reference may refer to a
+check"). References are **second-class** (ADR 0094, 0118): they are held by a
+parameter or a `let` and lent to calls, and a function may return one tied to
+its one reference parameter (see "Returning a reference"); they are never
+stored in a field, an element, a payload, a `const` or a `static`, or held in
+a variable that changes, so none outlives the borrow it was made from and no
+lifetime is ever written. A reference may refer to a
 `static mut`, to a peripheral or a cluster, and to a volatile place, in which
 case it is itself volatile (see "References to a `static mut`", "References to
 peripherals and clusters" and "Volatile references").
@@ -2472,9 +2478,11 @@ cannot leave that protection. A static reached from one context only is not
 shared, and its borrows are allowed anywhere.
 
 **No reference leaves a `critical` block.** A reference is not the value of the
-block (see "Where a reference may be"), and a `break` whose value is a reference
+block (see "Where a reference may be"). A `break` whose value is a reference
 is `ty::reference-position`, at the value, when its loop is outside the
-innermost `critical` block around it, whatever the reference borrows:
+innermost `critical` block around it, and so is a `return` whose value is a
+reference, inside any `critical` block of its function (ADR 0118), whatever the
+reference borrows:
 
 ```
 fn leaves(x: u32) -> u32 {
@@ -2486,13 +2494,35 @@ fn leaves(x: u32) -> u32 {
         *b + *a
     }
 }
+
+struct Ring { buf: [u8; 8], head: usize }
+
+impl Ring {
+    fn peek(&self) -> &u8 {
+        critical {
+            return &self.buf[self.head];    // error: ty::reference-position
+        }
+    }
+
+    fn peek_outside(&self) -> &u8 {
+        let at: usize = critical { self.head };
+        &self.buf[at]                       // fine: the value is computed inside
+    }
+}
 ```
 
 A `break` to a loop inside the block, one out of the block with a value that
 is not a reference, and a `break` with no value (the wait of "Enabling, waiting
-and testing") are unchanged. A reference cast to a raw pointer with `as` and
-used outside the block is allowed: a raw pointer is the program's word, as one
-taken with `&raw` is.
+and testing") are unchanged, and so is a `return` whose value is not a
+reference. The rule is on the type of the value, not on what it borrows: even
+`return first(&self.buf)` inside the block is rejected, though its result
+holds only the caller's borrow, and the program computes the value inside and
+returns after the block. A `return` inside two nested blocks is one error. The
+message is "a reference cannot be the value of a `return` out of a `critical`
+block", and the label says the reference would outlive the critical section.
+A reference cast to a raw pointer with `as` and used outside the
+block is allowed: a raw pointer is the program's word, as one taken with
+`&raw` is. (`?` cannot carry a reference: `Option` and `Result` hold none.)
 
 ### References to peripherals and clusters (ADR 0110, 0111)
 
@@ -2618,14 +2648,14 @@ reference it follows from that reference.
 
 A reference type may be written only as the type of a parameter that is not
 `mut`, of any function (with a body, an `extern fn`, a `#[export]` or a
-`#[naked]` function), and as the type of a `let` without `mut`. Anywhere else
-it is `ty::reference-position`, at the written type, with a label naming the
-position:
+`#[naked]` function), as the type of a `let` without `mut`, and as the return
+type of a function, at its top (`-> &T`, see "Returning a reference").
+Anywhere else it is `ty::reference-position`, at the written type, with a label
+naming the position:
 
 ```
 // each of these is ty::reference-position
 struct Holder { r: &u32 }                       // a field
-fn returns(r: &u32) -> &u32 { r }               // a return type
 fn mutable(mut r: &u32) { }                     // a `mut` parameter
 fn array(a: u32, b: u32) {
     let both: [&u32; 2] = [&a, &b];             // an element; and the literal
@@ -2633,14 +2663,19 @@ fn array(a: u32, b: u32) {
     let n: &&u32 = &&a;                         // a referent
     let p: *const &u32 = &raw const r;          // a pointee
 }
+extern fn lookup(r: &u32) -> Option(&u32);      // a type argument, below the top of a return type
 ```
 
 The positions are: the type of a field, a payload value, an array or slice
 element, a type argument (`Option(&u32)`, `size_of(&u32)`, which asks a layout
-no reference has), a return type, a `static`, `extern static` or `const`, the
-pointee of a pointer, the referent of a reference, and a `mut` parameter or a
-`let mut` (a reference is bound once, and a help says to declare a new `let`).
-A `comptime` parameter and a `comptime T: type` argument are forbidden as
+no reference has), a `static`, `extern static` or `const`, the pointee of a
+pointer, the referent of a reference, and a `mut` parameter or a `let mut` (a
+reference is bound once, and a help says to declare a new `let`). A return
+type is not a position when the reference is at its top; below the top it
+holds one of the others, so `-> Option(&u32)`, `-> [&u32; 2]`, `-> *const
+&u32` and `-> &&u32` are reported at the inner reference, as a type argument,
+an element, a pointee and a referent, and a return type has no case of its
+own. A `comptime` parameter and a `comptime T: type` argument are forbidden as
 well; the language has neither yet, so nothing checks them. A type that
 holds a reference is reported once, at the outermost reference that is in a
 forbidden position (`&&u32` as a field is one error, at the whole), and a type
@@ -2648,30 +2683,36 @@ that failed already, as `&!`, is not reported again.
 
 The expressions of a reference type are an argument of a call, the initializer
 of a `let`, the operand of `*`, `as` or an expression statement, the base of a
-field, an index, a range in an index or a method call (ADR 0114), and the
-value of an `if`, a `match`, a block or a `loop` through its `break` values,
-itself in one of these positions:
+field, an index, a range in an index or a method call (ADR 0114), the value a
+function returns when its return type is a reference (its tail, or the operand
+of a `return`), and the value of an `if`, a `match`, a block or a `loop`
+through its `break` values, itself in one of these positions. A call of a
+function that returns a reference is one, in the same positions:
 
 ```
 fn positions(a: u32, b: u32, c: bool) -> u32 {
     let r: &u32 = if c { &a } else { &b };
     let s: &u32 = loop { break &a; };
     &a;
-    *r + *s + read(&a) + read(if c { &a } else { &b })
+    *r + *s + read(&a) + read(if c { &a } else { &b }) + *same(&a)
 }
 fn read(p: &u32) -> u32 { *p }
+fn same(p: &u32) -> &u32 { p }
 ```
 
 Those that would make a type with a reference below its top are
 `ty::reference-position` at the expression, at the innermost one that makes the
 type and not at those above it: an array literal of references (`[&a, &b]`),
 and `&`, `&mut` or `&raw` of an operand that is a reference (`&r`, `&&a`,
-`&raw const r`). So are the value of a `critical` block, which would outlive the
-protection it was taken in (and the value of a `break` out of one, see
-"References to a `static mut`"), and a `comptime` expression of a reference
-type, since a value computed at compile time is never a reference. `&f(&x)`
-is not one of these: no function returns a reference, so `f`'s result is
-borrowed.
+`&raw const r`), and so `&f(&x)` when `f` returns a reference, which would be
+a reference to a reference (when `f` returns anything else its result is
+borrowed, as `&make()` borrows a value of its own). So are the value of a
+`critical` block, which would outlive the protection it was taken in (and the
+value of a `break` or of a `return` out of one, see "References to a `static
+mut`"), and a `comptime` expression of a reference type, since a value
+computed at compile time is never a reference. `*f(&x)`, `f(&x).field`,
+`f(&x)[i]` and `f(&x).g()` are places and calls through the result, not
+references to it.
 Each place is reported: `let a: [&u32; 2] = [&x, &y];` has an error at the
 written type and another at the literal. A constant or a static of a reference
 type has no value, and its uses report nothing more. The panic function's
@@ -2848,14 +2889,22 @@ every target, exactly as the raw slice of its mutability is: the C struct
 `struct { const T *ptr; size_t len; }`, by the rules of "Aggregates by value".
 `extern fn`, `#[export]` and `#[naked]` functions may take `&[T]` and `&mut
 [T]`, as they may take references; the C side vouches for the address and the
-length. A reference to a slice is never returned, and code generation gives it
-no attribute a raw slice lacks.
+length. A reference to a slice is **returned** as the raw slice of its
+mutability is (ADR 0118, see "Returning a reference"): in `a0` and `a1` on
+riscv32, and through memory the caller provides on thumbv7m, by the rules of
+"Aggregates by value". Code generation gives it no attribute a raw slice
+lacks.
 
 ```
 extern fn c_sum(bytes: &[u8]) -> u32;        // C sees `struct { const uint8_t *ptr; size_t len; }`
 
 #[export]
 fn erebos_fill(out: &mut [u8], b: u8) { }
+
+#[export]
+fn erebos_tail(s: &[u8], at: usize) -> &[u8] {   // C receives the same struct
+    &s[at..]
+}
 ```
 
 **What does not change.** Raw slices, `slice` and `len` of a raw slice are as
@@ -2867,7 +2916,8 @@ panic function's parameter are references (ADR 0116, see "Messages in
 
 At compile time a reference to a slice is used as a reference is: a `static`
 or a byte string converts, a sub-slice of one is a slice inside it, and a
-function taking one runs in the evaluator (it is never a result).
+function taking or returning one runs in the evaluator (a value computed at
+compile time is never a reference, so it is never the result of a `const`).
 
 ```
 static TABLE: [u32; 4] = [1, 2, 3, 4];
@@ -2915,9 +2965,12 @@ fn erebos_scale(out: &mut u32, input: &u32) {
 }
 ```
 
-No function returns a reference, and code generation gives references no LLVM
-attribute that a raw pointer lacks (`noalias`, `nonnull`, `dereferenceable`):
-what the borrow check proves is not passed to the optimizer.
+A function that returns a reference returns it exactly as it returns a raw
+pointer of the same mutability and volatility: one register, or, for a
+reference to a slice, the raw slice (see "Returning a reference"). Code
+generation gives references, as parameters and as results, no LLVM attribute
+that a raw pointer lacks (`noalias`, `nonnull`, `dereferenceable`): what the
+borrow check proves is not passed to the optimizer.
 
 A function that takes and uses references runs at compile time as any
 function does, and the evaluator runs a borrow as it runs `&raw`: a borrow of a
@@ -2926,13 +2979,211 @@ read through it is what a read through that pointer is. So a read through a
 borrow of a `static mut` is `eval::static-mut`, and an access through a borrow
 of a peripheral, or through a volatile reference, `eval::volatile-access`. The
 address of a static cannot become an integer before linking
-(`eval::pointer-to-int`). No evaluation gives a reference as its result.
+(`eval::pointer-to-int`). A function that returns a reference runs too, and
+what it returns is used, `len(rest(&B, 1))`, but no evaluation gives a
+reference as its result: a `const` or a `comptime` expression of a reference
+type is `ty::reference-position`. A reference to a local of a call that has
+returned, made through a raw pointer and returned, is `eval::dangling-pointer`
+when it is used (ADR 0030); a borrow of such a local is rejected before the
+evaluation runs, as `analysis::returned-borrow`.
 
 ```
 static TABLE: [u32; 3] = [10, 20, 30];
 fn middle(r: &[u32; 3]) -> u32 { (*r)[1] }
 const MIDDLE: u32 = middle(&TABLE);             // 20
 ```
+
+### Returning a reference (ADR 0118)
+
+```
+struct Ring {
+    buf: [u8; 8],
+    head: usize,
+}
+
+impl Ring {
+    fn peek(&self) -> &u8 {                     // tied to `self`
+        &self.buf[self.head]
+    }
+
+    fn slot(&mut self, i: usize) -> &mut u8 {
+        &mut self.buf[i]
+    }
+}
+
+struct Config {
+    rate: u32,
+    parity: u8,
+}
+
+impl Config {
+    fn baud(&mut self, rate: u32) -> &mut Self {
+        self.rate = rate;
+        self
+    }
+
+    fn parity(&mut self, p: u8) -> &mut Self {
+        self.parity = p;
+        self
+    }
+}
+
+fn first(s: &[u8]) -> &u8 {                     // tied to `s`
+    &s[0]
+}
+
+fn rest(s: &[u8], at: usize) -> &[u8] {         // `at == len(s)` is the empty slice
+    &s[at..]
+}
+
+fn reason(r: u32) -> &[u8] {                    // no reference parameter: static data
+    match r {
+        0 => &b"division by zero",
+        _ => &b"unknown",
+    }
+}
+
+fn demo() -> u8 {
+    let mut cfg: Config = Config { rate: 0, parity: 0 };
+    cfg.baud(115200).parity(2);                 // chaining
+    let mut ring: Ring = Ring { buf: [0; 8], head: 0 };
+    *ring.slot(3) = 7;                          // a result as a place
+    let p: u8 = *ring.peek();
+    let n: usize = len(rest(&ring.buf, 8));     // 0
+    p + *first(reason(0)) + n as u8
+}
+```
+
+A function may have a reference type as its **return type**: `&T`, `&mut T`,
+`&[T]`, `&mut [T]` and the volatile forms, at the top of the return type only
+(below it, a reference is `ty::reference-position`, see "Where a reference may
+be"). Which reference parameter the result is tied to is read off the
+signature, and nothing is inferred (ADR 0008): no lifetime is written, and the
+check of a call reads only the callee's signature, as the check of a body reads
+only the body. The **reference parameters** are the parameters whose type is a
+reference, `self` written `&self` or `&mut self` among them; the others (`self`
+by value, integers, raw pointers, structs) count for nothing.
+
+| Reference parameters | Result | The result borrows |
+|----------------------|--------|--------------------|
+| exactly one, `&U` or `&mut U` | `&T` | through that parameter, or read-only static data |
+| exactly one, `&mut U` | `&mut T` | through that parameter |
+| exactly one, `&U` | `&mut T` | error: `ty::reference-return` |
+| none | `&T`, not volatile | read-only static data only |
+| none | `&mut T`, or volatile | error: `ty::reference-return` |
+| two or more | any | error: `ty::reference-return` |
+
+The one reference parameter is the result's **tied parameter**. A volatile
+result follows the same table: a `&mut volatile Desc` tied to a `&mut volatile
+Ring` parameter is a reborrow of part of it, and the body decides what it can
+produce, since no reference converts between volatile and not (ADR 0110) and a
+`&mut` is reached only through a `&mut` (ADR 0105).
+
+**Read-only static data** is a `static` or an `extern static` without `mut`, a
+byte string, or a field, element or sub-slice of one. A `static` without `mut`
+and a byte string are never written; an `extern static` without `mut` is
+written by nothing in the program, and whether C writes it is C's to vouch for,
+as for every `extern` item. That is all a function with no reference parameter
+can return, besides a reference made through a raw pointer (below), and a
+reference to a `static mut` or to a peripheral is not. A function with one
+reference parameter may return static data too, and it keeps that parameter
+borrowed while the result is in use, since the signature cannot say otherwise;
+a function that only selects static data by a value, as `reason` does, takes no
+reference.
+
+The value returned converts where its expected type asks: a `&mut T` to a `&T`,
+a reference to an array to a reference to a slice, a byte string `&[u8; N]` to
+a `&[u8]` (see "Kinds, conversions, casts and comparisons" and "Slices behind
+references"). A **getter** returns a reference to a part of `self`, `fn
+buf(&self) -> &[u8; 8]`, and a method `&mut self -> &mut Self` returns `self`,
+so that calls can be chained (see "Functions of a type and methods").
+
+**The errors.** A signature the table rejects is `ty::reference-return`, one
+per function, at the return type, with a label at each reference parameter, on
+any function that declares a return type: with a body, a method, an `extern
+fn`, a `#[export]` or a `#[naked]` function. The message and the help depend on
+the case:
+
+- two or more reference parameters: "cannot return a reference when N
+  parameters are references", the return type labelled "returns `T`, tied to
+  which one?", and the help "a returned reference is tied to the one reference
+  parameter: pass one reference, or return an index or a copy";
+- a `&mut` result with one `&` parameter: "cannot return a `&mut` tied to a `&`
+  parameter", with the help "make the parameter `&mut`, or return a `&`";
+- a `&mut` or volatile result with no reference parameter: "cannot return a
+  `&mut` when no parameter is a reference" (or "a volatile reference"), with
+  the help "with no reference parameter, a returned reference borrows read-only
+  static data, which is never `&mut` or volatile: return a raw pointer".
+
+```
+static mut COUNTER: u8 = 0;
+
+fn two(a: &u8, b: &u8) -> &u8 { a }             // error: ty::reference-return
+fn up(a: &u8) -> &mut u8 { &mut COUNTER }       // error: ty::reference-return
+fn none() -> &mut u8 { &mut COUNTER }           // error: ty::reference-return
+```
+
+The `const` or `static` of a reference type is `ty::reference-position` alone,
+never also `ty::reference-return`: its type is not a return type.
+
+What the body may return is checked by the borrow check ("What a body may
+return"), so that a function cannot return a reference to its own memory, and
+what a call's result borrows is told there too ("What a call's result holds").
+A `return` of a reference out of a `critical` block is
+`ty::reference-position` (see "References to a `static mut`").
+
+**A reference made through a raw pointer** may be returned, `&*p`, as the
+program's word, as it may be made and lent anywhere: the borrow check follows
+nothing through a raw pointer. Its reach is wider than one body, since the
+signature grants the meaning once, for every caller. `fn counter() -> &u32 {
+&*(&raw const COUNT) }`, with `COUNT` a `static mut`, has no reference
+parameter, so each call's result is read-only static data that holds nothing.
+It compiles when one context owns `COUNT`; when a handler also reaches it, the
+thread's `&raw const COUNT` outside `critical` is `analysis::unprotected-static`.
+The shared form takes the pointer inside a block and leaves it as a raw
+pointer, since no reference leaves `critical`:
+
+```
+fn counter() -> &u32 {
+    let p: *const u32 = critical { &raw const COUNT };
+    &*p
+}
+```
+
+Every caller then reads `*counter()` outside any protection while a handler may
+write `COUNT`: that is the program's word, given once in `counter`.
+
+**Functions with fixed callers.**
+
+- An **`extern fn`** may return a reference under the same table. C vouches
+  for what it returns, as it vouches for reference parameters and for linear
+  values. One with no reference parameter that returns a `&T` promises
+  read-only data for the whole run, as an `extern static` without `mut` does;
+  a program that cannot promise that returns a raw pointer and writes `&*p` at
+  the call.
+- An **`#[export]`** function may return one; its body is checked as any body,
+  and C receives a pointer or the C struct of a slice (see "Slices behind
+  references").
+- A **`#[naked]`** function may declare one; its body is the assembly, which
+  vouches for it.
+- The entry function, the handlers and the panic function are unchanged: the
+  first two take no parameters and return nothing or `!`, and the panic
+  function returns `!`.
+
+**In the C ABI.** A returned reference is returned as the raw pointer of its
+mutability and volatility, whatever the referent: one register, or, for a
+reference to a slice, the raw slice, in `a0` and `a1` on riscv32 and through
+memory the caller provides on thumbv7m (see "Aggregates by value"). It has no
+LLVM attribute.
+
+**What is not here.** A reference is not stored: `-> Option(&T)`, a field, an
+element, a `const` and a `static` of a reference type are
+`ty::reference-position`. There is no written lifetime and no `&static T`; no
+result tied to several parameters (an error, above); no `split_at_mut` (see
+"Slices behind references"); no reference moved forward in a loop, since a
+`let` of a reference is bound once, so a loop over a buffer keeps an index or
+recurses; no two-phase borrow (see "The call `x.f(args)`"); and a `&T` result
+of a `&mut` parameter stays a mutable loan (see "The borrow check").
 
 ### The borrow check (ADR 0106, 0111)
 
@@ -2964,8 +3215,9 @@ fn late_use() {
 }
 ```
 
-- A borrow passed to a call, `f(&mut x)`, is in use until the call returns; no
-  call returns a reference, so nothing holds it afterwards.
+- A borrow passed to a call, `f(&mut x)`, is in use until the call returns; if
+  the call returns a reference, its result holds the borrow for as long as the
+  result is in use (see "What a call's result holds").
 - A reference copied (`let b: &u32 = a;`) or moved keeps the borrows it may hold
   in use while either copy is used. One that may hold one of several, such as
   `if c { &a } else { &b }`, keeps all of them in use.
@@ -3077,10 +3329,10 @@ holds for arrays (ADR 0108, 0109):
   nothing is followed.
 
 A `&mut [T]` or a `&mut [T; N]` is **not split** into two halves in use
-together: that would need a function that returns two references, which the
-language does not have (ADR 0094), or literal bounds compared, which the check
-does not do for indexes either. A program that needs both halves borrows them
-one after the other.
+together: that would need a function with two results, and the language has no
+tuples and no binding of two references at once (ADR 0108, 0118), or literal
+bounds compared, which the check does not do for indexes either. A program
+that needs both halves borrows them one after the other.
 
 ```
 fn write(bytes: &[u8]) { }
@@ -3125,6 +3377,138 @@ to take the value into a `let` before. `touch(&mut (*s)[0], &(*s)[1])` on a
 slice is two errors, since the check of the second index reads `s` before the
 second element is borrowed; on an array it is one.
 
+**What a call's result holds (ADR 0118).** At a call of a function that returns
+a reference, the result **holds what its tied argument holds**: the borrows the
+argument may hold at the call, and, since an argument of a reference type is
+lent or copied, the borrow of the argument itself. A call with no reference
+argument gives a result that holds nothing. A borrow held by a result lasts
+until the last use of what holds it, like every borrow:
+
+```
+fn first(s: &[u8]) -> &u8 { &s[0] }
+
+fn held(mut buf: [u8; 4]) -> u8 {
+    let b: &u8 = first(&buf);
+    buf[0] = 1;                         // error: analysis::borrow-conflict
+    *b
+}
+
+fn released(mut buf: [u8; 4]) -> u8 {
+    let b: &u8 = first(&buf);
+    let v: u8 = *b;
+    buf[0] = 1;                         // fine: `b` is not used after its read
+    v
+}
+```
+
+- A `&mut` argument that is a variable or a parameter is lent by a reborrow `&mut
+  *r`, and the result holds that reborrow, so `r` and `*r` are not used while
+  the result is: with `slot(r: &mut Ring, i: usize) -> &mut u8`, `let x: &mut u8
+  = slot(r, 0); r.head = 1; *x = 2;` is a conflict, and `*x = 2; r.head = 1;`
+  is not.
+- A `&T` result of a `&mut` parameter holds the mutable reborrow, as in Rust: it
+  is not downgraded to a shared borrow, so reading the receiver while a `&u8`
+  from `ring.top()` (`top(&mut self) -> &u8`) is used later is a conflict. A
+  program that wants both reads first, or takes the value out.
+- A result is a value of a reference type, in the positions where one may be
+  (see "Where a reference may be"); a `&mut` result is moved where it goes, and
+  a `let` that holds one is lent to calls as any `&mut` variable is. In a chain,
+  `cfg.baud(1).parity(2)`, each receiver is a reborrow of the previous result
+  (ADR 0114), which holds what it held: `cfg` is borrowed until the last call of
+  the chain returns, and usable after it. There is no two-phase borrow, so
+  `ring.slot(ring.count())` is a conflict and is written with a `let`.
+- A result with no reference argument holds nothing, so `table() -> &[u8; 4]`
+  does not keep any variable of its caller borrowed.
+- **Across calls.** A result that holds a borrow of a static or a peripheral
+  keeps it in use during the calls made while the result is live, and a callee
+  that reaches the static against the table is
+  `analysis::borrow-conflict-in-call` (see "Across calls", below).
+
+**What a body may return (ADR 0118).** The parameters of a body hold nothing
+at its start: what the tied parameter refers to was borrowed by the caller,
+and the caller's check holds it. Every borrow the body makes is a site with a
+path rooted at a variable, a parameter that is not a reference, a value the
+compiler keeps, a static, a peripheral, or the `Deref` of a reference. The set
+a local holds is the union of every site on every chain of copies, reborrows
+and tied calls that produced its value. At each `return`, and at the body's
+tail, each site in the set of the returned value is classified by its root:
+
+- rooted at a **`Deref` of a reference**: accepted; it borrows through the
+  reference, and whatever that reference holds is classified on its own;
+- rooted at a **`static` without `mut`**, a byte string included: accepted;
+- rooted at a **variable** (a parameter that is not a reference, `self` by
+  value, a value the compiler keeps for `&f()`, `&Config { .. }` or `&CONST`),
+  at a **`static mut` or `extern static mut`**, or at a **peripheral** or a
+  cluster of one: `analysis::returned-borrow`.
+
+A body may therefore return parts of its tied parameter (`&r.buf[i]`,
+`&s[a..b]`, `&mut self.ch[1]`), the parameter itself (`self` in a chain), a
+copy of it, a reborrow of it held in a `let`, a call's result tied to it, and
+read-only static data; and references made through a raw pointer, which hold
+no borrow. It may not return a value whose chain reaches a borrow of its own
+memory, of a `static mut` or of a peripheral, however it gets there: `let t:
+&[u8; 4] = &local; &t[1..]` is rejected, and so is `first(&local)`. A `static
+mut` and a peripheral are refused because the caller's check holds nothing for
+the result, so it could not see which static the result reaches: two results
+of such a function could be in use together, one `&mut`, with no conflict
+found, and a direct access of the static beside the result would conflict with
+nothing; in a static shared with handlers, the reference would also outlive the
+protection it was taken in. The handle to a peripheral is a reference passed
+down (see "References to peripherals and clusters"). A method of a peripheral
+type may return a cluster of the receiver (`fn timer(&mut self, i: usize) ->
+&mut Timer { &mut self.timer[i] }`): that is a reborrow through `self`, which
+the caller borrowed where it named the peripheral. No function returns a
+reference to a named peripheral (`&mut UART0`), and a register keeps no
+address (`ty::register-address`), so no getter returns one.
+
+```
+fn total() -> &u32 {
+    let total: u32 = 1;
+    let t: &u32 = &total;
+    t
+}
+```
+
+Built as `main.ers` with `--emit=mir`, it is `analysis::returned-borrow`:
+
+```
+analysis::returned-borrow
+
+  × cannot return a reference to `total`, a local of this function
+   ╭─[main.ers:3:19]
+ 2 │     let total: u32 = 1;
+ 3 │     let t: &u32 = &total;
+   ·                   ───┬──
+   ·                      ╰── `total` is borrowed here
+ 4 │     t
+   ·     ┬
+   ·     ╰── returned here
+ 5 │ }
+   ╰────
+  help: return the value, or a part of the reference parameter
+```
+
+**The error.** `analysis::returned-borrow` has its primary
+label at the borrow ("`x` is borrowed here"), a label "returned here" at the
+expression that writes the return place, and a help by case. The message names
+the root and not the part: "cannot return a reference to `x`, a local of this
+function", "cannot return a reference to a temporary value of this function",
+"cannot return a reference to a constant, which has no address of its own"
+(help: declare a `static` to return a reference to it; for a `const` of an
+aggregate type, a scalar one is told as a temporary value), "cannot return a
+reference to `COUNT`, a `static mut`" (or "an `extern static mut`"; help: a
+returned reference cannot borrow a `static mut`: borrow it in the caller and
+pass the reference in, or return a raw pointer and write `&*p` where it is
+used) and "cannot return a reference to `UART0`, a peripheral" (help: borrow
+the peripheral or its cluster in the caller and pass the reference in). There
+is one error per borrow and `return`, so a borrow reaching two `return`s is two
+errors at the same borrow with different "returned here" labels, and one
+borrow reaching one `return` by two paths is one error. For a body whose tail
+is an `if` or a `match`, "returned here" is at the whole expression, not at the
+arm that borrows. The analysis runs only on a body with a borrow in it: a body
+with none returns only its tied parameter's borrow or a reference made through
+a raw pointer.
+
 **What the check does not change.** A use after a move stays the analysis of
 moves': the borrow check runs only on a body that analysis accepted, and the
 analysis of linearity runs on the same bodies (a borrow neither gives nor
@@ -3167,7 +3551,14 @@ it is in the access's own block after it, or is the call that the access is an
 argument of, which reads its arguments when it runs, after all of them are
 evaluated, whatever the span of the call; the first of those in source order is
 the one labeled (ADR 0107 orders ties exactly). When every use is reached only round a loop, the first of
-them is labeled "the borrow is used in the next iteration of the loop". The help
+them is labeled "the borrow is used in the next iteration of the loop". When a
+borrow in conflict is held through the result of a call (ADR 0118), the borrow
+gets one more label, at that call, "the result of this call holds the borrow":
+the nearest call on the chain of copies, reborrows and tied calls from the
+later use back to the borrow, and, where the chains fork, the one of lowest
+block and then statement number in MIR, so that the label does not depend on
+the order of the search. A
+borrow held by no call, or with no later use, has no such label. The help
 says to end the borrow first: use the reference before, or take the value out
 into a `let` before borrowing it. Errors are ordered by the span of the access,
 and those with the same span, message and labels are dropped.
@@ -3200,7 +3591,11 @@ fn held() {
 ```
 
 During a call, the borrows in use are those "Calls" above says: what the
-arguments may hold, and what is held by anything used after the call. For each
+arguments may hold, and what is held by anything used after the call, the
+result of an earlier call that returns a reference among it (ADR 0118): a
+`&mut` of a `static mut` passed to `pick(r: &mut u32) -> &mut u32` inside a
+`critical` block is in use during a later call made while the result is used
+after it, and that call reaching the static is `analysis::borrow-conflict-in-call`. For each
 whose place starts at a static or a peripheral, the accesses of the callee, and
 of every function the callee reaches through calls, to an overlapping place
 conflict with it by the table above: `bump(&mut COUNT)` with `bump` reading or
@@ -3320,7 +3715,9 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   and the rules: R1, a reference
   type is only the type of a local, never reached by another type (not a field,
   a payload value, an array or slice element, a pointee or a referent), nor the
-  type of a static, nor a body's return type; R2, no place that is written,
+  type of a static; a body's return type may be one, at its top (`_0` of type
+  `&T`), and its type reaches no other reference, as for every local (ADR 0118);
+  R2, no place that is written,
   borrowed `&mut` or given to `&raw mut` goes through the `Deref` of a shared
   reference; R3, the place of a borrow is a local followed by `Field`,
   `Index`, `ConstIndex`, `Element`, `ConstElement`, `Subslice`,
@@ -3328,7 +3725,14 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   assigned the address of a static or of a peripheral (`const static S`,
   `const peripheral P`) is a temporary: nothing else writes it, and no `&` or
   `&raw` takes its own place, so that the analyses can read `(*_t)` as the
-  static or the peripheral; U1, a place of type `[T]` is followed only by
+  static or the peripheral; R5 (ADR 0118), a body whose return type is a
+  reference has at most one parameter of a reference type, that parameter
+  exists and is a `&mut` when the return type is a `&mut`, and the return type
+  is a shared reference that is not volatile when there is none: it is the
+  signature rule of type checking, stated for MIR, so that every call of such a
+  body has at most one reference argument (the arguments of a call fit its
+  parameters exactly, P3) and a body built otherwise fails
+  the validator rather than misleading the analysis; U1, a place of type `[T]` is followed only by
   `Index` or a sub-slice, or is the whole place of a `Ref` or an `AddressOf`,
   and no operand, destination, `asm` operand, `SliceAddress`, `SliceLen` or
   `switch` names one. T1 says where `Index`, `Subslice` and `ConstSubslice`
@@ -3345,7 +3749,15 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   the analysis
   of moves it runs on the MIR of each body before anything evaluates it, so a
   `const` that calls a function with a conflict reports
-  `analysis::borrow-conflict` and nothing from the evaluation.
+  `analysis::borrow-conflict` and nothing from the evaluation. **A call's
+  result** (ADR 0118) of a reference type is set to what the call's one
+  reference argument held before the call, or to nothing when the call has none;
+  `Terminator::Return` reads `_0` when it is a reference, so a borrow it holds is
+  in use until the function returns; and, after the fixed points, each site in
+  the set of `_0` at a `Return` is classified by its root, as "What a body may
+  return" says. The label of a call whose result holds a borrow in conflict is
+  found after the fixed points, only for an error, by a walk back over the
+  definitions of the local that is read.
 - **Statics and peripherals** (ADR 0111, 0112). A static is reached through
   its address, `_t = const static S`, then `(*_t)`; a peripheral the same way,
   with `const peripheral P`. By R4 the analysis reads a place whose base is
@@ -3736,10 +4148,48 @@ and of a `Ring` of the root module `Ring.push` (see "Symbols"). A type and a
 module of one name cannot share a module's namespace, so such a symbol never
 equals the symbol of an item or of another function of a type.
 
-**Getters.** References are not returned (see "References"), so a getter
-returns a copy: `fn count(&self) -> usize`. A part of a non-copy type has no
-getter: the type offers methods that do the work in place through `&self` or
-`&mut self`, or makes the field `pub` so that callers borrow it (`&r.buf`).
+**Getters and chaining (ADR 0118).** A method may return a reference (see
+"Returning a reference"), so a getter returns a reference to a part of `self`,
+`fn buf(&self) -> &[u8; 8]` or `fn slot(&mut self, i: usize) -> &mut u8`, and a
+part of a non-copy type has one. A getter of a value that is copy and that the
+caller wants copied still returns the copy: `fn count(&self) -> usize`. The
+result is tied to the receiver, the method's one reference parameter, so the
+receiver is borrowed for as long as the result is used (see "The borrow
+check"). A method `&mut self -> &mut Self` returns `self`, and a call on its
+result is a call on a receiver that is a reborrow of that result (the base of a
+method call may be any expression of a reference type), so one expression
+configures a driver, and the receiver is borrowed until the last call of the
+chain returns:
+
+```
+struct Config {
+    rate: u32,
+    parity: u8,
+}
+
+impl Config {
+    fn baud(&mut self, rate: u32) -> &mut Self {
+        self.rate = rate;
+        self
+    }
+
+    fn parity(&mut self, p: u8) -> &mut Self {
+        self.parity = p;
+        self
+    }
+}
+
+fn setup(cfg: &mut Config) {
+    cfg.baud(115200).parity(2);             // Config::parity(Config::baud(&mut *cfg, 115200), 2)
+}
+```
+
+A method of a peripheral type may return a reference to one of its clusters,
+`fn timer(&mut self, i: usize) -> &mut Timer { &mut self.timer[i] }`, a
+reborrow through the receiver that the caller borrowed where it named the
+peripheral (`DUAL.timer(1).load = 5;`). A register keeps no address
+(`ty::register-address`), so no getter returns one, and no function returns a
+reference to a named peripheral (`analysis::returned-borrow`).
 
 ```
 #[linear]
@@ -3777,9 +4227,11 @@ fn run() -> u32 {
 ```
 
 **What there is not.** No `impl` outside the module of its type; no two-phase
-borrow of the receiver; no volatile receiver; no associated constants or
-types; no functions of `Option`, `Result`, arrays or built-in types, and no
-generic types; no function returning a reference to its receiver.
+borrow of the receiver (`ring.slot(ring.count())` is a conflict, written with
+a `let`); no volatile receiver; no associated constants or types; no functions
+of `Option`, `Result`, arrays or built-in types, and no generic types; no
+method returning a reference that is stored (`-> Option(&T)`, see "Returning a
+reference").
 
 ## Layout (ADR 0022, 0039)
 
@@ -5795,8 +6247,9 @@ or `!`, and `critical { X } + 1` as a statement is
 `parser::unexpected-token`. A value of any type but a reference may leave it,
 as from any block, and `break` and `continue` to a loop outside it, `return`
 and `?` are allowed inside. A reference is not the value of the block, nor of a
-`break` that leaves it, because it must not outlive the protection it was taken
-in (`ty::reference-position`, see "References to a `static mut`").
+`break` or a `return` that leaves it, because it must not outlive the
+protection it was taken in (`ty::reference-position`, see "References to a
+`static mut`").
 
 - On entry it records whether maskable interrupts were enabled and masks them;
   on **every** way out of the block it puts back what it recorded: the end of
@@ -8041,7 +8494,7 @@ Every error has a stable code, shown with the message.
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
 | `analysis::use-after-move` | a place read, moved, assigned a part of, borrowed or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
-| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]`, while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, a `sym` operand naming a `static mut`, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call, or a `&mut [T; N]` converted to a `&mut [T]`, too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap, two elements of an array or a slice always do, and so does a sub-slice with every element and sub-slice of its base; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies (ADR 0106, 0107) |
+| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]`, while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, a `sym` operand naming a `static mut`, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call, or a `&mut [T; N]` converted to a `&mut [T]`, too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap, two elements of an array or a slice always do, and so does a sub-slice with every element and sub-slice of its base; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies; a borrow held through the result of a call, a function that returns a reference, gets one more label at that call (ADR 0106, 0107, 0118) |
 | `analysis::borrow-conflict-in-call` | a call during which a borrow of a `static mut`, an `extern static mut`, a `static` or a peripheral is in use, whose callee, or a function the callee reaches through calls, has an access to an overlapping place that conflicts with it; the panic function that a check calls is not followed (ADR 0111) |
 | `analysis::returned-borrow` | a function that returns a reference whose value may hold a borrow of a local (a variable, a parameter that is not a reference, `self` by value, a temporary such as `&f()`, `&Config { .. }` or `&CONST`, whatever the `let`s, copies, reborrows and calls it passed through), of a `static mut` or `extern static mut`, or of a peripheral or a cluster of one; one error per borrow and `return`, at the borrow, with a label where the value is returned and a help by case; a borrow through a reference parameter, of a `static` without `mut` or of a byte string, and a reference made through a raw pointer, are accepted (ADR 0118) |
 | `analysis::linear-not-consumed` | a linear value still held where the function returns (a `return`, the end of the body, a `?` that returns), by a variable, a parameter or a temporary: a variable never moved, a parameter, the result of a call that is discarded, a literal that is discarded, a value consumed on some paths only, a `.Some(_)` or `_` arm that leaves a payload held, a value that comes round a loop (`let t: Transfer = start(1);` or `start(1);` in a loop) before it is consumed, or a value written over a place that holds one of the same origin (two parts of one call's result); or a linear field still held when its struct is ended by `end`; one error per value, at the call, the literal or the function (a parameter) where it came in, naming the place that holds it, with a label at each return it reaches, and where it was moved to that place; paths that do not return owe nothing (ADR 0102, 0103) |

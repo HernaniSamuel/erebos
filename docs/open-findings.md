@@ -274,6 +274,19 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   accurate, and step 1's decision does not name the two. `rt/arch/armv7m.ers`
   (around line 291): the comment line added for the `__aeabi_` divisions is 91
   characters where the paragraph wraps near 78. (M5.7, final review)
+- `src/analysis/borrows.rs`, `Flow::refusal`: `&CONST` returned from a
+  function is told as "a constant, which has no address of its own", with the
+  help to declare a `static`, only when the constant is an aggregate (MIR
+  building copies its data into a temporary with `LocalDecl::constant` set);
+  for a scalar constant (`const LIMIT: u32 = 8; fn f() -> &u32 { &LIMIT }`) the
+  error is "a temporary value of this function" with the local's help. Both
+  are `analysis::returned-borrow`, so the program is rejected either way; ADR
+  0118 asks for the constant's help in both. (M5.8, step 11)
+- `src/analysis/borrows.rs`: an `analysis::borrow-conflict` whose sites are
+  held through two calls and read by one use (`let b: &u8 = if c { first(&buf)
+  } else { other(&buf) }; buf[0] = 1; *b`) repeats the label "the borrow is
+  used later here" once per site, at the same `*b`; the older snapshots with
+  several sites do the same, so it was left. (M5.8, step 6)
 
 ## Tests
 
