@@ -1,0 +1,151 @@
+// The M5.8 milestone program: references returned from functions (ADR 0118),
+// on both targets. Three shapes of the rule, each as its signature states it:
+//
+// - A ring buffer whose methods return parts of `self`: `peek(&self) -> &u8`,
+//   `slot(&mut self, i: usize) -> &mut u8` and `buf(&self) -> &[u8; 8]`, a
+//   getter of a part that is not copy. The ring is filled through `*ring
+//   .slot(i) = b`, one byte at a time; `peek` reads the byte under `head`;
+//   `slot` held in a `let` is written once and not used after; `buf` is
+//   printed, converted to a `&[u8]` where `print` takes it. The ring holds
+//   "ring-buf" after the loop, "Ring-buF" after the two writes that follow,
+//   and `peek` with `head` at 1 reads the `i`, 105.
+// - A decoder that walks a buffer of messages (a length byte, then that many
+//   bytes) by recursion over `rest(s: &[u8], n: usize) -> &[u8]`: each call
+//   gets the tail of the slice it was given and holds the loan of the caller's
+//   `s`; `rest(&STREAM, 14)` is the empty slice at `len(s)`.
+// - Panic reasons from `reason(r: core::PanicReason) -> &[u8]`, a function
+//   with no reference parameter that returns static data chosen by a value. It
+//   is called once by `main`, and by the panic function, which prints it.
+//
+// The program ends in a panic made on purpose: `slot(8)` on a ring of eight
+// bytes is an index out of bounds, so the last line of output is its reason,
+// and the exit code is that of the panic function.
+// expect-output: ring Ring-buF
+// expect-output: peek 105
+// expect-output: msg 1: abc
+// expect-output: msg 2: de
+// expect-output: msg 3: f
+// expect-output: msg 4: wxyz
+// expect-output: messages 4, left 0
+// expect-output: reason division by zero
+// expect-output: index out of bounds
+// expect-exit: 1
+
+mod board;
+use board::{exit, print, putc};
+
+static WORD: [u8; 8] = b"ring-buf";
+
+// Four messages: "abc", "de", "f" and "wxyz".
+static STREAM: [u8; 14] = b"\x03abc\x02de\x01f\x04wxyz";
+
+struct Ring {
+    buf: [u8; 8],
+    head: usize,
+}
+
+impl Ring {
+    // The byte at `head`, tied to `self`.
+    fn peek(&self) -> &u8 {
+        &self.buf[self.head]
+    }
+
+    // The byte at `i`, tied to `self`; panics when `i` is eight or more.
+    fn slot(&mut self, i: usize) -> &mut u8 {
+        &mut self.buf[i]
+    }
+
+    fn buf(&self) -> &[u8; 8] {
+        &self.buf
+    }
+}
+
+// The bytes of `s` from `n` on, where `n` may be `len(s)`.
+fn rest(s: &[u8], n: usize) -> &[u8] {
+    &s[n..]
+}
+
+// Prints the messages in `s` and answers how many there were: the first byte
+// is the length of the first message, which `rest` skips along with it.
+fn walk(s: &[u8], index: u32) -> u32 {
+    if len(s) == 0 {
+        return index;
+    }
+    let n: usize = s[0] as usize;
+    print(&b"msg ");
+    print_u32(index + 1);
+    print(&b": ");
+    print(&s[1..1 + n]);
+    print(&b"\n");
+    walk(rest(s, 1 + n), index + 1)
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(&digits[10 - n..]);
+}
+
+fn reason(r: core::PanicReason) -> &[u8] {
+    match r {
+        .DivisionByZero => &b"division by zero",
+        .IndexOutOfBounds => &b"index out of bounds",
+        .AssertionFailed => &b"assertion failed",
+        .NoVariant => &b"enum value is no variant",
+        .FieldOutOfRange => &b"value does not fit its field",
+        .UnhandledVector => &b"vector not handled",
+    }
+}
+
+entry fn main() -> ! {
+    let mut ring: Ring = Ring { buf: [0; 8], head: 0 };
+    let mut i: usize = 0;
+    while i < 8 {
+        *ring.slot(i) = WORD[i];
+        i += 1;
+    }
+    // `slot` held in a `let`, written once; the borrow of `ring` ends with
+    // that write.
+    let last: &mut u8 = ring.slot(7);
+    *last = b'F';
+    *ring.slot(0) = b'R';
+    print(&b"ring ");
+    print(ring.buf());
+    putc(b'\n');
+
+    ring.head = 1;
+    let under: &u8 = ring.peek();
+    print(&b"peek ");
+    print_u32(*under as u32);
+    putc(b'\n');
+
+    let messages: u32 = walk(&STREAM, 0);
+    print(&b"messages ");
+    print_u32(messages);
+    print(&b", left ");
+    print_u32(len(rest(&STREAM, 14)) as u32);
+    putc(b'\n');
+
+    print(&b"reason ");
+    print(reason(.DivisionByZero));
+    putc(b'\n');
+
+    let past: usize = 8;
+    *ring.slot(past) = 0;
+    exit(0)
+}
+
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    print(reason(info.reason));
+    print(&b"\n");
+    exit(1)
+}

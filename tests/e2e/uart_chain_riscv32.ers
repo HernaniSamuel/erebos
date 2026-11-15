@@ -1,0 +1,178 @@
+// A UART configured by a chain of methods that return `&mut Self` (ADR 0118),
+// and a getter of a cluster, on QEMU `virt`. The driver of
+// `uart_methods_riscv32.ers` gains three methods, each
+// `&mut self -> &mut Self`: `fifo(on: bool)`, `word_length(bits: u8)` and
+// `interrupts(mask: u8)`.
+// Each writes a register of the 16550 and returns `self`, so that
+// `UART0.fifo(true).word_length(8).interrupts(1);` configures the device in one
+// expression, the peripheral borrowed as `&mut` for the whole chain (ADR 0114,
+// 0115). Every step of the chain is read back: `line_control()` and `mask()`
+// read the line control and the interrupt enable register (`virt`'s 16550
+// returns what was written to both: the line control as it is, the interrupt
+// enable in its low four bits), and `fifo_enabled()` reads the interrupt
+// identification register, which shares the offset of the FIFO control register
+// (`fcr` is write only, `iir` read only) and has bits 7:6 set while the FIFOs
+// are enabled. A `fifo` that did nothing would print "fifo 0". The chain can
+// end in `write`, and can disable the FIFOs again:
+// `UART0.interrupts(0).fifo(false).write(..)`.
+//
+// Module `plic` has `impl Plic` with
+// `ctx(&mut self, i: usize) -> &mut Context`, a getter of one element of the
+// cluster array: a reborrow through the receiver, which the caller borrowed
+// where it named `PLIC`. A register of each element is written through the
+// result, `PLIC.ctx(0).threshold = 3`, and through a `let` that holds the
+// result, and read back through a new call each; the thresholds are put back
+// to zero.
+// Only on riscv32 (ADR 0077, reason 1): the 16550 and the PLIC are devices of
+// `virt`. The program prints through its own driver, not the board's `putc`.
+// targets: riscv32imac-unknown-none-elf
+// expect-output: chain lcr 3 ier 1 fifo 1
+// expect-output: chained write, ier 0 fifo 0
+// expect-output: thresholds 3 and 5
+// expect-exit: 0
+
+mod board;
+use board::exit;
+
+mod uart {
+    pub peripheral Uart16550 {
+        pub write thr: u8 at 0x00,
+        pub read write ier: u8 at 0x01,
+        pub write fcr: u8 at 0x02,
+        pub read iir: u8 at 0x02,
+        pub read write lcr: u8 at 0x03,
+        pub read lsr: u8 at 0x05,
+    }
+
+    pub peripheral UART0: Uart16550 at 0x1000_0000;
+
+    // Bit 5 of `lsr`: the transmit holding register is empty.
+    const THR_EMPTY: u8 = 0x20;
+
+    impl Uart16550 {
+        pub fn ready(&self) -> bool {
+            (self.lsr & THR_EMPTY) != 0
+        }
+
+        pub fn putc(&mut self, byte: u8) {
+            while !self.ready() {}
+            self.thr = byte;
+        }
+
+        pub fn write(&mut self, s: &[u8]) {
+            let mut i: usize = 0;
+            while i < len(s) {
+                self.putc(s[i]);
+                i += 1;
+            }
+        }
+
+        // Enables (bit 0) or disables the FIFOs.
+        pub fn fifo(&mut self, on: bool) -> &mut Self {
+            self.fcr = if on { 1 } else { 0 };
+            self
+        }
+
+        // Bits 0 and 1 of `lcr` hold the word length less five.
+        pub fn word_length(&mut self, bits: u8) -> &mut Self {
+            self.lcr = bits - 5;
+            self
+        }
+
+        pub fn interrupts(&mut self, mask: u8) -> &mut Self {
+            self.ier = mask;
+            self
+        }
+
+        pub fn line_control(&self) -> u8 {
+            self.lcr
+        }
+
+        pub fn mask(&self) -> u8 {
+            self.ier
+        }
+
+        // Bits 7:6 of `iir` are set while the FIFOs are enabled.
+        pub fn fifo_enabled(&self) -> bool {
+            (self.iir & 0xC0) == 0xC0
+        }
+    }
+}
+
+mod plic {
+    // One context of the PLIC: its priority threshold (the claim register
+    // that follows it is not used).
+    pub peripheral Context {
+        pub read write threshold: u32 at 0x0,
+    }
+
+    pub peripheral Plic {
+        pub ctx: [Context; 2] at 0x20_0000 step 0x1000,
+    }
+
+    pub peripheral PLIC: Plic at 0x0C00_0000;
+
+    impl Plic {
+        // One context of the cluster, borrowed through the receiver.
+        pub fn ctx(&mut self, i: usize) -> &mut Context {
+            &mut self.ctx[i]
+        }
+    }
+}
+
+use plic::PLIC;
+use uart::UART0;
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    UART0.write(&digits[10 - n..]);
+}
+
+entry fn main() -> ! {
+    if !UART0.ready() {
+        exit(2)
+    }
+    UART0.fifo(true).word_length(8).interrupts(1);
+    UART0.write(&b"chain lcr ");
+    print_u32(UART0.line_control() as u32);
+    UART0.write(&b" ier ");
+    print_u32(UART0.mask() as u32);
+    UART0.write(&b" fifo ");
+    print_u32(UART0.fifo_enabled() as u32);
+    UART0.write(&b"\n");
+    UART0.interrupts(0).fifo(false).write(&b"chained write, ier ");
+    print_u32(UART0.mask() as u32);
+    UART0.write(&b" fifo ");
+    print_u32(UART0.fifo_enabled() as u32);
+    UART0.write(&b"\n");
+
+    // The second context through a `let` (its last use is the write), the
+    // first through the result itself; both read back through a new call.
+    let second: &mut plic::Context = PLIC.ctx(1);
+    second.threshold = 5;
+    PLIC.ctx(0).threshold = 3;
+    if PLIC.ctx(0).threshold != 3 || PLIC.ctx(1).threshold != 5 {
+        exit(3)
+    }
+    UART0.write(&b"thresholds 3 and 5\n");
+    PLIC.ctx(0).threshold = 0;
+    PLIC.ctx(1).threshold = 0;
+    if PLIC.ctx(0).threshold != 0 || PLIC.ctx(1).threshold != 0 {
+        exit(4)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

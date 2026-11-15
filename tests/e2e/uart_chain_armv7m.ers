@@ -1,0 +1,169 @@
+// A UART configured by a chain of methods that return `&mut Self` (ADR 0118),
+// and a getter of a cluster, on QEMU `mps2-an385`. The driver of
+// `uart_methods_armv7m.ers` gains three methods, each
+// `&mut self -> &mut Self`: `baud(divisor: u32)`, `transmit(on: bool)` and
+// `receive(on: bool)`.
+// Each writes a register of the CMSDK UART and returns `self`, so that
+// `UART.baud(16).transmit(true).receive(true);` configures the device in one
+// expression, the peripheral borrowed as `&mut` for the whole chain (ADR 0114,
+// 0115). `divisor()` and `control()` read the baud divisor and the control
+// register back (the divisor of 16 is the least QEMU accepts; the control
+// register keeps the bits written: bit 0 enables the transmitter, bit 1 the
+// receiver, and no interrupt is enabled). The chain can end in `write`:
+// `UART.receive(false).write(..)`.
+//
+// Module `timers` declares, as the program's own device (ADR 0077), the CMSDK
+// dual timer, which QEMU maps at 0x4000_2000 on every board of the family: two
+// identical timers `0x20` apart. `impl DualTimer` has
+// `timer(&mut self, i: usize) -> &mut Timer`, a getter of one element of the
+// cluster array: a reborrow through the receiver, which the caller borrowed
+// where it named `TIMERS`. The register written and read back is `load`, the
+// first of the timer, through the result itself,
+// `TIMERS.timer(0).load = 1000`, and through a `let` that holds the result.
+// `control` is left as reset leaves it, the timer disabled, free-running and 16
+// bits wide, so the two values written differ and are at most 0xFFFF. The loads
+// are put back to zero.
+// Only on thumbv7m (ADR 0077, reason 1): the UART and the timers are devices of
+// `mps2-an385`. The program prints through its own driver, not the board's
+// `putc`.
+// targets: thumbv7m-none-eabi
+// expect-output: chain baud 16 ctrl 3
+// expect-output: chained write, ctrl 1
+// expect-output: loads 1000 and 2000
+// expect-exit: 0
+
+mod board;
+use board::exit;
+
+mod uart {
+    pub peripheral Cmsdk {
+        pub read write data: u32 at 0x00,
+        pub read write state: u32 at 0x04,
+        pub read write ctrl: u32 at 0x08,
+        pub read write bauddiv: u32 at 0x10,
+    }
+
+    pub peripheral UART: Cmsdk at 0x4000_4000;
+
+    // Bit 0 of `state`: the transmit buffer is full.
+    const TX_FULL: u32 = 1;
+    // Bits 0 and 1 of `ctrl`: the transmitter and the receiver are enabled.
+    const TX_ENABLE: u32 = 1;
+    const RX_ENABLE: u32 = 2;
+
+    impl Cmsdk {
+        pub fn ready(&self) -> bool {
+            (self.state & TX_FULL) == 0
+        }
+
+        pub fn putc(&mut self, byte: u8) {
+            while !self.ready() {}
+            self.data = byte as u32;
+        }
+
+        pub fn write(&mut self, s: &[u8]) {
+            let mut i: usize = 0;
+            while i < len(s) {
+                self.putc(s[i]);
+                i += 1;
+            }
+        }
+
+        // QEMU needs the divisor before the transmitter is enabled.
+        pub fn baud(&mut self, divisor: u32) -> &mut Self {
+            self.bauddiv = divisor;
+            self
+        }
+
+        pub fn transmit(&mut self, on: bool) -> &mut Self {
+            self.ctrl = if on { self.ctrl | TX_ENABLE } else { self.ctrl & !TX_ENABLE };
+            self
+        }
+
+        pub fn receive(&mut self, on: bool) -> &mut Self {
+            self.ctrl = if on { self.ctrl | RX_ENABLE } else { self.ctrl & !RX_ENABLE };
+            self
+        }
+
+        pub fn divisor(&self) -> u32 {
+            self.bauddiv
+        }
+
+        pub fn control(&self) -> u32 {
+            self.ctrl
+        }
+    }
+}
+
+mod timers {
+    // One timer of the CMSDK dual timer: its load register.
+    pub peripheral Timer {
+        pub read write load: u32 at 0x00,
+    }
+
+    pub peripheral DualTimer {
+        pub timer: [Timer; 2] at 0x00 step 0x20,
+    }
+
+    pub peripheral TIMERS: DualTimer at 0x4000_2000;
+
+    impl DualTimer {
+        // One timer of the cluster, borrowed through the receiver.
+        pub fn timer(&mut self, i: usize) -> &mut Timer {
+            &mut self.timer[i]
+        }
+    }
+}
+
+use timers::TIMERS;
+use uart::UART;
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    UART.write(&digits[10 - n..]);
+}
+
+entry fn main() -> ! {
+    UART.baud(16).transmit(true).receive(true);
+    if !UART.ready() {
+        exit(2)
+    }
+    UART.write(&b"chain baud ");
+    print_u32(UART.divisor());
+    UART.write(&b" ctrl ");
+    print_u32(UART.control());
+    UART.write(&b"\n");
+    UART.receive(false).write(&b"chained write, ctrl ");
+    print_u32(UART.control());
+    UART.write(&b"\n");
+
+    // The second timer through a `let` (its last use is the write), the first
+    // through the result itself; both read back through a new call.
+    let second: &mut timers::Timer = TIMERS.timer(1);
+    second.load = 2000;
+    TIMERS.timer(0).load = 1000;
+    if TIMERS.timer(0).load != 1000 || TIMERS.timer(1).load != 2000 {
+        exit(3)
+    }
+    UART.write(&b"loads 1000 and 2000\n");
+    TIMERS.timer(0).load = 0;
+    TIMERS.timer(1).load = 0;
+    if TIMERS.timer(0).load != 0 || TIMERS.timer(1).load != 0 {
+        exit(4)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

@@ -1,0 +1,88 @@
+// A reference returned across the C ABI (ADR 0118, "Functions with fixed
+// callers", ADR 0108): an `#[export]` function, `erebos_tail(s: &[u8], n:
+// usize) -> &[u8]`, returns the bytes of its parameter from `n` on, a result
+// tied to the one reference parameter. A reference to a slice crosses as the
+// raw slice does, the C struct `{ T *ptr; size_t len; }`: C receives it in two
+// registers on riscv32 and through a hidden pointer to the result on thumbv7m.
+// C calls the function with a slice of six bytes, 10 to 60, and answers what
+// it got: the length of the tail from 2 and its first byte, that its pointer
+// is inside the array it was given, and the same for the tail from 6, the
+// length of the array, which is empty and ends the array. Erebos calls the
+// function too, on a static array, and reads the tail it gets as a slice.
+// link-c: returned_references_c.c
+// expect-output: tail 4, first 30, inside 1
+// expect-output: empty 0, inside 1
+// expect-output: erebos 3, first 40, sum 150
+// expect-exit: 0
+
+mod board;
+use board::{exit, print, putc};
+
+extern fn c_tail_len() -> u32;
+extern fn c_tail_first() -> u32;
+extern fn c_tail_inside() -> u32;
+extern fn c_empty_len() -> u32;
+extern fn c_empty_inside() -> u32;
+
+static BYTES: [u8; 6] = [10, 20, 30, 40, 50, 60];
+
+// Called from C: the bytes of `s` from `n` on, where `n` may be `len(s)`.
+#[export]
+fn erebos_tail(s: &[u8], n: usize) -> &[u8] {
+    &s[n..]
+}
+
+fn sum(s: &[u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += s[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(&digits[10 - n..]);
+}
+
+entry fn main() -> ! {
+    print(&b"tail ");
+    print_u32(c_tail_len());
+    print(&b", first ");
+    print_u32(c_tail_first());
+    print(&b", inside ");
+    print_u32(c_tail_inside());
+    putc(b'\n');
+
+    print(&b"empty ");
+    print_u32(c_empty_len());
+    print(&b", inside ");
+    print_u32(c_empty_inside());
+    putc(b'\n');
+
+    let tail: &[u8] = erebos_tail(&BYTES, 3);
+    print(&b"erebos ");
+    print_u32(len(tail) as u32);
+    print(&b", first ");
+    print_u32(tail[0] as u32);
+    print(&b", sum ");
+    print_u32(sum(tail));
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
