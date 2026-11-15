@@ -1,0 +1,139 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/returned_reference_critical_errors.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:18:20]
+ 17 │         critical {
+ 18 │             return first(&self.buf);
+    ·                    ────────┬───────
+    ·                            ╰── `&u8` would outlive the critical section
+ 19 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:24:20]
+ 23 │         critical {
+ 24 │             return &mut self.buf[i];
+    ·                    ────────┬───────
+    ·                            ╰── `&mut u8` would outlive the critical section
+ 25 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:35:16]
+ 34 │     critical {
+ 35 │         return s;
+    ·                ┬
+    ·                ╰── `&[u8]` would outlive the critical section
+ 36 │     }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:42:20]
+ 41 │         critical {
+ 42 │             return s;
+    ·                    ┬
+    ·                    ╰── `&[u8]` would outlive the critical section
+ 43 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:51:24]
+ 50 │             if done {
+ 51 │                 return &s[1..];
+    ·                        ───┬───
+    ·                           ╰── `&[u8]` would outlive the critical section
+ 52 │             }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:60:20]
+ 59 │         critical {
+ 60 │             return s;
+    ·                    ┬
+    ·                    ╰── `&[u8]` would outlive the critical section
+ 61 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:67:16]
+ 66 │     critical {
+ 67 │         return &b"reason";
+    ·                ─────┬────
+    ·                     ╰── `&[u8; 6]` would outlive the critical section
+ 68 │     }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:74:20]
+ 73 │         if done {
+ 74 │             return s;
+    ·                    ┬
+    ·                    ╰── `&[u8]` would outlive the critical section
+ 75 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:76:16]
+ 75 │         }
+ 76 │         return &s[1..];
+    ·                ───┬───
+    ·                   ╰── `&[u8]` would outlive the critical section
+ 77 │     }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:84:24]
+ 83 │             if done {
+ 84 │                 return s;
+    ·                        ┬
+    ·                        ╰── `&[u8]` would outlive the critical section
+ 85 │             }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `return` out of a `critical` block
+    ╭─[returned_reference_critical_errors.ers:87:16]
+ 86 │         }
+ 87 │         return s;
+    ·                ┬
+    ·                ╰── `&[u8]` would outlive the critical section
+ 88 │     }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118);
+        use the value inside the block, or return a copy of what it refers to

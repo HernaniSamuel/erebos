@@ -1,0 +1,251 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/returned_reference_critical_accepted.ers
+---
+--- mir ---
+static mut TICKS: u32; // align 4
+
+fn rest(_1: &[u8], _2: usize) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: usize; // at
+    let _3: usize;
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+    let _7: bool;
+    let _8: &[u8];
+
+    bb0: {
+        _3 = len(_1);
+        _4 = copy _2;
+        _5 = copy _3;
+        _6 = Le(copy _4, copy _5);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _7 = Le(copy _5, copy _3);
+        if copy _7 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _8 = &(*_1)[_4.._5];
+        _0 = copy _8;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn after_the_block(_1: &[u8]) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: usize; // n
+    let _3: u32;
+    let _4: usize;
+    let _5: &[u8];
+
+    bb0: {
+        critical_enter _3;
+        _4 = len(_1);
+        critical_exit _3;
+        _2 = copy _4;
+        _5 = call rest(copy _1, copy _2);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn the_choice_inside(_1: &[u8]) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: usize; // at
+    let _3: u32;
+    let _4: usize;
+    let _5: bool;
+    let _6: usize;
+    let _7: &[u8];
+
+    bb0: {
+        critical_enter _3;
+        _4 = len(_1);
+        _5 = Gt(copy _4, const 1_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = const 1_usize;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _6 = const 0_usize;
+        goto -> bb3;
+    }
+
+    bb3: {
+        critical_exit _3;
+        _2 = copy _6;
+        _7 = call rest(copy _1, copy _2);
+        _0 = copy _7;
+        return;
+    }
+}
+
+fn a_number(_1: bool) -> u32 {
+    let _0: u32;
+    let _1: bool; // c
+    let _2: u32;
+    let _3: *mut u32;
+    let _4: u32;
+    let _5: *mut u32;
+
+    bb0: {
+        critical_enter _2;
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _3 = const static TICKS;
+        _4 = copy (*_3);
+        _0 = copy _4;
+        critical_exit _2;
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _5 = const static TICKS;
+        (*_5) = Add(copy (*_5), const 1_u32);
+        critical_exit _2;
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+fn a_number_inside_a_reference_after(_1: &[u8], _2: bool) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: bool; // c
+    let _3: u32; // seen
+    let _4: u32;
+    let _5: *mut u32;
+    let _6: *mut u32;
+    let _7: u32;
+    let _8: bool;
+    let _9: &[u8];
+
+    bb0: {
+        critical_enter _4;
+        if copy _2 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = const static TICKS;
+        (*_5) = Add(copy (*_5), const 1_u32);
+        goto -> bb3;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _6 = const static TICKS;
+        _7 = copy (*_6);
+        critical_exit _4;
+        _3 = copy _7;
+        _8 = Eq(copy _3, const 0_u32);
+        if copy _8 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _0 = copy _1;
+        return;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        _9 = call rest(copy _1, const 1_usize);
+        _0 = copy _9;
+        return;
+    }
+}
+
+fn a_block_that_is_not_critical(_1: &[u8], _2: bool) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: bool; // c
+    let _3: &[u8];
+
+    bb0: {
+        if copy _2 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _3 = call rest(copy _1, const 1_usize);
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn TICKS() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

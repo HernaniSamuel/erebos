@@ -173,7 +173,8 @@ impl Checker<'_, '_> {
     /// holding a reference below its top, at the innermost one, and the
     /// values of a `critical` block and of a `comptime` expression that are
     /// references (ADR 0105), and the values of a `break` that are references
-    /// and leave a `critical` block (ADR 0110). The expressions above an
+    /// and leave a `critical` block (ADR 0110), and the values of a `return`
+    /// that are references inside one (ADR 0118). The expressions above an
     /// expression reported are not: their types come from it. A type that was
     /// written is reported at its text (`report_reference_types`).
     pub(super) fn report_made_references(&mut self, body: &Block) {
@@ -181,10 +182,19 @@ impl Checker<'_, '_> {
         // The `break`s, found at the `critical` block they leave, which the
         // walk reaches before them (ADR 0110).
         let mut leaving: HashSet<ExprId> = HashSet::new();
+        // The `return`s inside a `critical` block, found the same way. A
+        // `return` leaves every block around it, and is one error however
+        // many (ADR 0118).
+        let mut returning: HashSet<ExprId> = HashSet::new();
         let tables = &self.q.tables;
         body.walk(&mut |expr| {
             if let ExprKind::Critical(block) = &expr.kind {
                 leaving.extend(breaks_out_of(block));
+                block.walk(&mut |inner| {
+                    if matches!(inner.kind, ExprKind::Return(Some(_))) {
+                        returning.insert(inner.id);
+                    }
+                });
             }
             let ty = tables.expr_ty(expr.id);
             // Its own error was reported, as `&mut` of a variable that is
@@ -236,6 +246,18 @@ impl Checker<'_, '_> {
                         diagnostic("the value of a `break` out of a `critical` block")
                             .label(value.span, format!("`{ty}` would outlive the critical section"))
                             .help("a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use the value inside the block, or break with a copy of what it refers to"),
+                    );
+                    return;
+                }
+                // `critical { return &x; }`
+                ExprKind::Return(Some(value))
+                    if returning.contains(&expr.id) && is_reference(tables.expr_ty(value.id)) =>
+                {
+                    let ty = tables.expr_ty(value.id);
+                    found.push(
+                        diagnostic("the value of a `return` out of a `critical` block")
+                            .label(value.span, format!("`{ty}` would outlive the critical section"))
+                            .help("a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110, 0118); use the value inside the block, or return a copy of what it refers to"),
                     );
                     return;
                 }

@@ -1,0 +1,97 @@
+// emit: typeck
+// A `return` whose value is a reference, inside a `critical` block (ADR 0118):
+// the protection would end while the reference lives, whatever it borrows.
+// One `ty::reference-position` per `return`, at the value, however many
+// `critical` blocks it leaves: the plain one, one inside two nested blocks,
+// one inside a loop and an `if` in the block, a `&mut` one, a byte string
+// converted at the `return`, the `return first(&self.buf)` whose result holds
+// only the caller's borrow (which the rule rejects as well), and two `return`s
+// of one block, an error each. The `return`s of values that are not references
+// and the ones after the block are not reported (see the accepted file).
+struct Ring {
+    buf: [u8; 8],
+}
+
+impl Ring {
+    fn harmless(&self) -> &u8 {
+        critical {
+            return first(&self.buf);
+        }
+    }
+
+    fn slot(&mut self, i: usize) -> &mut u8 {
+        critical {
+            return &mut self.buf[i];
+        }
+    }
+}
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+fn plain(s: &[u8]) -> &[u8] {
+    critical {
+        return s;
+    }
+}
+
+fn two_blocks_deep(s: &[u8]) -> &[u8] {
+    critical {
+        critical {
+            return s;
+        }
+    }
+}
+
+fn in_a_loop(s: &[u8], done: bool) -> &[u8] {
+    critical {
+        loop {
+            if done {
+                return &s[1..];
+            }
+        }
+    }
+}
+
+fn block_inside_a_loop(s: &[u8]) -> &[u8] {
+    loop {
+        critical {
+            return s;
+        }
+    }
+}
+
+fn a_byte_string() -> &[u8] {
+    critical {
+        return &b"reason";
+    }
+}
+
+fn two_returns(s: &[u8], done: bool) -> &[u8] {
+    critical {
+        if done {
+            return s;
+        }
+        return &s[1..];
+    }
+}
+
+fn inside_a_nested_block_of_a_block(s: &[u8], done: bool) -> &[u8] {
+    critical {
+        {
+            if done {
+                return s;
+            }
+        }
+        return s;
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

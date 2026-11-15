@@ -634,6 +634,16 @@ let injected_r: &mut u32 = &mut injected_n;"
 fn injected_use(injected_h: InjHolder) {}"
     ),
     s!(
+        "ty::reference-position",
+        Mir,
+        Items,
+        "fn injected_f(injected_s: &[u8]) -> &[u8] {
+    critical {
+        return injected_s;
+    }
+}"
+    ),
+    s!(
         "ty::reference-return",
         Mir,
         Items,

@@ -1,0 +1,69 @@
+// emit: mir
+// What the rule of ADR 0118 on `critical` leaves alone: the value computed
+// inside the block and returned after it, a `return` of a value that is not a
+// reference inside a block (the rule is on the type of the value, not on
+// `return`), and a `return` of a reference in a block that is not `critical`,
+// beside a `critical` block that ends before it.
+static mut TICKS: u32 = 0;
+
+fn rest(s: &[u8], at: usize) -> &[u8] {
+    &s[at..]
+}
+
+fn after_the_block(s: &[u8]) -> &[u8] {
+    let n: usize = critical { len(s) };
+    return rest(s, n);
+}
+
+fn the_choice_inside(s: &[u8]) -> &[u8] {
+    let at: usize = critical {
+        if len(s) > 1 {
+            1
+        } else {
+            0
+        }
+    };
+    rest(s, at)
+}
+
+fn a_number(c: bool) -> u32 {
+    critical {
+        if c {
+            return TICKS;
+        }
+        TICKS += 1;
+    }
+    return 0;
+}
+
+// A `return` of a reference after the block, beside a `return` of a number
+// inside one.
+fn a_number_inside_a_reference_after(s: &[u8], c: bool) -> &[u8] {
+    let seen: u32 = critical {
+        if c {
+            TICKS += 1;
+        }
+        TICKS
+    };
+    if seen == 0 {
+        return s;
+    }
+    rest(s, 1)
+}
+
+fn a_block_that_is_not_critical(s: &[u8], c: bool) -> &[u8] {
+    {
+        if c {
+            return s;
+        }
+    }
+    rest(s, 1)
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
