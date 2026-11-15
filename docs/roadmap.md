@@ -313,7 +313,13 @@ Agreed as useful, not yet scheduled:
     functions returning a static byte string chosen by a value, not a
     sub-slice of an argument. Designed in ADR 0118 (Accepted): the scope
     is decided (the tied result, and a result with no reference parameter
-    borrowing read-only static data), to land as M5.8.
+    borrowing read-only static data), to land as M5.8. Recounted after its
+    migration (the commands of M5.7): of the 53 sites of reason 8, 34 are now
+    references and 19 remain: 12 slices or pointers stored in a `const` or
+    `static`, 4 that hold or carry a stored slice (the field and the parameter
+    of `Reader`, the local that reads the field, `widest`'s table), and the 3
+    sites of `erebos_skip` (see "After M5" below). A reference that is
+    stored is what still holds them.
   The same step would let a `&mut [T]` be split in two halves in use
   together, as Rust's `split_at_mut`, which ADR 0108 leaves out because the
   two references could be neither returned nor bound in pairs.
@@ -542,43 +548,61 @@ ADRs:
   - Not in M5: references stored in structs (ADR 0094); function
     pointers; priorities and several cores, to which ADR 0094 says how it
     extends.
-- **After M5**, from the measurement of M5.7 (ADR 0117). What stays a raw
-  pointer in `rt/`, `tests/boards/` and `tests/e2e/`: 886 lines and 385 sites
-  (1587 and 538 before M5.7; the sites are declarations of raw type and the
-  `&raw` expressions that flow into none, counted as the plan
-  `.claude/plans/M5.7.md` records, step 7). By reason, as sites (lines):
-  1 the test's subject 97 (121); 2 an analysis rejected the reference 0;
-  3 a signature fixed by another caller 26 (15); 4 an `asm` operand 1 (1);
-  5 a fixed address outside a peripheral 96 (101); 6 device memory at a
-  computed address 0; 7 linked data 6 (16); 8 a reference returned or stored
-  55 (204), 53 without the two fields of `core::PanicInfo`; 9 reinterpreting
-  memory 104 (428). `aapcs_c.ers` alone is 373 of the lines and 55 of the
-  sites.
+- **After M5**, from the measurement of M5.7 (ADR 0117), recounted after M5.8
+  (ADR 0118). What stays a raw pointer in `rt/`, `tests/boards/` and
+  `tests/e2e/`: 729 lines and 351 sites in 77 files (886, 385 and 89 after
+  M5.7; 1587, 538 and 112 before it; the sites are declarations of raw type
+  and the `&raw` expressions that flow into none, counted as the plan
+  `.claude/plans/M5.7.md` records, step 7, with the same commands, so the
+  three measurements compare). The programs M5.8 added to `tests/e2e/`
+  (`returned_references`, `uart_chain_riscv32`, `uart_chain_armv7m` and
+  `returned_references_c`) write no raw pointer: they add no line, site or
+  file. By reason, as sites (lines), with M5.7's count beside: 1 the test's
+  subject 97 (121), as before; 2 an analysis rejected the reference 0, as
+  before; 3 a signature fixed by another caller 26 (15), as before; 4 an
+  `asm` operand 1 (1), as before; 5 a fixed address outside a peripheral 96
+  (101), as before; 6 device memory at a computed address 0, as before;
+  7 linked data 6 (16), as before; 8 a reference returned or stored 21 (47),
+  19 (45) without the two fields of `core::PanicInfo`, from 55 (204) and 53
+  (202); 9 reinterpreting memory 104 (428), as before. Only reason 8 moved:
+  M5.8 removed 34 of its sites and 157 net of its lines, all in `tests/e2e/`.
+  `aapcs_c.ers` alone is 373 of the lines and 55 of the sites.
   - Marking the dereference of a raw pointer, since the language has no
     `unsafe` (ADR 0030): moved here from M5, as ADR 0117 says, whatever the
     counts. The question is whether what remains is rare and local enough to
-    be marked. What remains is mostly not rare: 886 lines in 89 files, but
+    be marked. What remains is mostly not rare: 729 lines in 77 files, but
     the sites in the programs that exist to test raw pointers (reasons 1, 9:
-    201 of 385) are the point of those tests, and reasons 3 to 5 (123 sites)
+    201 of 351) are the point of those tests, and reasons 3 to 5 (123 sites)
     are `core`'s memory functions, the boards' registers and `asm`. The user
     decides, with these numbers.
   - Returning a reference tied to the one reference parameter (deferred
-    ideas): of the 59 candidate sites (reasons 2, 6, 7, 8), 53 are reason 8
-    without `PanicInfo`'s fields, 89.8 percent, which is above the 60 percent
-    that ADR 0117 sets, so this was a pending decision, settled by ADR 0118
-    (Accepted; its scope decided with the user, a step of its own, M5.8,
-    after M5.7 and before M6, with the migration and a recount). Not built
-    in M5.7. What the 53 are: 32 return types, 12 `const`s and `static`s of
-    slices, 4 parameters, 1 field, 1 local and 3 operands of `slice(..)`.
-    Of the 32 return types, 29 return a byte string in static memory chosen
-    by an enum, an integer or a `bool` (`reason`, `name`, `state_name`): they
-    have no reference parameter to tie a result to, so the idea as written
-    removes 3 of them (`rest`, `part`, `erebos_skip`, which return a
-    sub-slice of their argument); the rest need a reference to static data
-    that may be returned or stored, which the idea leaves out. Reason 2 has
-    no case (no program was rejected by the borrow check, the check of moves
-    or the rule of shared statics when it moved to references), so the
-    cases that "may want the same feature" are none.
+    ideas): of the 59 candidate sites (reasons 2, 6, 7, 8) that M5.7 counted,
+    53 were reason 8 without `PanicInfo`'s fields, 89.8 percent, which was
+    above the 60 percent that ADR 0117 sets, so this became a pending
+    decision, settled by ADR 0118 (Accepted; its scope decided with the user,
+    a step of its own, M5.8, after M5.7 and before M6, with the migration and
+    a recount). M5.8 built it and moved 31 return types (the 29 that return a
+    byte string chosen by an enum, an integer or a `bool`, which ADR 0118
+    ties to read-only static data, and `rest` and `part`, which return a
+    sub-slice of their argument), the parameter `s` of `part` and the
+    operands of `slice(..)` in `rest` and `part` to references: 34 sites.
+    What reason 8 still holds, 19 sites (45 lines) in `tests/e2e/`, by
+    kind: 12 `const`s and `static`s that store a slice or a pointer (7 byte
+    strings: `HEX_DIGITS` in `command_decoder`, `memory_map`, `memory_map_ram`
+    and `print`, `TOPICS`, `GREETING`, `EVENTS`; 2 arrays of byte strings:
+    `MESSAGES` of `print`, `INPUTS`; 2 arrays of pointers to peripherals:
+    `TRANSPORTS` of `plic_virtio` and `svd_virt`; 1 pointer to a peripheral:
+    `CONSOLE`), 3 parameters (`erebos_skip`'s `s`, `widest`'s `table`,
+    `reader`'s `text`), 1 return type (`erebos_skip`), 1 field
+    (`Reader.text`), 1 local (`digits::next`'s `text`) and 1 operand of
+    `slice(..)` (`erebos_skip`); plus `PanicInfo`'s two fields in `rt/`. They
+    are the references the language does not store (ADR 0094); `erebos_skip`
+    is called from C, and M5.8's step 9 left it raw as the subject of
+    `slices.ers`, so by that reading its 3 sites are reason 1 and reason 8
+    holds 16 (43 lines). Reason 2 has no case, neither in M5.7 nor now: no
+    program was rejected by the borrow check, the check of moves, the rule
+    of shared statics or the rules of a returned reference when it moved to
+    references.
   - A static placed in a named region and handles with range-typed indexes
     (deferred ideas): counts in their entries (reason 6: 0 sites, reason 7:
     6 sites).
