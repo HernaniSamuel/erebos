@@ -1,0 +1,33 @@
+// emit: mir
+// A reference made through a raw pointer to a variable of a call that has
+// returned is `eval::dangling-pointer` when it is used at compile time (ADR
+// 0118, 0030). The body is accepted by the analyses: a reference made through
+// a raw pointer is the program's word, and a borrow of the variable itself
+// would be `analysis::returned-borrow` (`returned_borrow_errors.ers`) before
+// the evaluator ran. The function that returns a reference to a static is
+// read in a `const` without error.
+static TABLE: [u32; 2] = [5, 6];
+
+fn dangling() -> &u32 {
+    let x: u32 = 5;
+    let p: *const u32 = &raw const x;
+    &*p
+}
+
+fn dangling_part(i: usize) -> &u32 {
+    let t: [u32; 2] = [1, 2];
+    let p: *const u32 = &raw const t as *const u32;
+    &*(&raw const p[i])
+}
+
+fn element(i: usize) -> &u32 {
+    &TABLE[i]
+}
+
+const READ: u32 = *dangling();
+const READ_PART: u32 = *dangling_part(1);
+const COMPARE: bool = &raw const *dangling() == &raw const *dangling();
+const FINE: u32 = *element(1);
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

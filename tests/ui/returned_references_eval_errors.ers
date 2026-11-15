@@ -1,0 +1,31 @@
+// emit: typeck
+// A value computed at compile time is never a reference (ADR 0118, 0105): a
+// `comptime` expression of a call that returns a reference, and a `const` of
+// a reference type, are `ty::reference-position`. The function that returns the
+// reference is accepted, and so is the `comptime` expression that reads a number
+// through its result.
+fn reason(r: core::PanicReason) -> &[u8] {
+    match r {
+        .DivisionByZero => &b"division by zero",
+        .IndexOutOfBounds => &b"out of bounds",
+        _ => &b"other",
+    }
+}
+
+static B: [u8; 4] = [1, 2, 3, 4];
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+const BORROWED: &[u8] = reason(.IndexOutOfBounds);
+const LENGTH: usize = len(reason(.DivisionByZero));
+
+fn use_it() -> usize {
+    let held: &[u8] = comptime reason(.DivisionByZero);
+    let number: u32 = comptime *first(&B) as u32;
+    held[0] as usize + number as usize
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,62 @@
+// emit: llvm-ir
+// A function that returns a reference runs at compile time as any other: the
+// evaluator runs a `Ref` as `AddressOf` and returns the pointer (ADR 0118,
+// 0107). The value computed at compile time is never a reference (ADR 0105):
+// `N` is a `usize`, and the table below holds raw slices, each the result of
+// a call cast back, as relocations with lengths into the byte string.
+static B: [u8; 6] = [1, 2, 3, 4, 5, 6];
+const TOPICS: *const [u8] = &raw const b"statics, byte strings, slices";
+
+// `len(rest(&B, 1))` is 5, a number in a `const`.
+const N: usize = len(rest(&B, 1));
+
+fn rest(s: &[u8], at: usize) -> &[u8] {
+    &s[at..]
+}
+
+// A function that returns a reference, called by another that returns one and
+// by a `comptime` expression.
+fn drop_two(s: &[u8]) -> &[u8] {
+    rest(rest(s, 1), 1)
+}
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+fn sum(s: &[u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += s[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+// `n` bytes of `s` from `start`, as a reference to a part of the slice: the
+// form the static table below needs.
+fn part(s: &[u8], start: usize, n: usize) -> &[u8] {
+    &s[start..start + n]
+}
+
+static MESSAGES: [*const [u8]; 3] = [
+    part(&*TOPICS, 0, 7) as *const [u8],
+    part(&*TOPICS, 9, 12) as *const [u8],
+    part(&*TOPICS, 23, 6) as *const [u8],
+];
+
+static TAIL: *const [u8] = rest(&B, 4) as *const [u8];
+
+static mut RESULTS: [u32; 5] = [0; 5];
+
+// Stores 5, 18, 1, 2 and 5.
+entry fn main() -> ! {
+    RESULTS[0] = N as u32;
+    RESULTS[1] = comptime sum(drop_two(&B));
+    RESULTS[2] = comptime *first(&B) as u32;
+    RESULTS[3] = comptime len(TAIL) as u32;
+    RESULTS[4] = comptime len(MESSAGES[2]) as u32 - 1;
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }

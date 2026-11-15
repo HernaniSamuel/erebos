@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_references_dangling.ers
+---
+--- errors ---
+eval::dangling-pointer
+
+  × this pointer points to a variable of a call that has returned
+    ╭─[returned_references_dangling.ers:27:19]
+ 26 │ 
+ 27 │ const READ: u32 = *dangling();
+    ·       ──┬─        ─────┬─────
+    ·         │              ╰── accessed here
+    ·         ╰── while evaluating the constant `READ`
+ 28 │ const READ_PART: u32 = *dangling_part(1);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::dangling-pointer
+
+  × this pointer points to a variable of a call that has returned
+    ╭─[returned_references_dangling.ers:28:24]
+ 27 │ const READ: u32 = *dangling();
+ 28 │ const READ_PART: u32 = *dangling_part(1);
+    ·       ────┬────        ────────┬────────
+    ·           │                    ╰── accessed here
+    ·           ╰── while evaluating the constant `READ_PART`
+ 29 │ const COMPARE: bool = &raw const *dangling() == &raw const *dangling();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::dangling-pointer
+
+  × this pointer points to a variable of a call that has returned
+    ╭─[returned_references_dangling.ers:29:23]
+ 28 │ const READ_PART: u32 = *dangling_part(1);
+ 29 │ const COMPARE: bool = &raw const *dangling() == &raw const *dangling();
+    ·       ───┬───         ────────────────────────┬───────────────────────
+    ·          │                                    ╰── compared here
+    ·          ╰── while evaluating the constant `COMPARE`
+ 30 │ const FINE: u32 = *element(1);
+    ╰────
+  help: this code runs at compile time (ADR 0027)

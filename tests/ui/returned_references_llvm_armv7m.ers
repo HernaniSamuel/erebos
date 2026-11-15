@@ -1,0 +1,89 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// A returned reference is returned as the raw pointer of its mutability is
+// (ADR 0118, 0105, 0108), as in `returned_references_llvm.ers`: a `&u32` or
+// `&mut u32` is a `ptr`, a `&[u8]` is the raw slice's return, which is `sret`
+// on thumbv7m (ADR 0075), and no LLVM attribute (`nonnull`, `noalias`,
+// `dereferenceable`) is given to it that a raw pointer lacks. The `raw_*`
+// functions are the same signatures with raw pointers, to read the two side by
+// side. The call of a function with a reference argument goes through the
+// temporary slot of ADR 0107; the call of one with none (`greeting`) does not.
+// An `extern fn` and an `#[export]` function return each kind under the same
+// rules. At `-O` the attributes that appear are the optimizer's own, inferred
+// from the bodies and the calls (`table` and `raw_table` both get `nonnull`, and
+// so does the `sret` slot of a call); the code generator gives none.
+static TABLE: [u8; 4] = [1, 2, 3, 4];
+
+fn shared(p: &u32) -> &u32 {
+    p
+}
+
+fn exclusive(p: &mut u32) -> &mut u32 {
+    p
+}
+
+fn rest(s: &[u8], at: usize) -> &[u8] {
+    &s[at..]
+}
+
+fn greeting() -> &[u8] {
+    &b"hello"
+}
+
+fn table() -> &[u8; 4] {
+    &TABLE
+}
+
+fn raw_table() -> *const [u8; 4] {
+    &raw const TABLE
+}
+
+fn raw_shared(p: *const u32) -> *const u32 {
+    p
+}
+
+fn raw_exclusive(p: *mut u32) -> *mut u32 {
+    p
+}
+
+fn raw_rest(s: *const [u8], at: usize) -> *const [u8] {
+    slice(&raw const (s as *const u8)[at], len(s) - at)
+}
+
+#[export]
+fn exported_word(p: &mut u32) -> &mut u32 {
+    exclusive(p)
+}
+
+#[export]
+fn exported_slice(s: &[u8]) -> &[u8] {
+    rest(s, 1)
+}
+
+extern fn imported_word(p: &u32) -> &u32;
+
+extern fn imported_slice(s: &[u8]) -> &[u8];
+
+fn read(p: &u32) -> u32 {
+    *shared(p)
+}
+
+fn write(p: &mut u32) {
+    *exclusive(p) = 7;
+}
+
+fn tail_length(s: &[u8]) -> usize {
+    len(rest(s, 1))
+}
+
+fn greeting_length() -> usize {
+    len(greeting())
+}
+
+fn through_extern(p: &u32, s: &[u8]) -> usize {
+    *imported_word(p) as usize + len(imported_slice(s))
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

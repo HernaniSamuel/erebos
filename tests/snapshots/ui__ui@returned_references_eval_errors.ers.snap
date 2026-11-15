@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_references_eval_errors.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the type of a constant
+    ╭─[returned_references_eval_errors.ers:21:17]
+ 20 │ 
+ 21 │ const BORROWED: &[u8] = reason(.IndexOutOfBounds);
+    ·                 ──┬──
+    ·                   ╰── `&[u8]` is a reference
+ 22 │ const LENGTH: usize = len(reason(.DivisionByZero));
+    ╰────
+  help: a static or a constant holds a value computed at compile time, which is never a reference
+        (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
+ty::reference-position
+
+  × a reference cannot be the value of a `comptime` expression
+    ╭─[returned_references_eval_errors.ers:25:23]
+ 24 │ fn use_it() -> usize {
+ 25 │     let held: &[u8] = comptime reason(.DivisionByZero);
+    ·                       ────────────────┬───────────────
+    ·                                       ╰── `&[u8]` is a reference
+ 26 │     let number: u32 = comptime *first(&B) as u32;
+    ╰────
+  help: a value computed at compile time is data, never a reference (ADR 0094, 0105); compute the
+        value, and borrow it where it is used
