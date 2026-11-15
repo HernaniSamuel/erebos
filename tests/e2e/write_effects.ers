@@ -68,12 +68,12 @@ fn print_hex(value: u32) {
     }
 }
 
-fn mode_name(m: Mode) -> *const [u8] {
+fn mode_name(m: Mode) -> &[u8] {
     match m {
-        .Off => &raw const b" off",
-        .On => &raw const b" on",
-        .Auto => &raw const b" auto",
-        _ => &raw const b" no variant",
+        .Off => &b" off",
+        .On => &b" on",
+        .Auto => &b" auto",
+        _ => &b" no variant",
     }
 }
 
@@ -144,7 +144,7 @@ entry fn main() -> ! {
     let mode: Mode = (*timer).mode;
     print(&b"mode ");
     print_u64(mode as u64);
-    print(&*mode_name(mode));
+    print(mode_name(mode));
     (*timer).mode = .Auto;
     print_hex(*second);
     putc(b'\n');

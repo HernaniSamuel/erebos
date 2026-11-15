@@ -33,32 +33,32 @@ fn print(s: &[u8]) {
     putc(b'\n');
 }
 
-fn handled(m: Msg) -> *const [u8] {
+fn handled(m: Msg) -> &[u8] {
     match m {
-        Msg::Nop => &raw const b"nop",
-        Msg::Wide(_) => &raw const b"wide",
-        Msg::SetMode(Mode::Off) => &raw const b"off",
-        Msg::SetMode(Mode::Run) => &raw const b"run",
-        Msg::SetMode(_) => &raw const b"mode?",
-        _ => &raw const b"tag?",
+        Msg::Nop => &b"nop",
+        Msg::Wide(_) => &b"wide",
+        Msg::SetMode(Mode::Off) => &b"off",
+        Msg::SetMode(Mode::Run) => &b"run",
+        Msg::SetMode(_) => &b"mode?",
+        _ => &b"tag?",
     }
 }
 
-fn strict(m: Msg) -> *const [u8] {
+fn strict(m: Msg) -> &[u8] {
     match m {
-        Msg::Nop => &raw const b"nop",
-        Msg::Wide(_) => &raw const b"wide",
-        Msg::SetMode(Mode::Off) => &raw const b"off",
-        Msg::SetMode(Mode::Run) => &raw const b"run",
+        Msg::Nop => &b"nop",
+        Msg::Wide(_) => &b"wide",
+        Msg::SetMode(Mode::Off) => &b"off",
+        Msg::SetMode(Mode::Run) => &b"run",
     }
 }
 
 entry fn main() -> ! {
     let msgs: *const Msg = &raw const BYTES as *const Msg;
-    print(&*handled(msgs[0]));
-    print(&*handled(msgs[1]));
-    print(&*strict(msgs[2]));
-    print(&*strict(msgs[1]));
+    print(handled(msgs[0]));
+    print(handled(msgs[1]));
+    print(strict(msgs[2]));
+    print(strict(msgs[1]));
     exit(0)
 }
 

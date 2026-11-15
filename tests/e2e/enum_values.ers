@@ -15,12 +15,12 @@ enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
 static mut BYTES: [u8; 5] = [0, 0, 0, 0, 0];
 
-fn name(m: Mode) -> *const [u8] {
+fn name(m: Mode) -> &[u8] {
     match m {
-        Mode::Off => &raw const b"off",
-        Mode::Run => &raw const b"run",
-        Mode::Sleep => &raw const b"sleep",
-        _ => &raw const b"other",
+        Mode::Off => &b"off",
+        Mode::Run => &b"run",
+        Mode::Sleep => &b"sleep",
+        _ => &b"other",
     }
 }
 
@@ -38,7 +38,7 @@ entry fn main() -> ! {
     let mut i: usize = 0;
     while i < 5 {
         putc(b' ');
-        print(&*name(modes[i]));
+        print(name(modes[i]));
         i += 1;
     }
     putc(b'\n');
@@ -47,7 +47,7 @@ entry fn main() -> ! {
     i = 0;
     while i < 5 {
         putc(b' ');
-        print(&*name(device[i]));
+        print(name(device[i]));
         i += 1;
     }
     putc(b'\n');

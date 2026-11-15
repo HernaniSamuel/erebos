@@ -100,8 +100,8 @@ fn decode(bytes: &[u8]) -> Decoded {
 }
 
 // The bytes of `s` from `start` on, where `start` may be `len(s)`.
-fn rest(s: &[u8], start: usize) -> *const [u8] {
-    slice(&raw const (s as *const u8)[start], len(s) - start)
+fn rest(s: &[u8], start: usize) -> &[u8] {
+    &s[start..]
 }
 
 comptime {
@@ -120,14 +120,14 @@ comptime {
         &b"an unknown mode is `off`",
     );
     assert(
-        match decode(&*rest(&b"\x00\x09", 1)) {
+        match decode(rest(&b"\x00\x09", 1)) {
             Decoded::Bad(0x09, 1) => true,
             _ => false,
         },
         &b"0x09 is no command",
     );
     assert(
-        match decode(&*rest(&b"\x01", 1)) {
+        match decode(rest(&b"\x01", 1)) {
             Decoded::Done => true,
             _ => false,
         },
@@ -162,11 +162,11 @@ fn print_hex(value: u32, digits: u32) {
     }
 }
 
-fn mode_name(mode: Mode) -> *const [u8] {
+fn mode_name(mode: Mode) -> &[u8] {
     match mode {
-        Mode::Off => &raw const b"off",
-        Mode::Run => &raw const b"run",
-        Mode::Sleep => &raw const b"sleep",
+        Mode::Off => &b"off",
+        Mode::Run => &b"run",
+        Mode::Sleep => &b"sleep",
     }
 }
 
@@ -194,7 +194,7 @@ fn dispatch(cmd: Cmd) {
         Cmd::SetMode(Mode::Run) => print(&b"start"),
         Cmd::SetMode(let mode: Mode) => {
             print(&b"mode ");
-            print(&*mode_name(mode));
+            print(mode_name(mode));
         }
     }
     print(&b"\n");
@@ -209,7 +209,7 @@ entry fn main() -> ! {
     loop {
         print_u32(at as u32);
         print(&b": ");
-        match decode(&*rest(&STREAM, at)) {
+        match decode(rest(&STREAM, at)) {
             Decoded::Done => {
                 print(&b"done\n");
                 break;

@@ -9,13 +9,13 @@
 mod board;
 use board::{exit, print};
 
-fn reason() -> *const [u8] {
+fn reason() -> &[u8] {
     print(&b"x is too large\n");
-    &raw const b"x is too large"
+    &b"x is too large"
 }
 
 fn checked(x: u32) {
-    assert(x < 10, &*reason());
+    assert(x < 10, reason());
 }
 
 entry fn main() -> ! {

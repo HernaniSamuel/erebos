@@ -13,16 +13,16 @@ enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
 static mut BYTES: [u8; 2] = [0, 0];
 
-fn name(m: Mode) -> *const [u8] {
-    match m { .Off => &raw const b"off", .Run => &raw const b"run", .Sleep => &raw const b"sleep" }
+fn name(m: Mode) -> &[u8] {
+    match m { .Off => &b"off", .Run => &b"run", .Sleep => &b"sleep" }
 }
 
 entry fn main() -> ! {
     BYTES = [1, 7];
     let modes: *const Mode = &raw const BYTES as *const Mode;
-    print(&*name(modes[0]));
+    print(name(modes[0]));
     print(&b"\n");
-    print(&*name(modes[1]));
+    print(name(modes[1]));
     exit(0)
 }
 
@@ -41,21 +41,21 @@ fn print_u32(value: u32) {
     print(&digits[10 - n..]);
 }
 
-fn reason(reason: core::PanicReason) -> *const [u8] {
+fn reason(reason: core::PanicReason) -> &[u8] {
     match reason {
-        .DivisionByZero => &raw const b"division by zero",
-        .IndexOutOfBounds => &raw const b"index out of bounds",
-        .AssertionFailed => &raw const b"assertion failed",
-        .NoVariant => &raw const b"enum value is no variant",
-        .FieldOutOfRange => &raw const b"value does not fit its field",
-        .UnhandledVector => &raw const b"vector not handled",
+        .DivisionByZero => &b"division by zero",
+        .IndexOutOfBounds => &b"index out of bounds",
+        .AssertionFailed => &b"assertion failed",
+        .NoVariant => &b"enum value is no variant",
+        .FieldOutOfRange => &b"value does not fit its field",
+        .UnhandledVector => &b"vector not handled",
     }
 }
 
 // Prints `<reason>[: <message>] at <file>:<line>:<column>`; the message of
 // these checks is empty (ADR 0053).
 panic fn on_panic(info: &core::PanicInfo) -> ! {
-    print(&*reason(info.reason));
+    print(reason(info.reason));
     if len(info.message) > 0 {
         print(&b": ");
         print(&*info.message);

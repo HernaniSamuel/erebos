@@ -21,12 +21,18 @@ const TOPICS: *const [u8] = &raw const b"statics, byte strings, slices";
 
 // `n` bytes of `s` from `start`; called at compile time for the table
 // below, so the slices it makes point into the byte strings of the image.
-fn part(s: *const [u8], start: usize, n: usize) -> *const [u8] {
-    slice(&raw const (*s)[start], n)
+// The table holds raw slices (ADR 0117, reason 8: a reference is not stored),
+// so each result is cast back.
+fn part(s: &[u8], start: usize, n: usize) -> &[u8] {
+    &s[start..start + n]
 }
 
 static GREETING: *const [u8] = &raw const b"hello from erebos";
-static MESSAGES: [*const [u8]; 3] = [part(TOPICS, 0, 7), part(TOPICS, 9, 12), part(TOPICS, 23, 6)];
+static MESSAGES: [*const [u8]; 3] = [
+    part(&*TOPICS, 0, 7) as *const [u8],
+    part(&*TOPICS, 9, 12) as *const [u8],
+    part(&*TOPICS, 23, 6) as *const [u8],
+];
 
 // The length of the longest message, computed from the static table.
 fn widest(table: &[*const [u8]]) -> usize {

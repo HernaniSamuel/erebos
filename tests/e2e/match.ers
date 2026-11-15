@@ -38,27 +38,27 @@ fn classify(x: u8) {
     }
 }
 
-fn signed(x: i8) -> *const [u8] {
+fn signed(x: i8) -> &[u8] {
     match x {
-        -128 => &raw const b"min",
-        -1 => &raw const b"minus-one",
-        127 => &raw const b"max",
-        _ => &raw const b"other",
+        -128 => &b"min",
+        -1 => &b"minus-one",
+        127 => &b"max",
+        _ => &b"other",
     }
 }
 
-fn wide(x: u64) -> *const [u8] {
+fn wide(x: u64) -> &[u8] {
     match x {
-        0xFFFF_FFFF_0000_0000 => &raw const b"high",
-        0xFFFF_FFFF_FFFF_FFFF => &raw const b"all",
-        _ => &raw const b"low",
+        0xFFFF_FFFF_0000_0000 => &b"high",
+        0xFFFF_FFFF_FFFF_FFFF => &b"all",
+        _ => &b"low",
     }
 }
 
-fn answer(b: bool) -> *const [u8] {
+fn answer(b: bool) -> &[u8] {
     match b {
-        true => &raw const b"yes",
-        false => &raw const b"no",
+        true => &b"yes",
+        false => &b"no",
     }
 }
 
@@ -81,27 +81,27 @@ entry fn main() -> ! {
     putc(b'\n');
 
     print(&b"signed: ");
-    print(&*signed(-128));
+    print(signed(-128));
     putc(b' ');
-    print(&*signed(-1));
+    print(signed(-1));
     putc(b' ');
-    print(&*signed(5));
+    print(signed(5));
     putc(b' ');
-    print(&*signed(127));
+    print(signed(127));
     putc(b'\n');
 
     print(&b"wide: ");
-    print(&*wide(0xFFFF_FFFF_0000_0000));
+    print(wide(0xFFFF_FFFF_0000_0000));
     putc(b' ');
-    print(&*wide(0xFFFF_FFFF_FFFF_FFFF));
+    print(wide(0xFFFF_FFFF_FFFF_FFFF));
     putc(b' ');
-    print(&*wide(0xFFFF_FFFF));
+    print(wide(0xFFFF_FFFF));
     putc(b'\n');
 
     print(&b"bool: ");
-    print(&*answer(CALLS == 0));
+    print(answer(CALLS == 0));
     putc(b' ');
-    print(&*answer(CALLS != 0));
+    print(answer(CALLS != 0));
     putc(b'\n');
 
     // A call as scrutinee runs once, whichever arm is taken, and the

@@ -27,29 +27,29 @@ fn print(s: &[u8]) {
     putc(b'\n');
 }
 
-fn handled(o: Option(u32)) -> *const [u8] {
+fn handled(o: Option(u32)) -> &[u8] {
     match o {
-        .None => &raw const b"none",
-        .Some(5) => &raw const b"some 5",
-        .Some(_) => &raw const b"some",
-        _ => &raw const b"tag?",
+        .None => &b"none",
+        .Some(5) => &b"some 5",
+        .Some(_) => &b"some",
+        _ => &b"tag?",
     }
 }
 
-fn strict(o: Option(u32)) -> *const [u8] {
+fn strict(o: Option(u32)) -> &[u8] {
     match o {
-        .None => &raw const b"none",
-        .Some(5) => &raw const b"some 5",
-        .Some(_) => &raw const b"some",
+        .None => &b"none",
+        .Some(5) => &b"some 5",
+        .Some(_) => &b"some",
     }
 }
 
 entry fn main() -> ! {
     let options: *const Option(u32) = &raw const BYTES as *const Option(u32);
-    print(&*handled(options[0]));
-    print(&*handled(options[1]));
-    print(&*strict(options[0]));
-    print(&*strict(options[1]));
+    print(handled(options[0]));
+    print(handled(options[1]));
+    print(strict(options[0]));
+    print(strict(options[1]));
     exit(0)
 }
 

@@ -86,30 +86,30 @@ comptime {
 
 static mut STATE: State = State::Idle;
 
-fn state_name(state: State) -> *const [u8] {
+fn state_name(state: State) -> &[u8] {
     match state {
-        State::Idle => &raw const b"idle",
-        State::Running => &raw const b"running",
-        State::Paused => &raw const b"paused",
-        State::Done => &raw const b"done",
+        State::Idle => &b"idle",
+        State::Running => &b"running",
+        State::Paused => &b"paused",
+        State::Done => &b"done",
     }
 }
 
-fn event_name(event: Event) -> *const [u8] {
+fn event_name(event: Event) -> &[u8] {
     match event {
-        Event::Unknown => &raw const b"unknown",
-        Event::Start => &raw const b"start",
-        Event::Pause => &raw const b"pause",
-        Event::Resume => &raw const b"resume",
-        Event::Stop => &raw const b"stop",
-        Event::Reset => &raw const b"reset",
+        Event::Unknown => &b"unknown",
+        Event::Start => &b"start",
+        Event::Pause => &b"pause",
+        Event::Resume => &b"resume",
+        Event::Stop => &b"stop",
+        Event::Reset => &b"reset",
     }
 }
 
 entry fn main() -> ! {
     // Read before any write: `.bss` was zeroed by `_start`.
     print(&b"state ");
-    print(&*state_name(STATE));
+    print(state_name(STATE));
     print(&b"\n");
 
     let mut i: usize = 0;
@@ -120,17 +120,17 @@ entry fn main() -> ! {
         STATE = step(from, event);
         board::putc(byte);
         print(&b" ");
-        print(&*event_name(event));
+        print(event_name(event));
         print(&b": ");
-        print(&*state_name(from));
+        print(state_name(from));
         print(&b" -> ");
-        print(&*state_name(STATE));
+        print(state_name(STATE));
         print(&b"\n");
         i += 1;
     }
 
     print(&b"state ");
-    print(&*state_name(STATE));
+    print(state_name(STATE));
     print(&b"\n");
     exit(if STATE == run(&*EVENTS) { 0 } else { 2 })
 }

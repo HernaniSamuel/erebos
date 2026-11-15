@@ -21,19 +21,19 @@ fn print(s: &[u8]) {
     putc(b'\n');
 }
 
-fn name(m: Mode) -> *const [u8] {
+fn name(m: Mode) -> &[u8] {
     match m {
-        Mode::Off => &raw const b"off",
-        Mode::Run => &raw const b"run",
-        Mode::Sleep => &raw const b"sleep",
+        Mode::Off => &b"off",
+        Mode::Run => &b"run",
+        Mode::Sleep => &b"sleep",
     }
 }
 
 entry fn main() -> ! {
     BYTES = [1, 7];
     let modes: *const Mode = &raw const BYTES as *const Mode;
-    print(&*name(modes[0]));
-    print(&*name(modes[1]));
+    print(name(modes[0]));
+    print(name(modes[1]));
     exit(0)
 }
 

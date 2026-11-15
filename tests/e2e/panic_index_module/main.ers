@@ -33,21 +33,21 @@ fn print_u32(value: u32) {
     print(&digits[10 - n..]);
 }
 
-fn reason(reason: core::PanicReason) -> *const [u8] {
+fn reason(reason: core::PanicReason) -> &[u8] {
     match reason {
-        .DivisionByZero => &raw const b"division by zero",
-        .IndexOutOfBounds => &raw const b"index out of bounds",
-        .AssertionFailed => &raw const b"assertion failed",
-        .NoVariant => &raw const b"enum value is no variant",
-        .FieldOutOfRange => &raw const b"value does not fit its field",
-        .UnhandledVector => &raw const b"vector not handled",
+        .DivisionByZero => &b"division by zero",
+        .IndexOutOfBounds => &b"index out of bounds",
+        .AssertionFailed => &b"assertion failed",
+        .NoVariant => &b"enum value is no variant",
+        .FieldOutOfRange => &b"value does not fit its field",
+        .UnhandledVector => &b"vector not handled",
     }
 }
 
 // Prints `<reason>[: <message>] at <file>:<line>:<column>`; the message of
 // these checks is empty (ADR 0053).
 panic fn on_panic(info: &core::PanicInfo) -> ! {
-    print(&*reason(info.reason));
+    print(reason(info.reason));
     if len(info.message) > 0 {
         print(&b": ");
         print(&*info.message);

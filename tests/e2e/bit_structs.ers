@@ -91,12 +91,12 @@ fn print_bool(b: bool) {
     print(if b { &b" true" } else { &b" false" });
 }
 
-fn parity_name(p: Parity) -> *const [u8] {
+fn parity_name(p: Parity) -> &[u8] {
     match p {
-        .None => &raw const b" none",
-        .Odd => &raw const b" odd",
-        .Even => &raw const b" even",
-        _ => &raw const b" no variant",
+        .None => &b" none",
+        .Odd => &b" odd",
+        .Even => &b" even",
+        _ => &b" no variant",
     }
 }
 
@@ -116,7 +116,7 @@ entry fn main() -> ! {
     print(&b"reads ");
     print_u64(lcr.word_length as u64);
     print_bool(lcr.two_stop_bits);
-    print(&*parity_name(lcr.parity));
+    print(parity_name(lcr.parity));
     print_bool(lcr.dlab);
     putc(b'\n');
 
@@ -194,7 +194,7 @@ entry fn main() -> ! {
     print(&b"static");
     print_hex(SAVED as u64, 2);
     print_bool(SAVED.dlab);
-    print(&*parity_name(SAVED.parity));
+    print(parity_name(SAVED.parity));
     putc(b'\n');
 
     let device: *mut volatile Control = &raw mut DEVICE as *mut volatile Control;
@@ -204,7 +204,7 @@ entry fn main() -> ! {
     print(&b"volatile");
     print_hex(DEVICE as u64, 8);
     print_hex((*device).high as u64, 2);
-    print(&*parity_name((*device).mode));
+    print(parity_name((*device).mode));
     putc(b'\n');
 
     // Bits 3 and 4 hold 2, which is no variant of `Parity`; a field write
@@ -212,7 +212,7 @@ entry fn main() -> ! {
     let odd: Lcr = hidden(0x10) as u8 as Lcr;
     print(&b"enum field ");
     print_u64(odd.parity as u64);
-    print(&*parity_name(odd.parity));
+    print(parity_name(odd.parity));
     let mut carried: Lcr = Lcr { .. };
     carried.parity = odd.parity;
     print_hex(carried as u64, 2);

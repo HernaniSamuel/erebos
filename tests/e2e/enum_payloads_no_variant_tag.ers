@@ -28,19 +28,19 @@ fn print(s: &[u8]) {
     putc(b'\n');
 }
 
-fn strict(m: Msg) -> *const [u8] {
+fn strict(m: Msg) -> &[u8] {
     match m {
-        Msg::Nop => &raw const b"nop",
-        Msg::Wide(5) => &raw const b"wide",
-        Msg::Wide(_) => &raw const b"other wide",
-        Msg::SetMode(_) => &raw const b"mode",
+        Msg::Nop => &b"nop",
+        Msg::Wide(5) => &b"wide",
+        Msg::Wide(_) => &b"other wide",
+        Msg::SetMode(_) => &b"mode",
     }
 }
 
 entry fn main() -> ! {
     let msgs: *const Msg = &raw const BYTES as *const Msg;
-    print(&*strict(msgs[0]));
-    print(&*strict(msgs[1]));
+    print(strict(msgs[0]));
+    print(strict(msgs[1]));
     exit(0)
 }
 
