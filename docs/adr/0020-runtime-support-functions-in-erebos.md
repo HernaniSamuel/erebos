@@ -1,6 +1,6 @@
 # 0020. Runtime support functions written in Erebos
 
-- Status: Accepted; amended by 0052 (the runtime functions move into `core`), 0076 (where LLVM would call a 64-bit division function with a convention C cannot write, code generation calls `core`'s)
+- Status: Accepted; amended by 0052 (the runtime functions move into `core`), 0076 (where LLVM would call a 64-bit division function with a convention C cannot write, code generation calls `core`'s), 0119 (the Erebos signatures of `memcpy`, `memmove`, `memset` and the `__aeabi_mem*` functions are `unsafe fn`)
 - Date: 2026-10-13
 
 ## Context

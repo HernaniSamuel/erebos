@@ -49,13 +49,13 @@ Do not write one for local implementation details that the code already explains
 | 0017 | [Literal operands of `as` take the target type](0017-literal-cast-operands.md) | Accepted, amended by 0059 |
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted, amended by 0031 |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted, amended by 0031, 0059 |
-| 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted, amended by 0052, 0076 |
+| 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted, amended by 0052, 0076, 0119 |
 | 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034, 0059, 0108 |
 | 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031, 0034, 0059, 0087 |
 | 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039, 0058, 0059, 0081, 0110 |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
 | 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted, amended by 0031, 0039, 0059 |
-| 0026 | [External functions](0026-external-functions.md) | Accepted, amended by 0051 |
+| 0026 | [External functions](0026-external-functions.md) | Accepted, amended by 0051, 0119 |
 | 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted, amended by 0030 |
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
 | 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034, 0049 |
@@ -108,14 +108,14 @@ Do not write one for local implementation details that the code already explains
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
 | 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088, 0117 |
 | 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted, amended by 0093, 0115 |
-| 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083, 0084 |
+| 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083, 0084, 0119 |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
 | 0081 | [Fences](0081-fences.md) | Accepted |
 | 0082 | [The LLVM diagnostic handler reaches `llvm_sys`, in one file](0082-llvm-diagnostic-handler-reaches-llvm-sys.md) | Accepted |
 | 0083 | [Startup code in `core::arch`](0083-startup-code-in-core-arch.md) | Accepted, amended by 0085, 0086, 0090 |
 | 0084 | [Interrupt handlers](0084-interrupt-handlers.md) | Accepted, amended by 0089 |
 | 0085 | [Vector tables, the trap entry and default handlers](0085-vector-tables-and-the-trap-entry.md) | Accepted, amended by 0090 |
-| 0086 | [Masking and waiting for interrupts](0086-masking-and-waiting-for-interrupts.md) | Accepted |
+| 0086 | [Masking and waiting for interrupts](0086-masking-and-waiting-for-interrupts.md) | Accepted, amended by 0119 |
 | 0087 | [`#[align(N)]` on functions](0087-align-on-functions.md) | Accepted |
 | 0088 | [Programs that take exceptions on purpose](0088-programs-that-take-exceptions.md) | Accepted |
 | 0089 | [The chip's interrupts](0089-the-chips-interrupts.md) | Accepted |
@@ -134,7 +134,7 @@ Do not write one for local implementation details that the code already explains
 | 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted, amended by 0113 |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
-| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114, 0116, 0118 |
+| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114, 0116, 0118, 0119 |
 | 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108, 0111, 0118 |
 | 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109, 0112, 0118 |
 | 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110, 0116, 0118 |
@@ -147,4 +147,5 @@ Do not write one for local implementation details that the code already explains
 | 0115 | [Peripherals owned by contexts](0115-peripherals-owned-by-contexts.md) | Accepted |
 | 0116 | [References in `assert` and the panic function](0116-references-in-assert-and-the-panic-function.md) | Accepted |
 | 0117 | [What stays a raw pointer](0117-what-stays-a-raw-pointer.md) | Accepted, amended by 0118 |
-| 0118 | [Returning references](0118-returning-references.md) | Accepted |
+| 0118 | [Returning references](0118-returning-references.md) | Accepted, amended by 0119 |
+| 0119 | [`unsafe`](0119-unsafe.md) | Accepted |

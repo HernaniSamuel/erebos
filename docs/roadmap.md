@@ -112,6 +112,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.6** ✅ Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** ✅ Fewer raw pointers | `assert` takes a `&[u8]` message and the panic function a `&core::PanicInfo` (ADR 0116); `core` and the tests moved to references where they can; what stays raw, measured (ADR 0117) | the e2e programs with references, the same output |
 | **M5.8** ✅ Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
+| **M5.9** `unsafe` | `unsafe { }` and `unsafe fn`; accesses through raw pointers, `asm`, `extern fn` calls, `extern static` accesses and calls to an `unsafe fn` need `unsafe`; `enable_interrupts` an `unsafe fn` (ADR 0119); every program migrated, with a count | the e2e programs with `unsafe`, the same output, and a safe interface built on `unsafe`, on both targets |
 
 Decisions already agreed for the later steps (ADR 0094 holds them):
 
@@ -577,7 +578,7 @@ ADRs:
     the sites in the programs that exist to test raw pointers (reasons 1, 9:
     201 of 351) are the point of those tests, and reasons 3 to 5 (123 sites)
     are `core`'s memory functions, the boards' registers and `asm`. The user
-    decides, with these numbers.
+    decided (2026-11-15) to mark it before M6, as step M5.9 (ADR 0119).
   - Returning a reference tied to the one reference parameter (deferred
     ideas): of the 59 candidate sites (reasons 2, 6, 7, 8) that M5.7 counted,
     53 were reason 8 without `PanicInfo`'s fields, 89.8 percent, which was
@@ -1447,7 +1448,8 @@ Documentation owed:
   error that joins two calls repeats its "used later" label (both in
   `docs/open-findings.md`); ADR 0095's status line does not name P5 (the user's,
   from M5.7).
-- **Next: M6** (types as values and `comptime` parameters: generics in the Zig
+- **Next: M5.9** (`unsafe`, ADR 0119, plan `.claude/plans/M5.9.md`), then
+  **M6** (types as values and `comptime` parameters: generics in the Zig
   model, monomorphized, ADR 0027), after M5 (moves, ownership, references,
-  returned references and methods), whose steps and model are above. What M6
-  must settle is listed under "M6" in the pending decisions.
+  returned references, methods and `unsafe`), whose steps and model are above.
+  What M6 must settle is listed under "M6" in the pending decisions.

@@ -1,6 +1,6 @@
 # 0086. Masking and waiting for interrupts
 
-- Status: Accepted
+- Status: Accepted; amended by 0119 (`enable_interrupts` is an `unsafe fn`)
 - Date: 2026-11-05
 - Amends: 0030 and 0083 (`_start` masks interrupts first), 0052 (the
   compiler knows two more items of `core::arch` by path)

@@ -1,6 +1,6 @@
 # 0118. Returning references
 
-- Status: Accepted
+- Status: Accepted; amended by 0119 (its examples that return `&*p` need an `unsafe` block around the borrow)
 - Date: 2026-11-14
 - Amends: 0094 ("References": a return type is a position of a reference
   where this ADR allows it; "Contexts": what a `return` may carry),
