@@ -1140,8 +1140,14 @@ impl<'b> Flow<'b> {
                         continue;
                     }
                     let span = if stmt.call { stmt.span } else { access.span };
+                    // The read of `_0` at a `Return` is the last resort: its
+                    // span is the body's, which starts before the statement
+                    // that reads what `_0` is made of, and the label belongs
+                    // on that one (ADR 0118).
+                    let at_return = index + 1 == self.code[block].len()
+                        && matches!(self.body.blocks[block].terminator, Terminator::Return);
                     let found = (
-                        key(span),
+                        (at_return, key(span)),
                         (block, index, k),
                         Later {
                             span,
@@ -3557,6 +3563,57 @@ mod tests {
             )],
         );
         assert!(diagnostics_of(&none).is_empty());
+    }
+
+    #[test]
+    fn the_later_use_is_the_statement_that_reads_not_the_return_that_starts_earlier() {
+        // fn f(r: &mut u32) -> &mut u32 { _2 = &mut *r; *r = 1; _0 = copy _2 }
+        // Both the read of `_2` by the write of `_0` and the read of `_0` by the
+        // `Return` are after the write of `*r`. The `Return`'s span is the
+        // body's, which starts before the statements', as MIR building gives
+        // it; the label is still at the statement.
+        let make = |terminator_at: usize| {
+            let mut block = block_at(
+                200,
+                vec![mutable(2, deref(1)), set(deref(1)), copy(0, 2)],
+                Terminator::Return,
+            );
+            block.terminator_span = span(terminator_at);
+            returning(
+                mut_ref(),
+                vec![decl(mut_ref(), Some("r")), decl(mut_ref(), None)],
+                vec![block],
+            )
+        };
+        for terminator_at in [100, 300] {
+            let list = diagnostics_of(&make(terminator_at));
+            assert_eq!(list.len(), 1, "{list:?}");
+            let used = labels_of(&list[0])
+                .into_iter()
+                .find(|(text, _)| text == "the borrow is used later here")
+                .unwrap();
+            assert_eq!(used.1, 202, "the terminator at {terminator_at}");
+        }
+        // With no statement that reads, the `Return`'s read is the fallback: the
+        // write of `_0` is before the conflicting write, and `_0` holds the
+        // borrow to the `Return`.
+        let mut only_return = block_at(
+            200,
+            vec![mutable(2, deref(1)), copy(0, 2), set(deref(1))],
+            Terminator::Return,
+        );
+        only_return.terminator_span = span(100);
+        let list = diagnostics_of(&returning(
+            mut_ref(),
+            vec![decl(mut_ref(), Some("r")), decl(mut_ref(), None)],
+            vec![only_return],
+        ));
+        assert_eq!(list.len(), 1, "{list:?}");
+        let used = labels_of(&list[0])
+            .into_iter()
+            .find(|(text, _)| text == "the borrow is used later here")
+            .unwrap();
+        assert_eq!(used.1, 100);
     }
 
     #[test]
