@@ -43,6 +43,7 @@ Hir {
             ),
             vis: Private,
             kind: Entry,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 566..567,
@@ -88,6 +89,7 @@ Hir {
             ),
             vis: Private,
             kind: Panic,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 603..604,
@@ -131,6 +133,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 Usize,
             ),
@@ -178,6 +181,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 Usize,
             ),
@@ -240,6 +244,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 Usize,
             ),
@@ -302,6 +307,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 Usize,
             ),

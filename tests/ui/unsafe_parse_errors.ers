@@ -1,0 +1,72 @@
+// emit: ast
+// `unsafe` before anything but `fn` with a body, or a block in an expression,
+// is `parser::misplaced-unsafe` (ADR 0119): before `extern fn`, `entry fn`,
+// `panic fn`, `interrupt fn`, `impl`, `extern static` and the other items, in
+// an `impl`, and in an expression with no block after it. Each is reported
+// at the `unsafe`, and the items after it still parse. In an `impl`, what
+// follows `unsafe` is reported as well, as it is without it.
+unsafe extern fn c_function();
+
+unsafe entry fn main() -> ! { loop {} }
+
+unsafe panic fn on_panic() -> ! { loop {} }
+
+unsafe interrupt fn tick() at Vector::SysTick {}
+
+pub unsafe entry fn public_entry() -> ! { loop {} }
+
+struct Holder {
+    n: u32,
+}
+
+unsafe impl Holder {
+    fn plain(self) {}
+}
+
+unsafe struct Wrapper {
+    n: u32,
+}
+
+unsafe enum Choice: u8 {
+    A = 0,
+}
+
+unsafe const LIMIT: u32 = 1;
+
+unsafe static COUNT: u32 = 1;
+
+unsafe extern static SYMBOL: u32;
+
+unsafe mod inner {}
+
+unsafe use inner;
+
+unsafe comptime {}
+
+unsafe unsafe fn twice() {}
+
+unsafe 1;
+
+impl Holder {
+    unsafe extern fn inside();
+
+    unsafe const INSIDE: u32 = 1;
+
+    unsafe {}
+
+    fn after(self) {}
+}
+
+fn in_expressions(p: *mut u32) {
+    let value: u32 = unsafe *p;
+}
+
+fn statement() {
+    unsafe;
+}
+
+fn local_fn() {
+    unsafe fn nested() {}
+}
+
+fn last() {}

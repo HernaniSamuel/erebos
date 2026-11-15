@@ -481,6 +481,7 @@ File {
                         span: 576..713,
                     },
                 ),
+                is_unsafe: false,
                 span: 550..713,
             },
         ),

@@ -1,0 +1,40 @@
+// emit: mir
+// An `unsafe` block lowers as a plain block (ADR 0119): `with_block` and
+// `without_block` have the same body but for the block, and the same MIR; the
+// same for a block that is a value, a statement, nested, and one that holds
+// `return`, `break` and `continue`.
+fn without_block(p: *mut u32, n: u32) -> u32 {
+    *p = n;
+    let mut i: u32 = 0;
+    loop {
+        if i == n { break; }
+        i += 1;
+        if i == 3 { continue; }
+        *p += i;
+    }
+    if n == 7 { return *p; }
+    { *p }
+}
+
+fn with_block(p: *mut u32, n: u32) -> u32 {
+    unsafe {
+        *p = n;
+    }
+    let mut i: u32 = 0;
+    loop {
+        unsafe {
+            if i == n { break; }
+            i += 1;
+            if i == 3 { continue; }
+            *p += i;
+        }
+    }
+    unsafe {
+        if n == 7 { return *p; }
+    }
+    unsafe { { *p } }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

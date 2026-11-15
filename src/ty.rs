@@ -463,7 +463,7 @@ fn untyped(expr: &Expr, variants: bool) -> bool {
 fn value_tails(expr: &Expr, out: &mut Vec<ExprId>) {
     out.push(expr.id);
     match &expr.kind {
-        ExprKind::Block(block) | ExprKind::Critical(block) => {
+        ExprKind::Block(block) | ExprKind::Critical(block) | ExprKind::Unsafe(block) => {
             if let Some(tail) = &block.tail {
                 value_tails(tail, out);
             }
@@ -932,7 +932,7 @@ impl Checker<'_, '_> {
     /// neither moved nor used (ADR 0097).
     fn discard(&mut self, expr: &Expr) {
         match &expr.kind {
-            ExprKind::Block(block) | ExprKind::Critical(block) => {
+            ExprKind::Block(block) | ExprKind::Critical(block) | ExprKind::Unsafe(block) => {
                 if let Some(tail) = &block.tail {
                     self.discard(tail);
                 }
@@ -982,7 +982,7 @@ impl Checker<'_, '_> {
         // its operand, which report any mismatch themselves.
         let reported_inside = matches!(
             &expr.kind,
-            ExprKind::Block(b) | ExprKind::Critical(b) if b.tail.is_some()
+            ExprKind::Block(b) | ExprKind::Critical(b) | ExprKind::Unsafe(b) if b.tail.is_some()
         ) || matches!(expr.kind, ExprKind::Comptime(_));
         if let Some(expected) = expected
             && (unsizes(ty, expected) || shares(ty, expected))
@@ -1012,7 +1012,7 @@ impl Checker<'_, '_> {
             && !reported_inside
         {
             match &expr.kind {
-                ExprKind::Block(block) | ExprKind::Critical(block) => {
+                ExprKind::Block(block) | ExprKind::Critical(block) | ExprKind::Unsafe(block) => {
                     self.report_block_mismatch(block, expected, ty, None);
                 }
                 _ => self.mismatch(expr, expected, ty),
@@ -1320,7 +1320,9 @@ impl Checker<'_, '_> {
             ExprKind::Slice(pointer, len) => self.make_slice(f, pointer, len),
             // The block's type, as any block's: the mask changes no type
             // (ADR 0086).
-            ExprKind::Block(block) | ExprKind::Critical(block) => self.block(f, block, expected),
+            ExprKind::Block(block) | ExprKind::Critical(block) | ExprKind::Unsafe(block) => {
+                self.block(f, block, expected)
+            }
             ExprKind::If { cond, then, else_ } => {
                 self.check(f, cond, Some(Ty::Bool));
                 let Some(else_) = else_ else {

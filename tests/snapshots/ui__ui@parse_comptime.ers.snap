@@ -351,6 +351,7 @@ File {
                         span: 185..272,
                     },
                 ),
+                is_unsafe: false,
                 span: 165..272,
             },
         ),

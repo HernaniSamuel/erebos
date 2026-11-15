@@ -479,7 +479,9 @@ impl Builder<'_, '_> {
     /// expression, so that a volatile read written as a statement happens.
     fn is_discarded(&mut self, expr: &hir::Expr) -> bool {
         match &expr.kind {
-            hir::ExprKind::Block(block) | hir::ExprKind::Critical(block) => block
+            hir::ExprKind::Block(block)
+            | hir::ExprKind::Critical(block)
+            | hir::ExprKind::Unsafe(block) => block
                 .tail
                 .as_ref()
                 .is_some_and(|tail| self.is_discarded(tail)),
@@ -495,7 +497,7 @@ impl Builder<'_, '_> {
         }
         let outer = std::mem::replace(&mut self.span, expr.span);
         match &expr.kind {
-            hir::ExprKind::Block(block) => {
+            hir::ExprKind::Block(block) | hir::ExprKind::Unsafe(block) => {
                 self.block_then(block, true);
             }
             hir::ExprKind::Critical(block) => {
@@ -1052,7 +1054,7 @@ impl Builder<'_, '_> {
                 }
                 Operand::Const(Const::Unit)
             }
-            hir::ExprKind::Block(block) => self.block(block),
+            hir::ExprKind::Block(block) | hir::ExprKind::Unsafe(block) => self.block(block),
             // Puts back what it recorded before each jump that leaves it too
             // (ADR 0086).
             hir::ExprKind::Critical(block) => self.critical(block, false),

@@ -96,6 +96,26 @@ impl Parser<'_> {
             .map_or(TokenKind::Eof, |token| token.kind)
     }
 
+    /// The kind of the token `n` places after the next one, `Eof` past the
+    /// end.
+    fn peek_nth(&self, n: usize) -> TokenKind {
+        self.tokens
+            .get(self.pos + n)
+            .map_or(TokenKind::Eof, |token| token.kind)
+    }
+
+    /// At `unsafe` followed by what starts a function: `fn`, `extern fn`,
+    /// `entry`, `panic` or `interrupt`. `unsafe fn` is the one valid form;
+    /// the others are parsed as functions and reported (ADR 0119).
+    fn at_unsafe_fn(&self) -> bool {
+        self.at(TokenKind::Unsafe)
+            && match self.peek_nth(1) {
+                TokenKind::Fn | TokenKind::Entry | TokenKind::Panic | TokenKind::Interrupt => true,
+                TokenKind::Extern => self.peek_nth(2) != TokenKind::Static,
+                _ => false,
+            }
+    }
+
     /// At `static` or `extern static`.
     fn at_static(&self) -> bool {
         self.at(TokenKind::Static)
@@ -323,7 +343,10 @@ impl Parser<'_> {
             ) || (at_items && (self.at_memory() || self.at_peripheral()))
                 // A keyword that cannot be a name, so `interrupt` alone is
                 // the misplaced name of something (ADR 0084).
-                || (self.at(TokenKind::Interrupt) && self.peek_second() == TokenKind::Fn);
+                || (self.at(TokenKind::Interrupt) && self.peek_second() == TokenKind::Fn)
+                // `unsafe { }` is an expression, so only `unsafe fn` starts
+                // an item (ADR 0119).
+                || (self.at(TokenKind::Unsafe) && self.peek_second() == TokenKind::Fn);
             if closes_module || starts_item {
                 return;
             }
@@ -384,6 +407,18 @@ impl Parser<'_> {
             | TokenKind::Interrupt
             | TokenKind::Fn
             | TokenKind::Extern => Ok(Item::Fn(self.fn_decl(attrs, vis, false)?)),
+            TokenKind::Unsafe if self.at_unsafe_fn() => {
+                Ok(Item::Fn(self.fn_decl(attrs, vis, false)?))
+            }
+            TokenKind::Unsafe => {
+                // Reported; the item after it parses as without `unsafe`.
+                let unsafe_ = self.bump();
+                self.misplaced_unsafe(unsafe_);
+                if self.item_noun().is_none() {
+                    return Err(Reported);
+                }
+                self.item_after(attrs, vis)
+            }
             TokenKind::Impl => Ok(Item::Impl(self.impl_decl(attrs, vis)?)),
             TokenKind::Struct => self.struct_item(attrs, vis),
             TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs, vis)?)),
@@ -439,6 +474,60 @@ impl Parser<'_> {
                 format!("`pub` does not apply to {what}"),
             )
             .label(pub_.span, "not allowed here")
+            .help(help),
+        );
+    }
+
+    /// What the next token starts, if it is an item other than a function
+    /// with a body: for the diagnostics that name it.
+    fn item_noun(&self) -> Option<&'static str> {
+        Some(match self.peek().kind {
+            _ if self.at_static() => "a `static`",
+            _ if self.at_memory() => "a `memory` block",
+            _ if self.at_peripheral() => "a peripheral item",
+            TokenKind::Extern => "an `extern fn`",
+            TokenKind::Entry => "the entry function",
+            TokenKind::Panic => "the panic function",
+            TokenKind::Interrupt => "an interrupt handler",
+            TokenKind::Struct => "a struct",
+            TokenKind::Enum => "an enum",
+            TokenKind::Const => "a constant",
+            TokenKind::Mod => "a module",
+            TokenKind::Use => "a `use`",
+            TokenKind::Comptime => "a `comptime` block",
+            TokenKind::Impl => "an `impl` block",
+            _ => return None,
+        })
+    }
+
+    /// Reports `unsafe`, the token `unsafe_`, before anything but a plain
+    /// function with a body: the next token starts what it was written
+    /// before (ADR 0119).
+    fn misplaced_unsafe(&mut self, unsafe_: Token) {
+        let (what, help) = match self.peek().kind {
+            TokenKind::Extern if !self.at_static() => (
+                "an `extern fn`",
+                "every call to an `extern fn` is already unsafe, so there is nothing more to mark; remove `unsafe` (ADR 0119)",
+            ),
+            TokenKind::Entry | TokenKind::Panic | TokenKind::Interrupt => (
+                self.item_noun().unwrap_or("this function"),
+                "no Erebos code calls it, so no caller can uphold a contract; remove `unsafe` (ADR 0119)",
+            ),
+            TokenKind::Impl => (
+                "an `impl` block",
+                "`unsafe` goes on each function in an `impl`, as `unsafe fn`, not on the block (ADR 0119)",
+            ),
+            _ => (
+                self.item_noun().unwrap_or("what follows"),
+                "`unsafe` marks a function with a body, `unsafe fn`, and a block in a function body, `unsafe { ... }` (ADR 0119)",
+            ),
+        };
+        self.diags.push(
+            Diagnostic::error(
+                "parser::misplaced-unsafe",
+                format!("`unsafe` does not apply to {what}"),
+            )
+            .label(unsafe_.span, "not allowed here")
             .help(help),
         );
     }
@@ -638,26 +727,22 @@ impl Parser<'_> {
     /// `None` for what is reported as not being one (ADR 0113).
     fn impl_item(&mut self) -> PResult<Option<FnDecl>> {
         let (attrs, vis) = self.attrs_and_vis()?;
-        if self.at(TokenKind::Fn) {
+        if self.at(TokenKind::Fn)
+            || (self.at(TokenKind::Unsafe) && self.peek_second() == TokenKind::Fn)
+        {
             return Ok(Some(self.fn_decl(attrs, vis, true)?));
         }
+        if self.at(TokenKind::Unsafe) {
+            // Reported; what follows is then reported as what it is.
+            let unsafe_ = self.bump();
+            self.misplaced_unsafe(unsafe_);
+            if self.item_noun().is_none() {
+                return Err(Reported);
+            }
+        }
         let token = self.peek();
-        let what = match token.kind {
-            _ if self.at_static() => "a `static`",
-            _ if self.at_memory() => "a `memory` block",
-            _ if self.at_peripheral() => "a peripheral item",
-            TokenKind::Extern => "an `extern fn`",
-            TokenKind::Entry => "the entry function",
-            TokenKind::Panic => "the panic function",
-            TokenKind::Interrupt => "an interrupt handler",
-            TokenKind::Struct => "a struct",
-            TokenKind::Enum => "an enum",
-            TokenKind::Const => "a constant",
-            TokenKind::Mod => "a module",
-            TokenKind::Use => "a `use`",
-            TokenKind::Comptime => "a `comptime` block",
-            TokenKind::Impl => "an `impl` block",
-            _ => return Err(self.error_expected("`fn` or `}`")),
+        let Some(what) = self.item_noun() else {
+            return Err(self.error_expected("`fn` or `}`"));
         };
         self.diags.push(
             Diagnostic::error(
@@ -674,6 +759,17 @@ impl Parser<'_> {
 
     fn fn_decl(&mut self, attrs: Vec<Attr>, vis: Visibility, in_impl: bool) -> PResult<FnDecl> {
         let start = self.peek().span;
+        // `unsafe fn` only: before `extern fn`, `entry fn`, `panic fn` and
+        // `interrupt fn` it is reported, and the function parses as without
+        // it (ADR 0119).
+        let mut is_unsafe = false;
+        if let Some(unsafe_) = self.eat(TokenKind::Unsafe) {
+            if self.at(TokenKind::Fn) {
+                is_unsafe = true;
+            } else {
+                self.misplaced_unsafe(unsafe_);
+            }
+        }
         let external = self.eat(TokenKind::Extern).is_some();
         let mut interrupt = false;
         let kind = if external {
@@ -710,6 +806,7 @@ impl Parser<'_> {
                 ret,
                 span: start.to(semi.span),
                 body: None,
+                is_unsafe: false,
             });
         }
         // `at` follows the signature of an `interrupt fn`, where it is
@@ -742,6 +839,7 @@ impl Parser<'_> {
             ret,
             span: start.to(body.span),
             body: Some(body),
+            is_unsafe,
         })
     }
 
@@ -1908,6 +2006,7 @@ impl Parser<'_> {
                 | TokenKind::While
                 | TokenKind::Loop
                 | TokenKind::Critical
+                | TokenKind::Unsafe
                 | TokenKind::Match
         )
     }
@@ -2371,6 +2470,30 @@ impl Parser<'_> {
                 return Ok(Expr {
                     span: token.span.to(body.span),
                     kind: ExprKind::Critical(body),
+                });
+            }
+            // `unsafe BLOCK`, a block expression like `critical` (ADR 0119).
+            TokenKind::Unsafe => {
+                self.bump();
+                if !self.at(TokenKind::LBrace) {
+                    let found = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::misplaced-unsafe",
+                            format!(
+                                "expected `{{` after `unsafe`, found {}",
+                                found.kind.describe()
+                            ),
+                        )
+                        .label(token.span, "not followed by a block")
+                        .help("in an expression `unsafe` marks a block, `unsafe { ... }`; an `unsafe fn` is declared outside function bodies, at module level or in an `impl` (ADR 0119)"),
+                    );
+                    return Err(Reported);
+                }
+                let body = self.block()?;
+                return Ok(Expr {
+                    span: token.span.to(body.span),
+                    kind: ExprKind::Unsafe(body),
                 });
             }
             _ => return Err(self.error_expected("an expression")),

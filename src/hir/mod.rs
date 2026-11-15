@@ -1118,6 +1118,9 @@ pub struct Fn {
     /// Private for a body run at compile time, which nothing names.
     pub vis: Visibility,
     pub kind: FnKind,
+    /// `unsafe fn` (ADR 0119): a call to it is an unsafe operation. Only a
+    /// plain function with a body is; its body is not an `unsafe` block.
+    pub is_unsafe: bool,
     pub ret: Ty,
     /// Span of the written return type; `None` when it was omitted.
     pub ret_span: Option<Span>,
@@ -1548,6 +1551,9 @@ pub enum ExprKind {
     /// `critical { .. }`: the block, run with interrupts masked (ADR 0078,
     /// 0086).
     Critical(Block),
+    /// `unsafe { .. }`: a block in which unsafe operations are allowed
+    /// (ADR 0119). Typed, evaluated and built as `Block` is.
+    Unsafe(Block),
     If {
         cond: Box<Expr>,
         then: Block,
@@ -1795,7 +1801,10 @@ impl Expr {
                 a.walk(f);
                 b.walk(f);
             }
-            ExprKind::Block(block) | ExprKind::Critical(block) | ExprKind::Loop(block) => {
+            ExprKind::Block(block)
+            | ExprKind::Critical(block)
+            | ExprKind::Unsafe(block)
+            | ExprKind::Loop(block) => {
                 block.walk(f);
             }
             ExprKind::Asm(asm) => {

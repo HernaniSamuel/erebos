@@ -883,6 +883,7 @@ File {
                         span: 423..824,
                     },
                 ),
+                is_unsafe: false,
                 span: 381..824,
             },
         ),
@@ -957,6 +958,7 @@ File {
                                 span: 871..897,
                             },
                         ),
+                        is_unsafe: false,
                         span: 846..897,
                     },
                     FnDecl {
@@ -1074,6 +1076,7 @@ File {
                                 span: 927..987,
                             },
                         ),
+                        is_unsafe: false,
                         span: 907..987,
                     },
                 ],

@@ -459,7 +459,9 @@ fn operands_of<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>, blocks: &mut Ve
             operands.push(a);
             operands.push(b);
         }
-        ExprKind::Block(b) | ExprKind::Critical(b) | ExprKind::Loop(b) => blocks.push(b),
+        ExprKind::Block(b) | ExprKind::Critical(b) | ExprKind::Unsafe(b) | ExprKind::Loop(b) => {
+            blocks.push(b);
+        }
         // Each expression inside an operand, however deep: the operands of
         // `asm` have no types of their own to look at.
         ExprKind::Asm(asm) => {

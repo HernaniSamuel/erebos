@@ -8297,6 +8297,7 @@ Every error has a stable code, shown with the message.
 | `parser::local-memory` | a `memory` block inside a function body: `memory {` followed by `region` and a name, or by `code`, `data` or `stack` and `in` |
 | `parser::local-peripheral` | a peripheral type or a peripheral inside a function body: `peripheral` followed by a name |
 | `parser::misplaced-pub` | `pub` on a `comptime` block, a `memory` block, an `impl` block or the entry function |
+| `parser::misplaced-unsafe` | `unsafe` before anything but `fn` with a body (`extern fn`, the entry, panic or interrupt function, an `impl` block, any other item), or in an expression and not followed by `{` (ADR 0119) |
 | `parser::impl-item` | an item other than a function with a body inside an `impl`: a constant, a struct, an `extern fn`, the entry or panic function, an interrupt handler, a static, a module, a `use`, a `comptime` block, a `memory` block, a peripheral item or another `impl` |
 | `parser::misplaced-self` | a receiver (`self`, `mut self`, `&self`, `&mut self`) that is not the first parameter of a function in an `impl`, or is in a function that is not in one |
 | `parser::enum-without-type` | an enum without `: Type` |

@@ -155,6 +155,7 @@ File {
                         span: 160..175,
                     },
                 ),
+                is_unsafe: false,
                 span: 83..175,
             },
         ),

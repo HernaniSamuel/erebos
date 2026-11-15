@@ -324,6 +324,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: BitStruct(
                 BitStructTy {
                     id: BitStructId(
@@ -451,6 +452,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: BitStruct(
                 BitStructTy {
                     id: BitStructId(
@@ -601,6 +603,7 @@ Hir {
             ),
             vis: Private,
             kind: Entry,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 1808..1809,
@@ -646,6 +649,7 @@ Hir {
             ),
             vis: Private,
             kind: Panic,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 1845..1846,
@@ -689,6 +693,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U32,
             ),
@@ -736,6 +741,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U32,
             ),
@@ -783,6 +789,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Bool,
             ret_span: Some(
                 648..652,
@@ -828,6 +835,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U8,
             ),
@@ -876,6 +884,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U8,
             ),
@@ -924,6 +933,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U8,
             ),
@@ -972,6 +982,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U8,
             ),
@@ -1020,6 +1031,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Enum(
                 EnumTy {
                     id: EnumId(
@@ -1075,6 +1087,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U32,
             ),
@@ -1123,6 +1136,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Bool,
             ret_span: None,
             param_count: 0,
@@ -1167,6 +1181,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U32,
             ),
@@ -1234,6 +1249,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U32,
             ),
@@ -1301,6 +1317,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Bool,
             ret_span: None,
             param_count: 0,
@@ -1347,6 +1364,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U32,
             ),

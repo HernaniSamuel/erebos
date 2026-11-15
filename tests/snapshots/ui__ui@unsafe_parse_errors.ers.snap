@@ -1,0 +1,299 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_parse_errors.ers
+---
+--- errors ---
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to an `extern fn`
+   ╭─[unsafe_parse_errors.ers:8:1]
+ 7 │ // follows `unsafe` is reported as well, as it is without it.
+ 8 │ unsafe extern fn c_function();
+   · ───┬──
+   ·    ╰── not allowed here
+ 9 │ 
+   ╰────
+  help: every call to an `extern fn` is already unsafe, so there is nothing more to mark; remove
+        `unsafe` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to the entry function
+    ╭─[unsafe_parse_errors.ers:10:1]
+  9 │ 
+ 10 │ unsafe entry fn main() -> ! { loop {} }
+    · ───┬──
+    ·    ╰── not allowed here
+ 11 │ 
+    ╰────
+  help: no Erebos code calls it, so no caller can uphold a contract; remove `unsafe` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to the panic function
+    ╭─[unsafe_parse_errors.ers:12:1]
+ 11 │ 
+ 12 │ unsafe panic fn on_panic() -> ! { loop {} }
+    · ───┬──
+    ·    ╰── not allowed here
+ 13 │ 
+    ╰────
+  help: no Erebos code calls it, so no caller can uphold a contract; remove `unsafe` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to an interrupt handler
+    ╭─[unsafe_parse_errors.ers:14:1]
+ 13 │ 
+ 14 │ unsafe interrupt fn tick() at Vector::SysTick {}
+    · ───┬──
+    ·    ╰── not allowed here
+ 15 │ 
+    ╰────
+  help: no Erebos code calls it, so no caller can uphold a contract; remove `unsafe` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to the entry function
+    ╭─[unsafe_parse_errors.ers:16:5]
+ 15 │ 
+ 16 │ pub unsafe entry fn public_entry() -> ! { loop {} }
+    ·     ───┬──
+    ·        ╰── not allowed here
+ 17 │ 
+    ╰────
+  help: no Erebos code calls it, so no caller can uphold a contract; remove `unsafe` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to an `impl` block
+    ╭─[unsafe_parse_errors.ers:22:1]
+ 21 │ 
+ 22 │ unsafe impl Holder {
+    · ───┬──
+    ·    ╰── not allowed here
+ 23 │     fn plain(self) {}
+    ╰────
+  help: `unsafe` goes on each function in an `impl`, as `unsafe fn`, not on the block (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a struct
+    ╭─[unsafe_parse_errors.ers:26:1]
+ 25 │ 
+ 26 │ unsafe struct Wrapper {
+    · ───┬──
+    ·    ╰── not allowed here
+ 27 │     n: u32,
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to an enum
+    ╭─[unsafe_parse_errors.ers:30:1]
+ 29 │ 
+ 30 │ unsafe enum Choice: u8 {
+    · ───┬──
+    ·    ╰── not allowed here
+ 31 │     A = 0,
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a constant
+    ╭─[unsafe_parse_errors.ers:34:1]
+ 33 │ 
+ 34 │ unsafe const LIMIT: u32 = 1;
+    · ───┬──
+    ·    ╰── not allowed here
+ 35 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a `static`
+    ╭─[unsafe_parse_errors.ers:36:1]
+ 35 │ 
+ 36 │ unsafe static COUNT: u32 = 1;
+    · ───┬──
+    ·    ╰── not allowed here
+ 37 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a `static`
+    ╭─[unsafe_parse_errors.ers:38:1]
+ 37 │ 
+ 38 │ unsafe extern static SYMBOL: u32;
+    · ───┬──
+    ·    ╰── not allowed here
+ 39 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a module
+    ╭─[unsafe_parse_errors.ers:40:1]
+ 39 │ 
+ 40 │ unsafe mod inner {}
+    · ───┬──
+    ·    ╰── not allowed here
+ 41 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a `use`
+    ╭─[unsafe_parse_errors.ers:42:1]
+ 41 │ 
+ 42 │ unsafe use inner;
+    · ───┬──
+    ·    ╰── not allowed here
+ 43 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a `comptime` block
+    ╭─[unsafe_parse_errors.ers:44:1]
+ 43 │ 
+ 44 │ unsafe comptime {}
+    · ───┬──
+    ·    ╰── not allowed here
+ 45 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to what follows
+    ╭─[unsafe_parse_errors.ers:46:1]
+ 45 │ 
+ 46 │ unsafe unsafe fn twice() {}
+    · ───┬──
+    ·    ╰── not allowed here
+ 47 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to what follows
+    ╭─[unsafe_parse_errors.ers:48:1]
+ 47 │ 
+ 48 │ unsafe 1;
+    · ───┬──
+    ·    ╰── not allowed here
+ 49 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to an `extern fn`
+    ╭─[unsafe_parse_errors.ers:51:5]
+ 50 │ impl Holder {
+ 51 │     unsafe extern fn inside();
+    ·     ───┬──
+    ·        ╰── not allowed here
+ 52 │ 
+    ╰────
+  help: every call to an `extern fn` is already unsafe, so there is nothing more to mark; remove
+        `unsafe` (ADR 0119)
+parser::impl-item
+
+  × an `extern fn` cannot be declared inside an `impl`
+    ╭─[unsafe_parse_errors.ers:51:12]
+ 50 │ impl Holder {
+ 51 │     unsafe extern fn inside();
+    ·            ───┬──
+    ·               ╰── inside an `impl`
+ 52 │ 
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to a constant
+    ╭─[unsafe_parse_errors.ers:53:5]
+ 52 │ 
+ 53 │     unsafe const INSIDE: u32 = 1;
+    ·     ───┬──
+    ·        ╰── not allowed here
+ 54 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::impl-item
+
+  × a constant cannot be declared inside an `impl`
+    ╭─[unsafe_parse_errors.ers:53:12]
+ 52 │ 
+ 53 │     unsafe const INSIDE: u32 = 1;
+    ·            ──┬──
+    ·              ╰── inside an `impl`
+ 54 │ 
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::misplaced-unsafe
+
+  × `unsafe` does not apply to what follows
+    ╭─[unsafe_parse_errors.ers:55:5]
+ 54 │ 
+ 55 │     unsafe {}
+    ·     ───┬──
+    ·        ╰── not allowed here
+ 56 │ 
+    ╰────
+  help: `unsafe` marks a function with a body, `unsafe fn`, and a block in a function body,
+        `unsafe { ... }` (ADR 0119)
+parser::misplaced-unsafe
+
+  × expected `{` after `unsafe`, found `*`
+    ╭─[unsafe_parse_errors.ers:61:22]
+ 60 │ fn in_expressions(p: *mut u32) {
+ 61 │     let value: u32 = unsafe *p;
+    ·                      ───┬──
+    ·                         ╰── not followed by a block
+ 62 │ }
+    ╰────
+  help: in an expression `unsafe` marks a block, `unsafe { ... }`; an `unsafe fn` is declared
+        outside function bodies, at module level or in an `impl` (ADR 0119)
+parser::misplaced-unsafe
+
+  × expected `{` after `unsafe`, found `;`
+    ╭─[unsafe_parse_errors.ers:65:5]
+ 64 │ fn statement() {
+ 65 │     unsafe;
+    ·     ───┬──
+    ·        ╰── not followed by a block
+ 66 │ }
+    ╰────
+  help: in an expression `unsafe` marks a block, `unsafe { ... }`; an `unsafe fn` is declared
+        outside function bodies, at module level or in an `impl` (ADR 0119)
+parser::misplaced-unsafe
+
+  × expected `{` after `unsafe`, found `fn`
+    ╭─[unsafe_parse_errors.ers:69:5]
+ 68 │ fn local_fn() {
+ 69 │     unsafe fn nested() {}
+    ·     ───┬──
+    ·        ╰── not followed by a block
+ 70 │ }
+    ╰────
+  help: in an expression `unsafe` marks a block, `unsafe { ... }`; an `unsafe fn` is declared
+        outside function bodies, at module level or in an `impl` (ADR 0119)
+parser::unexpected-token
+
+  × expected an item, found `}`
+    ╭─[unsafe_parse_errors.ers:70:1]
+ 69 │     unsafe fn nested() {}
+ 70 │ }
+    · ┬
+    · ╰── expected an item
+ 71 │ 
+    ╰────

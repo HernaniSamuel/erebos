@@ -409,6 +409,9 @@ pub struct FnDecl {
     pub ret: Option<Ty>,
     /// `None` for an `extern fn`, defined outside the program (ADR 0026).
     pub body: Option<Block>,
+    /// `unsafe fn` (ADR 0119): set for a plain function with a body only;
+    /// `unsafe` before any other function is reported and not recorded.
+    pub is_unsafe: bool,
     pub span: Span,
 }
 
@@ -663,6 +666,9 @@ pub enum ExprKind {
     Block(Block),
     /// `critical { .. }`: the block, run with interrupts masked (ADR 0078).
     Critical(Block),
+    /// `unsafe { .. }`: the block, in which unsafe operations are allowed
+    /// (ADR 0119). Typed and evaluated as a plain block.
+    Unsafe(Block),
     /// `if cond { .. } else ..`; the `else` part is a block or another `if`.
     If {
         cond: Box<Expr>,
@@ -882,6 +888,7 @@ impl ExprKind {
             self,
             ExprKind::Block(_)
                 | ExprKind::Critical(_)
+                | ExprKind::Unsafe(_)
                 | ExprKind::If { .. }
                 | ExprKind::While { .. }
                 | ExprKind::Loop(_)

@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_assign_types.ers
+---
+--- errors ---
+ty::not-assignable
+
+  × cannot assign to this expression
+   ╭─[unsafe_assign_types.ers:6:5]
+ 5 │ fn assign(p: *mut u32) {
+ 6 │     (unsafe { *p }) = 1;
+   ·     ───────┬───────
+   ·            ╰── not a variable, `*pointer` or `a[index]`
+ 7 │     ({ *p }) = 1;
+   ╰────
+ty::not-assignable
+
+  × cannot assign to this expression
+   ╭─[unsafe_assign_types.ers:7:5]
+ 6 │     (unsafe { *p }) = 1;
+ 7 │     ({ *p }) = 1;
+   ·     ────┬───
+   ·         ╰── not a variable, `*pointer` or `a[index]`
+ 8 │     unsafe { *p = 1; }
+   ╰────

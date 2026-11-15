@@ -212,6 +212,7 @@ Hir {
             ),
             vis: Private,
             kind: Entry,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 458..459,
@@ -257,6 +258,7 @@ Hir {
             ),
             vis: Private,
             kind: Panic,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 495..496,
@@ -300,6 +302,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Int(
                 U8,
             ),

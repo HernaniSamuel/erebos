@@ -114,6 +114,7 @@ File {
                                 span: 487..520,
                             },
                         ),
+                        is_unsafe: false,
                         span: 470..520,
                     },
                     FnDecl {
@@ -178,6 +179,7 @@ File {
                                 span: 549..575,
                             },
                         ),
+                        is_unsafe: false,
                         span: 526..575,
                     },
                     FnDecl {
@@ -333,6 +335,7 @@ File {
                                 span: 622..680,
                             },
                         ),
+                        is_unsafe: false,
                         span: 585..680,
                     },
                     FnDecl {
@@ -397,6 +400,7 @@ File {
                                 span: 715..741,
                             },
                         ),
+                        is_unsafe: false,
                         span: 690..741,
                     },
                     FnDecl {
@@ -512,6 +516,7 @@ File {
                                 span: 798..830,
                             },
                         ),
+                        is_unsafe: false,
                         span: 768..830,
                     },
                     FnDecl {
@@ -577,6 +582,7 @@ File {
                                 span: 868..914,
                             },
                         ),
+                        is_unsafe: false,
                         span: 849..914,
                     },
                     FnDecl {
@@ -689,6 +695,7 @@ File {
                                 span: 970..997,
                             },
                         ),
+                        is_unsafe: false,
                         span: 920..997,
                     },
                 ],
@@ -825,6 +832,7 @@ File {
                                 span: 1097..1122,
                             },
                         ),
+                        is_unsafe: false,
                         span: 1076..1122,
                     },
                     FnDecl {
@@ -945,6 +953,7 @@ File {
                                 span: 1153..1255,
                             },
                         ),
+                        is_unsafe: false,
                         span: 1128..1255,
                     },
                 ],
@@ -986,6 +995,7 @@ File {
                         span: 1280..1295,
                     },
                 ),
+                is_unsafe: false,
                 span: 1259..1295,
             },
         ),
@@ -1024,6 +1034,7 @@ File {
                         span: 1322..1337,
                     },
                 ),
+                is_unsafe: false,
                 span: 1297..1337,
             },
         ),

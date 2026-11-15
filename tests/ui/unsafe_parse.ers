@@ -1,0 +1,78 @@
+// emit: ast
+// `unsafe BLOCK` is a block expression (ADR 0119): a statement with no `;`, a
+// `let` value, the tail of a block, an operand, the arm of a `match`, and it
+// nests. `unsafe fn` is a function with a body, at module level, after `pub`,
+// in an `impl`, with `#[export]` and with `#[naked]`.
+fn blocks(p: *mut u32) -> u32 {
+    unsafe {
+        *p = 1;
+    }
+    let value: u32 = unsafe { *p };
+    let nested: u32 = unsafe {
+        unsafe {
+            *p = 2;
+        }
+        *p
+    };
+    let sum: u32 = unsafe { *p } + 1;
+    unsafe { *p = sum; };
+    let arm: u32 = match value {
+        0 => unsafe { *p }
+        _ => 1,
+    };
+    critical {
+        unsafe {
+            *p = arm;
+        }
+    }
+    unsafe {
+        critical {
+            *p = nested;
+        }
+    }
+    unsafe { *p }
+}
+
+unsafe fn plain() {}
+
+pub unsafe fn public(p: *mut u32) -> u32 {
+    unsafe { *p }
+}
+
+#[export]
+unsafe fn exported() {}
+
+#[export]
+pub unsafe fn exported_public() {}
+
+#[naked]
+unsafe fn naked() {
+    asm("ret", options(noreturn))
+}
+
+struct Counter {
+    n: u32,
+}
+
+impl Counter {
+    unsafe fn bump(&mut self) {
+        self.n += 1;
+    }
+
+    pub unsafe fn peek(&self, p: *const u32) -> u32 {
+        unsafe { *p }
+    }
+
+    #[export]
+    pub unsafe fn exported_method(self) {}
+
+    fn safe(self) {}
+}
+
+mod inner {
+    pub unsafe fn deep() {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

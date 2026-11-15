@@ -1,0 +1,12 @@
+// emit: ast
+// `unsafe { *p } = 1` is not an assignment to a place (ADR 0119): the block
+// is a value, as `critical { .. }` and `{ .. }` are. As a statement it ends
+// at the `}` and the `=` after it is not an expression; in parentheses it is
+// the place of an `Assign`, which type checking rejects.
+fn statement(p: *mut u32) {
+    unsafe { *p } = 1;
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

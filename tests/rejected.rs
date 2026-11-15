@@ -203,6 +203,13 @@ const CATALOG: &[Snippet] = &[
         "struct InjS {}\npub impl InjS {}"
     ),
     s!(
+        "parser::misplaced-unsafe",
+        Ast,
+        Items,
+        "unsafe extern fn injected_c();"
+    ),
+    s!("parser::misplaced-unsafe", Ast, Statements, "unsafe;"),
+    s!(
         "parser::impl-item",
         Ast,
         Items,

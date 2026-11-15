@@ -30,6 +30,7 @@ Hir {
             ),
             vis: Private,
             kind: Entry,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 32..33,
@@ -75,6 +76,7 @@ Hir {
             ),
             vis: Private,
             kind: Plain,
+            is_unsafe: false,
             ret: Unit,
             ret_span: None,
             param_count: 0,
@@ -132,6 +134,7 @@ Hir {
             ),
             vis: Private,
             kind: Panic,
+            is_unsafe: false,
             ret: Never,
             ret_span: Some(
                 110..111,

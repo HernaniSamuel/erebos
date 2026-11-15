@@ -63,6 +63,9 @@ pub enum TokenKind {
     /// `super`, the parent module, at the start of a path (ADR 0049).
     Super,
     True,
+    /// `unsafe`, which marks a block and a function whose callers uphold a
+    /// condition the compiler does not check (ADR 0119).
+    Unsafe,
     /// `use`, which brings a name into a module (ADR 0049).
     Use,
     Volatile,
@@ -169,6 +172,7 @@ impl TokenKind {
             "struct" => TokenKind::Struct,
             "super" => TokenKind::Super,
             "true" => TokenKind::True,
+            "unsafe" => TokenKind::Unsafe,
             "use" => TokenKind::Use,
             "volatile" => TokenKind::Volatile,
             "while" => TokenKind::While,
@@ -219,6 +223,7 @@ impl TokenKind {
             TokenKind::Struct => "`struct`",
             TokenKind::Super => "`super`",
             TokenKind::True => "`true`",
+            TokenKind::Unsafe => "`unsafe`",
             TokenKind::Use => "`use`",
             TokenKind::Volatile => "`volatile`",
             TokenKind::While => "`while`",

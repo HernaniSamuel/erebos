@@ -646,6 +646,7 @@ impl Lowerer<'_> {
             }
             ast::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
             ast::ExprKind::Critical(block) => ExprKind::Critical(self.block(block)),
+            ast::ExprKind::Unsafe(block) => ExprKind::Unsafe(self.block(block)),
             ast::ExprKind::If { cond, then, else_ } => ExprKind::If {
                 cond: self.boxed(cond),
                 then: self.block(then),

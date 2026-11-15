@@ -1,0 +1,1318 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_parse.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "blocks",
+                    span: 307..313,
+                },
+                receiver: None,
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "p",
+                            span: 314..315,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: true,
+                                volatile: false,
+                                pointee: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 322..325,
+                                                },
+                                            ],
+                                            span: 322..325,
+                                        },
+                                    ),
+                                    span: 322..325,
+                                },
+                            },
+                            span: 317..325,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u32",
+                                        span: 330..333,
+                                    },
+                                ],
+                                span: 330..333,
+                            },
+                        ),
+                        span: 330..333,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Unsafe(
+                                        Block {
+                                            stmts: [
+                                                Expr {
+                                                    expr: Expr {
+                                                        kind: Assign(
+                                                            Expr {
+                                                                kind: Deref(
+                                                                    Expr {
+                                                                        kind: Name(
+                                                                            Path {
+                                                                                segments: [
+                                                                                    Ident {
+                                                                                        name: "p",
+                                                                                        span: 358..359,
+                                                                                    },
+                                                                                ],
+                                                                                span: 358..359,
+                                                                            },
+                                                                        ),
+                                                                        span: 358..359,
+                                                                    },
+                                                                ),
+                                                                span: 357..359,
+                                                            },
+                                                            Expr {
+                                                                kind: Int(
+                                                                    Some(
+                                                                        1,
+                                                                    ),
+                                                                ),
+                                                                span: 362..363,
+                                                            },
+                                                        ),
+                                                        span: 357..363,
+                                                    },
+                                                    semi: Some(
+                                                        363..364,
+                                                    ),
+                                                },
+                                            ],
+                                            tail: None,
+                                            span: 347..370,
+                                        },
+                                    ),
+                                    span: 340..370,
+                                },
+                                semi: None,
+                            },
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "value",
+                                        span: 379..384,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 386..389,
+                                                    },
+                                                ],
+                                                span: 386..389,
+                                            },
+                                        ),
+                                        span: 386..389,
+                                    },
+                                    init: Expr {
+                                        kind: Unsafe(
+                                            Block {
+                                                stmts: [],
+                                                tail: Some(
+                                                    Expr {
+                                                        kind: Deref(
+                                                            Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "p",
+                                                                                span: 402..403,
+                                                                            },
+                                                                        ],
+                                                                        span: 402..403,
+                                                                    },
+                                                                ),
+                                                                span: 402..403,
+                                                            },
+                                                        ),
+                                                        span: 401..403,
+                                                    },
+                                                ),
+                                                span: 399..405,
+                                            },
+                                        ),
+                                        span: 392..405,
+                                    },
+                                    span: 375..406,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "nested",
+                                        span: 415..421,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 423..426,
+                                                    },
+                                                ],
+                                                span: 423..426,
+                                            },
+                                        ),
+                                        span: 423..426,
+                                    },
+                                    init: Expr {
+                                        kind: Unsafe(
+                                            Block {
+                                                stmts: [
+                                                    Expr {
+                                                        expr: Expr {
+                                                            kind: Unsafe(
+                                                                Block {
+                                                                    stmts: [
+                                                                        Expr {
+                                                                            expr: Expr {
+                                                                                kind: Assign(
+                                                                                    Expr {
+                                                                                        kind: Deref(
+                                                                                            Expr {
+                                                                                                kind: Name(
+                                                                                                    Path {
+                                                                                                        segments: [
+                                                                                                            Ident {
+                                                                                                                name: "p",
+                                                                                                                span: 468..469,
+                                                                                                            },
+                                                                                                        ],
+                                                                                                        span: 468..469,
+                                                                                                    },
+                                                                                                ),
+                                                                                                span: 468..469,
+                                                                                            },
+                                                                                        ),
+                                                                                        span: 467..469,
+                                                                                    },
+                                                                                    Expr {
+                                                                                        kind: Int(
+                                                                                            Some(
+                                                                                                2,
+                                                                                            ),
+                                                                                        ),
+                                                                                        span: 472..473,
+                                                                                    },
+                                                                                ),
+                                                                                span: 467..473,
+                                                                            },
+                                                                            semi: Some(
+                                                                                473..474,
+                                                                            ),
+                                                                        },
+                                                                    ],
+                                                                    tail: None,
+                                                                    span: 453..484,
+                                                                },
+                                                            ),
+                                                            span: 446..484,
+                                                        },
+                                                        semi: None,
+                                                    },
+                                                ],
+                                                tail: Some(
+                                                    Expr {
+                                                        kind: Deref(
+                                                            Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "p",
+                                                                                span: 494..495,
+                                                                            },
+                                                                        ],
+                                                                        span: 494..495,
+                                                                    },
+                                                                ),
+                                                                span: 494..495,
+                                                            },
+                                                        ),
+                                                        span: 493..495,
+                                                    },
+                                                ),
+                                                span: 436..501,
+                                            },
+                                        ),
+                                        span: 429..501,
+                                    },
+                                    span: 411..502,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "sum",
+                                        span: 511..514,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 516..519,
+                                                    },
+                                                ],
+                                                span: 516..519,
+                                            },
+                                        ),
+                                        span: 516..519,
+                                    },
+                                    init: Expr {
+                                        kind: Binary(
+                                            Add,
+                                            Expr {
+                                                kind: Unsafe(
+                                                    Block {
+                                                        stmts: [],
+                                                        tail: Some(
+                                                            Expr {
+                                                                kind: Deref(
+                                                                    Expr {
+                                                                        kind: Name(
+                                                                            Path {
+                                                                                segments: [
+                                                                                    Ident {
+                                                                                        name: "p",
+                                                                                        span: 532..533,
+                                                                                    },
+                                                                                ],
+                                                                                span: 532..533,
+                                                                            },
+                                                                        ),
+                                                                        span: 532..533,
+                                                                    },
+                                                                ),
+                                                                span: 531..533,
+                                                            },
+                                                        ),
+                                                        span: 529..535,
+                                                    },
+                                                ),
+                                                span: 522..535,
+                                            },
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        1,
+                                                    ),
+                                                ),
+                                                span: 538..539,
+                                            },
+                                            536..537,
+                                        ),
+                                        span: 522..539,
+                                    },
+                                    span: 507..540,
+                                },
+                            ),
+                            Expr {
+                                expr: Expr {
+                                    kind: Unsafe(
+                                        Block {
+                                            stmts: [
+                                                Expr {
+                                                    expr: Expr {
+                                                        kind: Assign(
+                                                            Expr {
+                                                                kind: Deref(
+                                                                    Expr {
+                                                                        kind: Name(
+                                                                            Path {
+                                                                                segments: [
+                                                                                    Ident {
+                                                                                        name: "p",
+                                                                                        span: 555..556,
+                                                                                    },
+                                                                                ],
+                                                                                span: 555..556,
+                                                                            },
+                                                                        ),
+                                                                        span: 555..556,
+                                                                    },
+                                                                ),
+                                                                span: 554..556,
+                                                            },
+                                                            Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "sum",
+                                                                                span: 559..562,
+                                                                            },
+                                                                        ],
+                                                                        span: 559..562,
+                                                                    },
+                                                                ),
+                                                                span: 559..562,
+                                                            },
+                                                        ),
+                                                        span: 554..562,
+                                                    },
+                                                    semi: Some(
+                                                        562..563,
+                                                    ),
+                                                },
+                                            ],
+                                            tail: None,
+                                            span: 552..565,
+                                        },
+                                    ),
+                                    span: 545..565,
+                                },
+                                semi: Some(
+                                    565..566,
+                                ),
+                            },
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "arm",
+                                        span: 575..578,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 580..583,
+                                                    },
+                                                ],
+                                                span: 580..583,
+                                            },
+                                        ),
+                                        span: 580..583,
+                                    },
+                                    init: Expr {
+                                        kind: Match {
+                                            scrutinee: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "value",
+                                                                span: 592..597,
+                                                            },
+                                                        ],
+                                                        span: 592..597,
+                                                    },
+                                                ),
+                                                span: 592..597,
+                                            },
+                                            arms: [
+                                                Arm {
+                                                    pattern: Pattern {
+                                                        kind: Int {
+                                                            value: Some(
+                                                                0,
+                                                            ),
+                                                            negated: false,
+                                                        },
+                                                        span: 608..609,
+                                                    },
+                                                    body: Expr {
+                                                        kind: Unsafe(
+                                                            Block {
+                                                                stmts: [],
+                                                                tail: Some(
+                                                                    Expr {
+                                                                        kind: Deref(
+                                                                            Expr {
+                                                                                kind: Name(
+                                                                                    Path {
+                                                                                        segments: [
+                                                                                            Ident {
+                                                                                                name: "p",
+                                                                                                span: 623..624,
+                                                                                            },
+                                                                                        ],
+                                                                                        span: 623..624,
+                                                                                    },
+                                                                                ),
+                                                                                span: 623..624,
+                                                                            },
+                                                                        ),
+                                                                        span: 622..624,
+                                                                    },
+                                                                ),
+                                                                span: 620..626,
+                                                            },
+                                                        ),
+                                                        span: 613..626,
+                                                    },
+                                                },
+                                                Arm {
+                                                    pattern: Pattern {
+                                                        kind: Wildcard,
+                                                        span: 635..636,
+                                                    },
+                                                    body: Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 640..641,
+                                                    },
+                                                },
+                                            ],
+                                            keyword: 586..591,
+                                        },
+                                        span: 586..648,
+                                    },
+                                    span: 571..649,
+                                },
+                            ),
+                            Expr {
+                                expr: Expr {
+                                    kind: Critical(
+                                        Block {
+                                            stmts: [],
+                                            tail: Some(
+                                                Expr {
+                                                    kind: Unsafe(
+                                                        Block {
+                                                            stmts: [
+                                                                Expr {
+                                                                    expr: Expr {
+                                                                        kind: Assign(
+                                                                            Expr {
+                                                                                kind: Deref(
+                                                                                    Expr {
+                                                                                        kind: Name(
+                                                                                            Path {
+                                                                                                segments: [
+                                                                                                    Ident {
+                                                                                                        name: "p",
+                                                                                                        span: 695..696,
+                                                                                                    },
+                                                                                                ],
+                                                                                                span: 695..696,
+                                                                                            },
+                                                                                        ),
+                                                                                        span: 695..696,
+                                                                                    },
+                                                                                ),
+                                                                                span: 694..696,
+                                                                            },
+                                                                            Expr {
+                                                                                kind: Name(
+                                                                                    Path {
+                                                                                        segments: [
+                                                                                            Ident {
+                                                                                                name: "arm",
+                                                                                                span: 699..702,
+                                                                                            },
+                                                                                        ],
+                                                                                        span: 699..702,
+                                                                                    },
+                                                                                ),
+                                                                                span: 699..702,
+                                                                            },
+                                                                        ),
+                                                                        span: 694..702,
+                                                                    },
+                                                                    semi: Some(
+                                                                        702..703,
+                                                                    ),
+                                                                },
+                                                            ],
+                                                            tail: None,
+                                                            span: 680..713,
+                                                        },
+                                                    ),
+                                                    span: 673..713,
+                                                },
+                                            ),
+                                            span: 663..719,
+                                        },
+                                    ),
+                                    span: 654..719,
+                                },
+                                semi: None,
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Unsafe(
+                                        Block {
+                                            stmts: [],
+                                            tail: Some(
+                                                Expr {
+                                                    kind: Critical(
+                                                        Block {
+                                                            stmts: [
+                                                                Expr {
+                                                                    expr: Expr {
+                                                                        kind: Assign(
+                                                                            Expr {
+                                                                                kind: Deref(
+                                                                                    Expr {
+                                                                                        kind: Name(
+                                                                                            Path {
+                                                                                                segments: [
+                                                                                                    Ident {
+                                                                                                        name: "p",
+                                                                                                        span: 765..766,
+                                                                                                    },
+                                                                                                ],
+                                                                                                span: 765..766,
+                                                                                            },
+                                                                                        ),
+                                                                                        span: 765..766,
+                                                                                    },
+                                                                                ),
+                                                                                span: 764..766,
+                                                                            },
+                                                                            Expr {
+                                                                                kind: Name(
+                                                                                    Path {
+                                                                                        segments: [
+                                                                                            Ident {
+                                                                                                name: "nested",
+                                                                                                span: 769..775,
+                                                                                            },
+                                                                                        ],
+                                                                                        span: 769..775,
+                                                                                    },
+                                                                                ),
+                                                                                span: 769..775,
+                                                                            },
+                                                                        ),
+                                                                        span: 764..775,
+                                                                    },
+                                                                    semi: Some(
+                                                                        775..776,
+                                                                    ),
+                                                                },
+                                                            ],
+                                                            tail: None,
+                                                            span: 750..786,
+                                                        },
+                                                    ),
+                                                    span: 741..786,
+                                                },
+                                            ),
+                                            span: 731..792,
+                                        },
+                                    ),
+                                    span: 724..792,
+                                },
+                                semi: None,
+                            },
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: Unsafe(
+                                    Block {
+                                        stmts: [],
+                                        tail: Some(
+                                            Expr {
+                                                kind: Deref(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "p",
+                                                                        span: 807..808,
+                                                                    },
+                                                                ],
+                                                                span: 807..808,
+                                                            },
+                                                        ),
+                                                        span: 807..808,
+                                                    },
+                                                ),
+                                                span: 806..808,
+                                            },
+                                        ),
+                                        span: 804..810,
+                                    },
+                                ),
+                                span: 797..810,
+                            },
+                        ),
+                        span: 334..812,
+                    },
+                ),
+                is_unsafe: false,
+                span: 304..812,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "plain",
+                    span: 824..829,
+                },
+                receiver: None,
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 832..834,
+                    },
+                ),
+                is_unsafe: true,
+                span: 814..834,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Pub,
+                kind: Plain,
+                name: Ident {
+                    name: "public",
+                    span: 850..856,
+                },
+                receiver: None,
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "p",
+                            span: 857..858,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: true,
+                                volatile: false,
+                                pointee: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 865..868,
+                                                },
+                                            ],
+                                            span: 865..868,
+                                        },
+                                    ),
+                                    span: 865..868,
+                                },
+                            },
+                            span: 860..868,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u32",
+                                        span: 873..876,
+                                    },
+                                ],
+                                span: 873..876,
+                            },
+                        ),
+                        span: 873..876,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Unsafe(
+                                    Block {
+                                        stmts: [],
+                                        tail: Some(
+                                            Expr {
+                                                kind: Deref(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "p",
+                                                                        span: 893..894,
+                                                                    },
+                                                                ],
+                                                                span: 893..894,
+                                                            },
+                                                        ),
+                                                        span: 893..894,
+                                                    },
+                                                ),
+                                                span: 892..894,
+                                            },
+                                        ),
+                                        span: 890..896,
+                                    },
+                                ),
+                                span: 883..896,
+                            },
+                        ),
+                        span: 877..898,
+                    },
+                ),
+                is_unsafe: true,
+                span: 840..898,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "export",
+                            span: 902..908,
+                        },
+                        arg: None,
+                        span: 900..909,
+                    },
+                ],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "exported",
+                    span: 920..928,
+                },
+                receiver: None,
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 931..933,
+                    },
+                ),
+                is_unsafe: true,
+                span: 910..933,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "export",
+                            span: 937..943,
+                        },
+                        arg: None,
+                        span: 935..944,
+                    },
+                ],
+                vis: Pub,
+                kind: Plain,
+                name: Ident {
+                    name: "exported_public",
+                    span: 959..974,
+                },
+                receiver: None,
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 977..979,
+                    },
+                ),
+                is_unsafe: true,
+                span: 949..979,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "naked",
+                            span: 983..988,
+                        },
+                        arg: None,
+                        span: 981..989,
+                    },
+                ],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "naked",
+                    span: 1000..1005,
+                },
+                receiver: None,
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Asm(
+                                    AsmExpr {
+                                        templates: [
+                                            StrLit {
+                                                bytes: "ret",
+                                                span: 1018..1023,
+                                            },
+                                        ],
+                                        operands: [],
+                                        options: [
+                                            AsmOption {
+                                                kind: Noreturn,
+                                                span: 1033..1041,
+                                            },
+                                        ],
+                                    },
+                                ),
+                                span: 1014..1043,
+                            },
+                        ),
+                        span: 1008..1045,
+                    },
+                ),
+                is_unsafe: true,
+                span: 990..1045,
+            },
+        ),
+        Struct(
+            StructDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Counter",
+                    span: 1054..1061,
+                },
+                fields: [
+                    FieldDecl {
+                        vis: Private,
+                        name: Ident {
+                            name: "n",
+                            span: 1068..1069,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 1071..1074,
+                                        },
+                                    ],
+                                    span: 1071..1074,
+                                },
+                            ),
+                            span: 1071..1074,
+                        },
+                    },
+                ],
+                span: 1047..1077,
+            },
+        ),
+        Impl(
+            ImplDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Counter",
+                    span: 1084..1091,
+                },
+                fns: [
+                    FnDecl {
+                        attrs: [],
+                        vis: Private,
+                        kind: Plain,
+                        name: Ident {
+                            name: "bump",
+                            span: 1108..1112,
+                        },
+                        receiver: Some(
+                            Receiver {
+                                kind: RefMut,
+                                span: 1113..1122,
+                            },
+                        ),
+                        params: [],
+                        ret: None,
+                        body: Some(
+                            Block {
+                                stmts: [
+                                    Expr {
+                                        expr: Expr {
+                                            kind: CompoundAssign(
+                                                Add,
+                                                Expr {
+                                                    kind: Field(
+                                                        Expr {
+                                                            kind: Name(
+                                                                Path {
+                                                                    segments: [
+                                                                        Ident {
+                                                                            name: "self",
+                                                                            span: 1134..1138,
+                                                                        },
+                                                                    ],
+                                                                    span: 1134..1138,
+                                                                },
+                                                            ),
+                                                            span: 1134..1138,
+                                                        },
+                                                        Ident {
+                                                            name: "n",
+                                                            span: 1139..1140,
+                                                        },
+                                                    ),
+                                                    span: 1134..1140,
+                                                },
+                                                Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                    span: 1144..1145,
+                                                },
+                                                1141..1143,
+                                            ),
+                                            span: 1134..1145,
+                                        },
+                                        semi: Some(
+                                            1145..1146,
+                                        ),
+                                    },
+                                ],
+                                tail: None,
+                                span: 1124..1152,
+                            },
+                        ),
+                        is_unsafe: true,
+                        span: 1098..1152,
+                    },
+                    FnDecl {
+                        attrs: [],
+                        vis: Pub,
+                        kind: Plain,
+                        name: Ident {
+                            name: "peek",
+                            span: 1172..1176,
+                        },
+                        receiver: Some(
+                            Receiver {
+                                kind: Ref,
+                                span: 1177..1182,
+                            },
+                        ),
+                        params: [
+                            Param {
+                                mutable: false,
+                                name: Ident {
+                                    name: "p",
+                                    span: 1184..1185,
+                                },
+                                ty: Ty {
+                                    kind: Ptr {
+                                        mutable: false,
+                                        volatile: false,
+                                        pointee: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u32",
+                                                            span: 1194..1197,
+                                                        },
+                                                    ],
+                                                    span: 1194..1197,
+                                                },
+                                            ),
+                                            span: 1194..1197,
+                                        },
+                                    },
+                                    span: 1187..1197,
+                                },
+                            },
+                        ],
+                        ret: Some(
+                            Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u32",
+                                                span: 1202..1205,
+                                            },
+                                        ],
+                                        span: 1202..1205,
+                                    },
+                                ),
+                                span: 1202..1205,
+                            },
+                        ),
+                        body: Some(
+                            Block {
+                                stmts: [],
+                                tail: Some(
+                                    Expr {
+                                        kind: Unsafe(
+                                            Block {
+                                                stmts: [],
+                                                tail: Some(
+                                                    Expr {
+                                                        kind: Deref(
+                                                            Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "p",
+                                                                                span: 1226..1227,
+                                                                            },
+                                                                        ],
+                                                                        span: 1226..1227,
+                                                                    },
+                                                                ),
+                                                                span: 1226..1227,
+                                                            },
+                                                        ),
+                                                        span: 1225..1227,
+                                                    },
+                                                ),
+                                                span: 1223..1229,
+                                            },
+                                        ),
+                                        span: 1216..1229,
+                                    },
+                                ),
+                                span: 1206..1235,
+                            },
+                        ),
+                        is_unsafe: true,
+                        span: 1162..1235,
+                    },
+                    FnDecl {
+                        attrs: [
+                            Attr {
+                                name: Ident {
+                                    name: "export",
+                                    span: 1243..1249,
+                                },
+                                arg: None,
+                                span: 1241..1250,
+                            },
+                        ],
+                        vis: Pub,
+                        kind: Plain,
+                        name: Ident {
+                            name: "exported_method",
+                            span: 1269..1284,
+                        },
+                        receiver: Some(
+                            Receiver {
+                                kind: Value,
+                                span: 1285..1289,
+                            },
+                        ),
+                        params: [],
+                        ret: None,
+                        body: Some(
+                            Block {
+                                stmts: [],
+                                tail: None,
+                                span: 1291..1293,
+                            },
+                        ),
+                        is_unsafe: true,
+                        span: 1259..1293,
+                    },
+                    FnDecl {
+                        attrs: [],
+                        vis: Private,
+                        kind: Plain,
+                        name: Ident {
+                            name: "safe",
+                            span: 1302..1306,
+                        },
+                        receiver: Some(
+                            Receiver {
+                                kind: Value,
+                                span: 1307..1311,
+                            },
+                        ),
+                        params: [],
+                        ret: None,
+                        body: Some(
+                            Block {
+                                stmts: [],
+                                tail: None,
+                                span: 1313..1315,
+                            },
+                        ),
+                        is_unsafe: false,
+                        span: 1299..1315,
+                    },
+                ],
+                span: 1079..1317,
+            },
+        ),
+        Mod(
+            ModDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "inner",
+                    span: 1323..1328,
+                },
+                items: Some(
+                    [
+                        Fn(
+                            FnDecl {
+                                attrs: [],
+                                vis: Pub,
+                                kind: Plain,
+                                name: Ident {
+                                    name: "deep",
+                                    span: 1349..1353,
+                                },
+                                receiver: None,
+                                params: [],
+                                ret: None,
+                                body: Some(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 1356..1358,
+                                    },
+                                ),
+                                is_unsafe: true,
+                                span: 1339..1358,
+                            },
+                        ),
+                    ],
+                ),
+                span: 1319..1360,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Entry,
+                name: Ident {
+                    name: "main",
+                    span: 1371..1375,
+                },
+                receiver: None,
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 1381..1382,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 1390..1392,
+                                    },
+                                ),
+                                span: 1385..1392,
+                            },
+                        ),
+                        span: 1383..1394,
+                    },
+                ),
+                is_unsafe: false,
+                span: 1362..1394,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Panic,
+                name: Ident {
+                    name: "on_panic",
+                    span: 1405..1413,
+                },
+                receiver: None,
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 1419..1420,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 1428..1430,
+                                    },
+                                ),
+                                span: 1423..1430,
+                            },
+                        ),
+                        span: 1421..1432,
+                    },
+                ),
+                is_unsafe: false,
+                span: 1396..1432,
+            },
+        ),
+    ],
+}

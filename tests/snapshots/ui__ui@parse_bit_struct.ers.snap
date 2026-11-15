@@ -1429,6 +1429,7 @@ File {
                         span: 1576..1703,
                     },
                 ),
+                is_unsafe: false,
                 span: 1555..1703,
             },
         ),
