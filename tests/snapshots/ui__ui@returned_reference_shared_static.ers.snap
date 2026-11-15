@@ -1,0 +1,39 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_reference_shared_static.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[returned_reference_shared_static.ers:19:7]
+ 14 │ interrupt fn tick() at Vector::MachineTimer {
+ 15 │     COUNT += 1;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 16 │ }
+ 17 │ 
+ 18 │ fn unprotected() -> &u32 {
+ 19 │     &*(&raw const COUNT)
+    ·       ─────────┬────────
+    ·                ╰── reached here, outside `critical`
+ 20 │ }
+ 21 │ 
+ 22 │ fn protected() -> &u32 {
+ 23 │     let p: *const u32 = critical { &raw const COUNT };
+ 24 │     &*p
+ 25 │ }
+ 26 │ 
+ 27 │ fn owned() -> &u32 {
+ 28 │     &*(&raw const OWNED)
+ 29 │ }
+ 30 │ 
+ 31 │ entry fn main() -> ! {
+ 32 │     OWNED = 1;
+ 33 │     let a: &u32 = unprotected();
+    ·                   ──────┬──────
+    ·                         ╰── called here, outside `critical`
+ 34 │     let b: &u32 = protected();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

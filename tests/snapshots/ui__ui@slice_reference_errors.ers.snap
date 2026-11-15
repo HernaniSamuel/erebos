@@ -14,8 +14,9 @@ ty::reference-position
     ·            ╰── `&mut [u8]` is a reference
  10 │ }
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::unsized
 
   × `[u8]` has no size known at compile time
@@ -189,8 +190,9 @@ ty::reference-position
     ·                   ╰── `&u8` is a reference
  46 │ 
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::peripheral-by-value
 
   × `Uart` is a peripheral type, which no value has

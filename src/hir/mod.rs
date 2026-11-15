@@ -711,8 +711,6 @@ pub struct ReferenceType {
 pub enum ReferencePosition {
     /// Any position of memory: a field, an element, a static, a pointee.
     Memory(NeverPosition),
-    /// A return type.
-    Return,
     /// The type of a `mut` parameter: a reference is bound once (ADR 0094).
     MutParameter,
     /// The type of a `let mut`, or of a `mut` binding in a pattern.

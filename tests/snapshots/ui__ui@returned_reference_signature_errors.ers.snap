@@ -1,0 +1,364 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_reference_signature_errors.ers
+---
+--- errors ---
+ty::reference-return
+
+  × cannot return a reference when 2 parameters are references
+    ╭─[returned_reference_signature_errors.ers:21:35]
+ 20 │ impl Ring {
+ 21 │     fn two(&self, other: &u32) -> &u32 {
+    ·            ──┬──  ──┬──           ──┬─
+    ·              │      │               ╰── returns `&u32`, tied to which one?
+    ·              │      ╰── `&u32` is a reference parameter
+    ·              ╰── `&Ring` is a reference parameter
+ 22 │         other
+    ╰────
+  help: a returned reference is tied to the one reference parameter: pass one reference, or return
+        an index or a copy
+ty::reference-return
+
+  × cannot return a `&mut` tied to a `&` parameter
+    ╭─[returned_reference_signature_errors.ers:25:26]
+ 24 │ 
+ 25 │     fn mutable(&self) -> &mut u8 {
+    ·                ──┬──     ───┬───
+    ·                  │          ╰── returns `&mut u8`
+    ·                  ╰── `&Ring` lends only a shared reference
+ 26 │         loop {}
+    ╰────
+  help: make the parameter `&mut`, or return a `&`
+ty::reference-return
+
+  × cannot return a reference when 2 parameters are references
+    ╭─[returned_reference_signature_errors.ers:30:33]
+ 29 │ 
+ 30 │ fn several(a: &u32, b: &u32) -> &u32 {
+    ·            ┬        ┬           ──┬─
+    ·            │        │             ╰── returns `&u32`, tied to which one?
+    ·            │        ╰── `&u32` is a reference parameter
+    ·            ╰── `&u32` is a reference parameter
+ 31 │     a
+    ╰────
+  help: a returned reference is tied to the one reference parameter: pass one reference, or return
+        an index or a copy
+ty::reference-return
+
+  × cannot return a reference when 3 parameters are references
+    ╭─[returned_reference_signature_errors.ers:34:48]
+ 33 │ 
+ 34 │ fn three(a: &u32, part: &mut u32, c: &[u8]) -> &mut u32 {
+    ·          ┬        ──┬─            ┬            ────┬───
+    ·          │          │             │                ╰── returns `&mut u32`, tied to which one?
+    ·          │          │             ╰── `&[u8]` is a reference parameter
+    ·          │          ╰── `&mut u32` is a reference parameter
+    ·          ╰── `&u32` is a reference parameter
+ 35 │     part
+    ╰────
+  help: a returned reference is tied to the one reference parameter: pass one reference, or return
+        an index or a copy
+ty::reference-return
+
+  × cannot return a reference when 2 parameters are references
+    ╭─[returned_reference_signature_errors.ers:38:56]
+ 37 │ 
+ 38 │ fn counted(a: &u32, n: u32, p: *const u32, b: &u32) -> &[u8] {
+    ·            ┬                               ┬           ──┬──
+    ·            │                               │             ╰── returns `&[u8]`, tied to which one?
+    ·            │                               ╰── `&u32` is a reference parameter
+    ·            ╰── `&u32` is a reference parameter
+ 39 │     &b"counted"
+    ╰────
+  help: a returned reference is tied to the one reference parameter: pass one reference, or return
+        an index or a copy
+ty::reference-return
+
+  × cannot return a `&mut` tied to a `&` parameter
+    ╭─[returned_reference_signature_errors.ers:42:34]
+ 41 │ 
+ 42 │ fn shared_to_mutable(a: &u32) -> &mut u32 {
+    ·                      ┬           ────┬───
+    ·                      │               ╰── returns `&mut u32`
+    ·                      ╰── `&u32` lends only a shared reference
+ 43 │     loop {}
+    ╰────
+  help: make the parameter `&mut`, or return a `&`
+ty::reference-return
+
+  × cannot return a `&mut` when no parameter is a reference
+    ╭─[returned_reference_signature_errors.ers:46:17]
+ 45 │ 
+ 46 │ fn nothing() -> &mut u32 {
+    ·                 ────┬───
+    ·                     ╰── returns `&mut u32`, with nothing to be tied to
+ 47 │     loop {}
+    ╰────
+  help: with no reference parameter, a returned reference borrows read-only static data, which is
+        never `&mut` or volatile: return a raw pointer
+ty::reference-return
+
+  × cannot return a volatile reference when no parameter is a reference
+    ╭─[returned_reference_signature_errors.ers:50:26]
+ 49 │ 
+ 50 │ fn volatile_nothing() -> &volatile u32 {
+    ·                          ──────┬──────
+    ·                                ╰── returns `&volatile u32`, with nothing to be tied to
+ 51 │     loop {}
+    ╰────
+  help: with no reference parameter, a returned reference borrows read-only static data, which is
+        never `&mut` or volatile: return a raw pointer
+ty::reference-return
+
+  × cannot return a `&mut` when no parameter is a reference
+    ╭─[returned_reference_signature_errors.ers:54:23]
+ 53 │ 
+ 54 │ fn mutable_slice() -> &mut [u8] {
+    ·                       ────┬────
+    ·                           ╰── returns `&mut [u8]`, with nothing to be tied to
+ 55 │     loop {}
+    ╰────
+  help: with no reference parameter, a returned reference borrows read-only static data, which is
+        never `&mut` or volatile: return a raw pointer
+ty::reference-return
+
+  × cannot return a reference when 2 parameters are references
+    ╭─[returned_reference_signature_errors.ers:58:38]
+ 57 │ 
+ 58 │ extern fn outside(a: &u8, b: &u8) -> &u8;
+    ·                   ┬       ┬          ─┬─
+    ·                   │       │           ╰── returns `&u8`, tied to which one?
+    ·                   │       ╰── `&u8` is a reference parameter
+    ·                   ╰── `&u8` is a reference parameter
+ 59 │ 
+    ╰────
+  help: a returned reference is tied to the one reference parameter: pass one reference, or return
+        an index or a copy
+ty::reference-return
+
+  × cannot return a `&mut` when no parameter is a reference
+    ╭─[returned_reference_signature_errors.ers:60:32]
+ 59 │ 
+ 60 │ extern fn outside_mutable() -> &mut u8;
+    ·                                ───┬───
+    ·                                   ╰── returns `&mut u8`, with nothing to be tied to
+ 61 │ 
+    ╰────
+  help: with no reference parameter, a returned reference borrows read-only static data, which is
+        never `&mut` or volatile: return a raw pointer
+ty::reference-return
+
+  × cannot return a reference when 2 parameters are references
+    ╭─[returned_reference_signature_errors.ers:63:32]
+ 62 │ #[export]
+ 63 │ fn exported(a: &u8, b: &u8) -> &u8 {
+    ·             ┬       ┬          ─┬─
+    ·             │       │           ╰── returns `&u8`, tied to which one?
+    ·             │       ╰── `&u8` is a reference parameter
+    ·             ╰── `&u8` is a reference parameter
+ 64 │     a
+    ╰────
+  help: a returned reference is tied to the one reference parameter: pass one reference, or return
+        an index or a copy
+ty::reference-return
+
+  × cannot return a `&mut` tied to a `&` parameter
+    ╭─[returned_reference_signature_errors.ers:68:32]
+ 67 │ #[export]
+ 68 │ fn exported_mutable(a: &u8) -> &mut u8 {
+    ·                     ┬          ───┬───
+    ·                     │             ╰── returns `&mut u8`
+    ·                     ╰── `&u8` lends only a shared reference
+ 69 │     loop {}
+    ╰────
+  help: make the parameter `&mut`, or return a `&`
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[returned_reference_signature_errors.ers:77:31]
+ 76 │ 
+ 77 │ fn unsized(a: &u8, b: &u8, c: [u8]) -> &u8 {
+    ·                               ──┬─
+    ·                                 ╰── `[u8]` as the type of a parameter
+ 78 │     a
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::reference-position
+
+  × a reference cannot be a type argument
+    ╭─[returned_reference_signature_errors.ers:82:25]
+ 81 │ // A reference below the top of a return type.
+ 82 │ fn optional() -> Option(&u32) {
+    ·                         ──┬─
+    ·                           ╰── `&u32` is a reference
+ 83 │     .None
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+    ╭─[returned_reference_signature_errors.ers:86:26]
+ 85 │ 
+ 86 │ fn referent(r: &u32) -> &&u32 {
+    ·                          ──┬─
+    ·                            ╰── `&u32` is a reference
+ 87 │     &r
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+    ╭─[returned_reference_signature_errors.ers:87:5]
+ 86 │ fn referent(r: &u32) -> &&u32 {
+ 87 │     &r
+    ·     ─┬
+    ·      ╰── makes `&&u32`, a reference to a reference
+ 88 │ }
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be an array element
+    ╭─[returned_reference_signature_errors.ers:90:25]
+ 89 │ 
+ 90 │ fn element(r: &u32) -> [&u32; 2] {
+    ·                         ──┬─
+    ·                           ╰── `&u32` is a reference
+ 91 │     [r, r]
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be an array element
+    ╭─[returned_reference_signature_errors.ers:91:5]
+ 90 │ fn element(r: &u32) -> [&u32; 2] {
+ 91 │     [r, r]
+    ·     ───┬──
+    ·        ╰── makes `[&u32; 2]`, an array of references
+ 92 │ }
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the pointee of a pointer
+    ╭─[returned_reference_signature_errors.ers:94:24]
+ 93 │ 
+ 94 │ fn pointee() -> *const &u32 {
+    ·                        ──┬─
+    ·                          ╰── `&u32` is a reference
+ 95 │     loop {}
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the element type of a slice
+    ╭─[returned_reference_signature_errors.ers:98:31]
+ 97 │ 
+ 98 │ fn slice_pointee() -> *const [&u32] {
+    ·                               ──┬─
+    ·                                 ╰── `&u32` is a reference
+ 99 │     loop {}
+    ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+     ╭─[returned_reference_signature_errors.ers:103:13]
+ 102 │ fn of_a_result(x: &u32) -> u32 {
+ 103 │     let r: &&u32 = &same(x);
+     ·             ──┬─
+     ·               ╰── `&u32` is a reference
+ 104 │     **r
+     ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+     ╭─[returned_reference_signature_errors.ers:103:20]
+ 102 │ fn of_a_result(x: &u32) -> u32 {
+ 103 │     let r: &&u32 = &same(x);
+     ·                    ────┬───
+     ·                        ╰── makes `&&u32`, a reference to a reference
+ 104 │     **r
+     ╰────
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the type of a constant
+     ╭─[returned_reference_signature_errors.ers:112:16]
+ 111 │ // The type of a constant or a static is not a return type.
+ 112 │ const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+     ·                ────┬───
+     ·                    ╰── `&mut u32` is a reference
+ 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+     ╰────
+  help: a static or a constant holds a value computed at compile time, which is never a reference
+        (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
+ty::non-copy-constant
+
+  × the constant `MUTABLE` is of the non-copy type `&mut u32`
+     ╭─[returned_reference_signature_errors.ers:112:16]
+ 111 │ // The type of a constant or a static is not a return type.
+ 112 │ const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+     ·                ────┬───
+     ·                    ╰── `&mut u32` is not copy
+ 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+     ╰────
+  help: mark `&mut u32` with `#[copy]` if its values may be duplicated, or declare a `static`,
+        whose initializer may be of any type (ADR 0096)
+ty::reference-position
+
+  × a reference cannot be the type of a constant
+     ╭─[returned_reference_signature_errors.ers:113:17]
+ 112 │ const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+ 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+     ·                 ──────┬──────
+     ·                       ╰── `&volatile u32` is a reference
+ 114 │ static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+     ╰────
+  help: a static or a constant holds a value computed at compile time, which is never a reference
+        (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
+ty::reference-position
+
+  × a reference cannot be the type of a static
+     ╭─[returned_reference_signature_errors.ers:114:22]
+ 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+ 114 │ static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+     ·                      ────┬───
+     ·                          ╰── `&mut u32` is a reference
+ 115 │ static HELD_VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+     ╰────
+  help: a static or a constant holds a value computed at compile time, which is never a reference
+        (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
+ty::reference-position
+
+  × a reference cannot be the type of a static
+     ╭─[returned_reference_signature_errors.ers:115:23]
+ 114 │ static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+ 115 │ static HELD_VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+     ·                       ──────┬──────
+     ·                             ╰── `&volatile u32` is a reference
+ 116 │ 
+     ╰────
+  help: a static or a constant holds a value computed at compile time, which is never a reference
+        (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead

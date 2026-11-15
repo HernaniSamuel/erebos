@@ -1,0 +1,1005 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_references_mir.ers
+---
+--- mir ---
+struct Ring { 0 buf: [u8; 8] at 0, 1 head: usize at 8 } // size 12, align 4
+struct Config { 0 rate: u32 at 0, 1 parity: u8 at 4 } // size 8, align 4
+struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+peripheral Context { 0 threshold: u32 at 0x0, 1 claim: u32 at 0x4 } // extent 8, align 4
+peripheral Plic { 0 priority: [u32; 96] step 0x4 at 0x0, 1 ctx: [Context; 2] step 0x100 at 0x1000, 2 first: Context at 0x2000 } // extent 8200, align 4
+peripheral PLIC: Plic at 0xc000000;
+
+static TABLE: [u8; 4]; // align 1
+extern static LIMIT: u32; // align 4
+static mut OWNED: u32; // align 4
+static mut SHARED: u32; // align 4
+
+fn Ring.peek(_1: &Ring) -> &u8 {
+    let _0: &u8;
+    let _1: &Ring; // self
+    let _2: &Ring;
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: &u8;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy (*_1).1;
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 8_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = &(*_2).0[_4];
+        _0 = copy _6;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn Ring.slot(_1: &mut Ring, _2: usize) -> &mut u8 {
+    let _0: &mut u8;
+    let _1: &mut Ring; // self
+    let _2: usize; // i
+    let _3: usize;
+    let _4: bool;
+    let _5: &mut u8;
+
+    bb0: {
+        _3 = copy _2;
+        _4 = Lt(copy _3, const 8_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = &mut (*_1).0[_3];
+        _0 = move _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn Ring.buf(_1: &Ring) -> &[u8; 8] {
+    let _0: &[u8; 8];
+    let _1: &Ring; // self
+    let _2: &[u8; 8];
+
+    bb0: {
+        _2 = &(*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Ring.pick(_1: Ring, _2: usize, _3: &[u8]) -> &u8 {
+    let _0: &u8;
+    let _1: Ring; // self
+    let _2: usize; // at
+    let _3: &[u8]; // s
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+    let _7: &u8;
+
+    bb0: {
+        _4 = copy _2;
+        _5 = len(_3);
+        _6 = Lt(copy _4, copy _5);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _7 = &(*_3)[_4];
+        _0 = copy _7;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn Config.baud(_1: &mut Config, _2: u32) -> &mut Config {
+    let _0: &mut Config;
+    let _1: &mut Config; // self
+    let _2: u32; // rate
+
+    bb0: {
+        (*_1).0 = copy _2;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn Config.parity(_1: &mut Config, _2: u8) -> &mut Config {
+    let _0: &mut Config;
+    let _1: &mut Config; // self
+    let _2: u8; // parity
+
+    bb0: {
+        (*_1).1 = copy _2;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn Config.rate(_1: &Config) -> &u32 {
+    let _0: &u32;
+    let _1: &Config; // self
+    let _2: &u32;
+
+    bb0: {
+        _2 = &(*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Plic.ctx(_1: &mut Plic, _2: usize) -> &mut Context {
+    let _0: &mut Context;
+    let _1: &mut Plic; // self
+    let _2: usize; // i
+    let _3: usize;
+    let _4: bool;
+    let _5: &mut Context;
+
+    bb0: {
+        _3 = copy _2;
+        _4 = Lt(copy _3, const 2_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = &mut (*_1).1[_3];
+        _0 = move _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn Plic.first(_1: &Plic) -> &Context {
+    let _0: &Context;
+    let _1: &Plic; // self
+    let _2: &Context;
+
+    bb0: {
+        _2 = &(*_1).2;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn first(_1: &[u8]) -> &u8 {
+    let _0: &u8;
+    let _1: &[u8]; // s
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: &u8;
+
+    bb0: {
+        _2 = const 0_usize;
+        _3 = len(_1);
+        _4 = Lt(copy _2, copy _3);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = &(*_1)[_2];
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn rest(_1: &[u8], _2: usize) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: usize; // at
+    let _3: usize;
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+    let _7: bool;
+    let _8: &[u8];
+
+    bb0: {
+        _3 = len(_1);
+        _4 = copy _2;
+        _5 = copy _3;
+        _6 = Le(copy _4, copy _5);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _7 = Le(copy _5, copy _3);
+        if copy _7 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _8 = &(*_1)[_4.._5];
+        _0 = copy _8;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn middle(_1: &[u8], _2: usize, _3: usize) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: usize; // from
+    let _3: usize; // to
+    let _4: usize;
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+    let _8: bool;
+    let _9: &[u8];
+
+    bb0: {
+        _4 = len(_1);
+        _5 = copy _2;
+        _6 = copy _3;
+        _7 = Le(copy _5, copy _6);
+        if copy _7 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _8 = Le(copy _6, copy _4);
+        if copy _8 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _9 = &(*_1)[_5.._6];
+        _0 = copy _9;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn field(_1: &Pair) -> &u32 {
+    let _0: &u32;
+    let _1: &Pair; // p
+    let _2: &u32;
+
+    bb0: {
+        _2 = &(*_1).1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn tail(_1: &mut Pair) -> &mut u32 {
+    let _0: &mut u32;
+    let _1: &mut Pair; // p
+    let _2: &mut u32;
+
+    bb0: {
+        _2 = &mut (*_1).1;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn shared(_1: &mut Pair) -> &u32 {
+    let _0: &u32;
+    let _1: &mut Pair; // p
+    let _2: &u32;
+
+    bb0: {
+        _2 = &(*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn beside_a_pointer(_1: *const u8, _2: &[u8]) -> &[u8] {
+    let _0: &[u8];
+    let _1: *const u8; // p
+    let _2: &[u8]; // s
+
+    bb0: {
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn same(_1: &u32) -> &u32 {
+    let _0: &u32;
+    let _1: &u32; // r
+    let _2: &u32; // t
+
+    bb0: {
+        _2 = copy _1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn last(_1: &[u8]) -> &u8 {
+    let _0: &u8;
+    let _1: &[u8]; // s
+    let _2: usize;
+    let _3: bool;
+    let _4: &u8;
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+    let _8: &u8;
+    let _9: usize;
+    let _10: usize;
+    let _11: usize;
+    let _12: bool;
+    let _13: bool;
+    let _14: &[u8];
+    let _15: &u8;
+
+    bb0: {
+        _2 = len(_1);
+        _3 = Le(copy _2, const 1_usize);
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = const 0_usize;
+        _6 = len(_1);
+        _7 = Lt(copy _5, copy _6);
+        if copy _7 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        _9 = len(_1);
+        _10 = const 1_usize;
+        _11 = copy _9;
+        _12 = Le(copy _10, copy _11);
+        if copy _12 -> [true: bb5, false: bb6];
+    }
+
+    bb3: {
+        _8 = &(*_1)[_5];
+        _4 = copy _8;
+        goto -> bb9;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _13 = Le(copy _11, copy _9);
+        if copy _13 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _14 = &(*_1)[_10.._11];
+        _15 = call last(copy _14);
+        _4 = copy _15;
+        goto -> bb9;
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+
+    bb9: {
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn volatile_part(_1: &mut volatile Ring) -> &mut volatile u8 {
+    let _0: &mut volatile u8;
+    let _1: &mut volatile Ring; // r
+    let _2: &mut volatile u8;
+
+    bb0: {
+        _2 = &mut (*_1).0[1];
+        _0 = move _2;
+        return;
+    }
+}
+
+fn volatile_whole(_1: &volatile Ring) -> &volatile Ring {
+    let _0: &volatile Ring;
+    let _1: &volatile Ring; // r
+
+    bb0: {
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn reason(_1: u32) -> &[u8] {
+    let _0: &[u8];
+    let _1: u32; // code
+    let _2: u32;
+    let _3: &[u8];
+    let _4: *const [u8; 16];
+    let _5: &[u8];
+    let _6: *const [u8; 13];
+    let _7: &[u8];
+    let _8: *const [u8; 7];
+    let _9: &[u8];
+
+    bb0: {
+        _2 = copy _1;
+        switch copy _2 -> [0_u32: bb1, 1_u32: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _4 = const b"division by zero";
+        _5 = &(*_4)[0..16];
+        _3 = copy _5;
+        goto -> bb4;
+    }
+
+    bb2: {
+        _6 = const b"out of bounds";
+        _7 = &(*_6)[0..13];
+        _3 = copy _7;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _8 = const b"unknown";
+        _9 = &(*_8)[0..7];
+        _3 = copy _9;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn greeting() -> &[u8; 5] {
+    let _0: &[u8; 5];
+    let _1: *const [u8; 5];
+    let _2: &[u8; 5];
+
+    bb0: {
+        _1 = const b"hello";
+        _2 = &(*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn table() -> &[u8; 4] {
+    let _0: &[u8; 4];
+    let _1: *const [u8; 4];
+    let _2: &[u8; 4];
+
+    bb0: {
+        _1 = const static TABLE;
+        _2 = &(*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn entry_of(_1: usize) -> &u8 {
+    let _0: &u8;
+    let _1: usize; // i
+    let _2: *const [u8; 4];
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: &u8;
+
+    bb0: {
+        _2 = const static TABLE;
+        _3 = Rem(copy _1, const 4_usize);
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = &(*_2)[_4];
+        _0 = copy _6;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn limit() -> &u32 {
+    let _0: &u32;
+    let _1: *const u32;
+    let _2: &u32;
+
+    bb0: {
+        _1 = const static LIMIT;
+        _2 = &(*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+extern fn lookup(_1: &[u8]) -> &u8;
+
+extern fn banner() -> &[u8];
+
+fn exported(_1: &[u8]) -> &[u8] {
+    let _0: &[u8];
+    let _1: &[u8]; // s
+    let _2: usize;
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: bool;
+    let _7: &[u8];
+
+    bb0: {
+        _2 = len(_1);
+        _3 = const 1_usize;
+        _4 = copy _2;
+        _5 = Le(copy _3, copy _4);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = Le(copy _4, copy _2);
+        if copy _6 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _7 = &(*_1)[_3.._4];
+        _0 = copy _7;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+naked fn naked(_1: &u32) -> &u32 {
+    let _0: &u32;
+    let _1: &u32; // r
+
+    bb0: {
+        asm("ret", options(noreturn));
+    }
+}
+
+fn counter() -> &u32 {
+    let _0: &u32;
+    let _1: *mut u32;
+    let _2: *const u32;
+    let _3: &u32;
+
+    bb0: {
+        _1 = const static OWNED;
+        _2 = &raw const (*_1);
+        _3 = &(*_2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn shared_counter() -> &u32 {
+    let _0: &u32;
+    let _1: *const u32; // p
+    let _2: u32;
+    let _3: *mut u32;
+    let _4: *const u32;
+    let _5: &u32;
+
+    bb0: {
+        critical_enter _2;
+        _3 = const static SHARED;
+        _4 = &raw const (*_3);
+        critical_exit _2;
+        _1 = copy _4;
+        _5 = &(*_1);
+        _0 = copy _5;
+        return;
+    }
+}
+
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+    let _1: u32;
+    let _2: *mut u32;
+
+    bb0: {
+        critical_enter _1;
+        _2 = const static SHARED;
+        (*_2) = Add(copy (*_2), const 1_u32);
+        critical_exit _1;
+        return;
+    }
+}
+
+fn uses(_1: &[u8; 3]) -> u32 {
+    let _0: u32;
+    let _1: &[u8; 3]; // s
+    let _2: Ring; // ring
+    let _3: Pair; // p
+    let _4: &u8; // held
+    let _5: u32; // from_call
+    let _6: &u8; // chosen
+    let _7: u8; // indexed
+    let _8: u32; // a
+    let _9: Config; // cfg
+    let _10: Ring;
+    let _11: [u8; 8];
+    let _12: usize;
+    let _13: bool;
+    let _14: &mut Ring;
+    let _15: &mut u8;
+    let _16: &mut Ring;
+    let _17: &mut u8;
+    let _18: Pair;
+    let _19: &Ring;
+    let _20: &u8;
+    let _21: &Pair;
+    let _22: &u32;
+    let _23: u32;
+    let _24: u32;
+    let _25: u8;
+    let _26: u32;
+    let _27: u32;
+    let _28: &[u8];
+    let _29: &[u8];
+    let _30: &u8;
+    let _31: &[u8];
+    let _32: &[u8];
+    let _33: usize;
+    let _34: usize;
+    let _35: bool;
+    let _36: u8;
+    let _37: u8;
+    let _38: u32;
+    let _39: u32;
+    let _40: &Pair;
+    let _41: &Pair;
+    let _42: u32;
+    let _43: u32;
+    let _44: u32;
+    let _45: u32;
+    let _46: u32;
+    let _47: Config;
+    let _48: u32;
+    let _49: u32;
+    let _50: &Ring;
+    let _51: &[u8; 8];
+    let _52: u8;
+    let _53: u32;
+    let _54: u32;
+    let _55: u32;
+    let _56: &Config;
+    let _57: &u32;
+    let _58: u32;
+    let _59: u32;
+    let _60: u32;
+    let _61: &u32;
+    let _62: u32;
+    let _63: u32;
+    let _64: u32;
+    let _65: &u32;
+    let _66: u32;
+    let _67: u32;
+
+    bb0: {
+        _12 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _13 = Lt(copy _12, const 8_usize);
+        if copy _13 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _11[_12] = const 0_u8;
+        _12 = Add(copy _12, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _10.0 = copy _11;
+        _10.1 = const 0_usize;
+        _2 = move _10;
+        _14 = &mut _2;
+        _15 = call Ring.slot(move _14, const 2_usize);
+        (*_15) = const 9_u8;
+        _16 = &mut _2;
+        _17 = call slot_of(move _16, const 3_usize);
+        (*_17) = const 4_u8;
+        _18.0 = const 1_u32;
+        _18.1 = const 2_u32;
+        _3 = move _18;
+        _19 = &_2;
+        _20 = call Ring.peek(copy _19);
+        _4 = copy _20;
+        _21 = &_3;
+        _22 = call field(copy _21);
+        _23 = copy (*_22);
+        _24 = copy _23;
+        _25 = copy (*_4);
+        _26 = copy _25 as u32;
+        _27 = Add(copy _24, copy _26);
+        _5 = copy _27;
+        _28 = &(*_1)[0..3];
+        _29 = call rest(copy _28, const 1_usize);
+        _30 = call first(copy _29);
+        _6 = copy _30;
+        _31 = &(*_1)[0..3];
+        _32 = call rest(copy _31, const 1_usize);
+        _33 = const 0_usize;
+        _34 = len(_32);
+        _35 = Lt(copy _33, copy _34);
+        if copy _35 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _36 = copy (*_32)[_33];
+        _7 = copy _36;
+        _37 = copy (*_6);
+        _38 = copy _37 as u32;
+        _39 = copy _38;
+        _40 = &_3;
+        _41 = call p_a(copy _40);
+        _42 = copy (*_41).0;
+        _43 = Add(copy _39, copy _42);
+        _44 = copy _43;
+        _45 = copy _7 as u32;
+        _46 = Add(copy _44, copy _45);
+        _8 = copy _46;
+        _47.0 = const 0_u32;
+        _47.1 = const 0_u8;
+        _9 = move _47;
+        _48 = Add(copy _5, copy _8);
+        _49 = copy _48;
+        _50 = &_2;
+        _51 = call Ring.buf(copy _50);
+        _52 = copy (*_51)[2];
+        _53 = copy _52 as u32;
+        _54 = Add(copy _49, copy _53);
+        _55 = copy _54;
+        _56 = &_9;
+        _57 = call Config.rate(copy _56);
+        _58 = copy (*_57);
+        _59 = Add(copy _55, copy _58);
+        _60 = copy _59;
+        _61 = call counter();
+        _62 = copy (*_61);
+        _63 = Add(copy _60, copy _62);
+        _64 = copy _63;
+        _65 = call shared_counter();
+        _66 = copy (*_65);
+        _67 = Add(copy _64, copy _66);
+        _0 = copy _67;
+        return;
+    }
+
+    bb5: {
+        panic(index out of bounds);
+    }
+}
+
+fn slot_of(_1: &mut Ring, _2: usize) -> &mut u8 {
+    let _0: &mut u8;
+    let _1: &mut Ring; // r
+    let _2: usize; // i
+    let _3: usize;
+    let _4: bool;
+    let _5: &mut u8;
+
+    bb0: {
+        _3 = copy _2;
+        _4 = Lt(copy _3, const 8_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = &mut (*_1).0[_3];
+        _0 = move _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn p_a(_1: &Pair) -> &Pair {
+    let _0: &Pair;
+    let _1: &Pair; // p
+
+    bb0: {
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn chain(_1: &mut Config) -> () {
+    let _0: ();
+    let _1: &mut Config; // c
+    let _2: &mut Config;
+    let _3: &mut Config;
+    let _4: &mut Config;
+    let _5: &mut Config;
+    let _6: &mut Config;
+    let _7: &mut Config;
+    let _8: &mut Config;
+    let _9: &mut Config;
+    let _10: &mut Config;
+    let _11: &mut Config;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = call Config.baud(move _2, const 115200_u32);
+        _4 = &mut (*_3);
+        _5 = call Config.parity(move _4, const 2_u8);
+        _6 = &mut (*_1);
+        _7 = call Config.baud(move _6, const 9600_u32);
+        _8 = &mut (*_7);
+        _9 = call Config.baud(move _8, const 1200_u32);
+        _10 = &mut (*_9);
+        _11 = call Config.parity(move _10, const 0_u8);
+        return;
+    }
+}
+
+fn clusters(_1: usize) -> u32 {
+    let _0: u32;
+    let _1: usize; // i
+    let _2: &mut Context; // ctx
+    let _3: *mut Plic;
+    let _4: &mut Plic;
+    let _5: &mut Context;
+    let _6: *mut Plic;
+    let _7: &Plic;
+    let _8: &Context;
+    let _9: u32;
+    let _10: u32;
+    let _11: *mut Plic;
+    let _12: &mut Plic;
+    let _13: &mut Context;
+    let _14: u32;
+    let _15: u32;
+
+    bb0: {
+        _3 = const peripheral PLIC;
+        _4 = &mut (*_3);
+        _5 = call Plic.ctx(move _4, copy _1);
+        _2 = move _5;
+        (*_2).0 = const 3_u32;
+        _6 = const peripheral PLIC;
+        _7 = &(*_6);
+        _8 = call Plic.first(copy _7);
+        _9 = copy (*_8).1;
+        _10 = copy _9;
+        _11 = const peripheral PLIC;
+        _12 = &mut (*_11);
+        _13 = call Plic.ctx(move _12, const 1_usize);
+        _14 = copy (*_13).1;
+        _15 = Add(copy _10, copy _14);
+        _0 = copy _15;
+        return;
+    }
+}
+
+fn set(_1: &mut Ring) -> () {
+    let _0: ();
+    let _1: &mut Ring; // r
+    let _2: &mut Ring;
+    let _3: &mut u8;
+    let _4: &mut Ring;
+    let _5: &mut u8;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = call slot_of(move _2, const 0_usize);
+        (*_3) = const 1_u8;
+        _4 = &mut (*_1);
+        _5 = call slot_of(move _4, const 1_usize);
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn TABLE() -> [u8; 4] {
+    let _0: [u8; 4];
+    let _1: [u8; 4];
+
+    bb0: {
+        _1[0] = const 1_u8;
+        _1[1] = const 2_u8;
+        _1[2] = const 3_u8;
+        _1[3] = const 4_u8;
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn OWNED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn SHARED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

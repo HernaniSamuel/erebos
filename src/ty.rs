@@ -692,6 +692,7 @@ impl Checker<'_, '_> {
         }
 
         self.params(f);
+        self.reference_return(f);
         if let FnKind::Interrupt(vector) = f.kind {
             self.interrupt_vector(vector);
             self.interrupt_return(f, vector);

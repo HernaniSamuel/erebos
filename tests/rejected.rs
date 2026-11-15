@@ -634,6 +634,14 @@ let injected_r: &mut u32 = &mut injected_n;"
 fn injected_use(injected_h: InjHolder) {}"
     ),
     s!(
+        "ty::reference-return",
+        Mir,
+        Items,
+        "fn injected_two(injected_a: &u32, injected_b: &u32) -> &u32 {
+    injected_a
+}"
+    ),
+    s!(
         "ty::never-in-memory",
         Mir,
         Items,
@@ -1020,6 +1028,15 @@ fn injected_f(injected_h: InjHandle6) {
     injected_x = 2;
     *injected_r = 3;
     injected_x
+}"
+    ),
+    s!(
+        "analysis::returned-borrow",
+        Mir,
+        Items,
+        "fn injected_f() -> &u32 {
+    let injected_x: u32 = 1;
+    &injected_x
 }"
     ),
     s!(

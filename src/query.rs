@@ -1757,9 +1757,11 @@ impl<'h> Queries<'h> {
         let f = self.hir.fn_(id);
         let mut types = vec![f.ret];
         types.extend(f.locals.iter().map(|local| local.ty));
-        // A reference returned, bound `mut` or asked the layout of was
-        // reported at its type (ADR 0105): MIR holds none (rule R1).
-        let mut references = matches!(f.ret, hir::Ty::Ref(_))
+        // A reference held by a constant or a static, bound `mut` or asked
+        // the layout of was reported at its type (ADR 0105): MIR holds none
+        // (rules R1, R5). The type of a function's result is not one at its
+        // top (ADR 0118); below it, `lacks_layout_in` finds it.
+        let mut references = (f.comptime.is_some() && matches!(f.ret, hir::Ty::Ref(_)))
             || (f.locals.iter()).any(|local| local.mutable && matches!(local.ty, hir::Ty::Ref(_)));
         let mut peripherals = Vec::new();
         if let Some(body) = &f.body {

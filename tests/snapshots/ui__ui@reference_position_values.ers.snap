@@ -14,8 +14,9 @@ ty::reference-position
     ·         ╰── makes `[&u32; 2]`, an array of references
  19 │     [[&a], [&b]];
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be an array element
@@ -26,8 +27,9 @@ ty::reference-position
     ·        ╰── makes `[&u32; 1]`, an array of references
  20 │     [&a; 3];
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be an array element
@@ -38,8 +40,9 @@ ty::reference-position
     ·              ╰── makes `[&u32; 1]`, an array of references
  20 │     [&a; 3];
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be an array element
@@ -50,8 +53,9 @@ ty::reference-position
     ·        ╰── makes `[&u32; 3]`, an array of references
  21 │     0
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the referent of a reference
@@ -62,8 +66,9 @@ ty::reference-position
     ·      ╰── makes `&&u32`, a reference to a reference
  31 │     &mut q;
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::mut-borrow-of-immutable
 
   × cannot borrow `q` as `&mut`, which is not `mut`
@@ -88,8 +93,9 @@ ty::reference-position
     ·      ╰── makes `&&u32`, a reference to a reference
  33 │     let four: &u32 = *&r;
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the referent of a reference
@@ -100,8 +106,9 @@ ty::reference-position
     ·                        ╰── makes `&&u32`, a reference to a reference
  34 │     &(if c { &a } else { &b });
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the referent of a reference
@@ -112,8 +119,9 @@ ty::reference-position
     ·                  ╰── makes `&&u32`, a reference to a reference
  35 │     take(four)
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the pointee of a pointer
@@ -124,8 +132,9 @@ ty::reference-position
     ·           ╰── makes `*const &u32`, a pointer to a reference
  42 │     (&raw const r) as *const u8;
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the pointee of a pointer
@@ -136,8 +145,9 @@ ty::reference-position
     ·            ╰── makes `*const &u32`, a pointer to a reference
  43 │     take(r)
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the value of a `critical` block

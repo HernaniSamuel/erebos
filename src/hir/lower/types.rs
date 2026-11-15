@@ -114,11 +114,15 @@ impl Lowerer<'_> {
                 referent,
             } => {
                 // Where none may be (ADR 0105), once per written type: what
-                // is inside a reference recorded is not recorded again.
+                // is inside a reference recorded is not recorded again. A
+                // return type is a position of one, at its top (ADR 0118):
+                // the signature rule judges it (`ty::reference-return`), and
+                // what is inside it is a referent, a type argument, an
+                // element or a pointee, and is recorded as such.
                 let forbidden = match position {
                     UnsizedPosition::Memory(position) => Some(ReferencePosition::Memory(position)),
-                    UnsizedPosition::Return => Some(ReferencePosition::Return),
-                    UnsizedPosition::Variable
+                    UnsizedPosition::Return
+                    | UnsizedPosition::Variable
                     | UnsizedPosition::Parameter
                     | UnsizedPosition::Cast => None,
                 }

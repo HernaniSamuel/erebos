@@ -1,0 +1,236 @@
+// emit: typeck
+// A function returns a reference tied to its one reference parameter (ADR
+// 0118). Each accepted row of the signature rule: `&T` and `&mut T` of the one
+// parameter, of `&self` and `&mut self`, beside a `self` by value and a raw
+// pointer; slices and sub-slices; a volatile result of a volatile parameter;
+// with no reference parameter, a shared reference to read-only static data (a
+// byte string, a `static`, an element of one, an `extern static` without
+// `mut`); an `extern fn`, an `#[export]` function and a `#[naked]` one.
+// Chaining, recursion, a method of a peripheral type that returns a cluster,
+// a getter of a part that is not copy, the result used as a place, an
+// argument and a `let`, and `counter`, which returns a reference made through
+// a raw pointer. Nothing here is reported.
+use core::arch::Vector;
+
+static TABLE: [u8; 4] = [1, 2, 3, 4];
+extern static LIMIT: u32;
+static mut OWNED: u32 = 0;
+static mut SHARED: u32 = 0;
+
+struct Ring {
+    buf: [u8; 8],
+    head: usize,
+}
+
+struct Config {
+    rate: u32,
+    parity: u8,
+}
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+    read claim: u32 at 4,
+}
+
+peripheral Plic {
+    read write priority: [u32; 96] at 0,
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+impl Ring {
+    fn peek(&self) -> &u8 {
+        &self.buf[self.head]
+    }
+
+    fn slot(&mut self, i: usize) -> &mut u8 {
+        &mut self.buf[i]
+    }
+
+    fn buf(&self) -> &[u8; 8] {
+        &self.buf
+    }
+
+    fn pick(self, at: usize, s: &[u8]) -> &u8 {
+        &s[at]
+    }
+}
+
+impl Config {
+    fn baud(&mut self, rate: u32) -> &mut Self {
+        self.rate = rate;
+        self
+    }
+
+    fn parity(&mut self, parity: u8) -> &mut Self {
+        self.parity = parity;
+        self
+    }
+
+    fn rate(&self) -> &u32 {
+        &self.rate
+    }
+}
+
+impl Plic {
+    fn ctx(&mut self, i: usize) -> &mut Context {
+        &mut self.ctx[i]
+    }
+
+    fn first(&self) -> &Context {
+        &self.first
+    }
+}
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+fn rest(s: &[u8], at: usize) -> &[u8] {
+    &s[at..]
+}
+
+fn middle(s: &[u8], from: usize, to: usize) -> &[u8] {
+    &s[from..to]
+}
+
+fn field(p: &Pair) -> &u32 {
+    &p.b
+}
+
+fn tail(p: &mut Pair) -> &mut u32 {
+    &mut p.b
+}
+
+fn shared(p: &mut Pair) -> &u32 {
+    &p.a
+}
+
+fn beside_a_pointer(p: *const u8, s: &[u8]) -> &[u8] {
+    s
+}
+
+fn same(r: &u32) -> &u32 {
+    let t: &u32 = r;
+    t
+}
+
+fn last(s: &[u8]) -> &u8 {
+    if len(s) <= 1 { &s[0] } else { last(&s[1..]) }
+}
+
+fn volatile_part(r: &mut volatile Ring) -> &mut volatile u8 {
+    &mut r.buf[1]
+}
+
+fn volatile_whole(r: &volatile Ring) -> &volatile Ring {
+    r
+}
+
+fn reason(code: u32) -> &[u8] {
+    match code {
+        0 => &b"division by zero",
+        1 => &b"out of bounds",
+        _ => &b"unknown",
+    }
+}
+
+fn greeting() -> &[u8; 5] {
+    &b"hello"
+}
+
+fn table() -> &[u8; 4] {
+    &TABLE
+}
+
+fn entry_of(i: usize) -> &u8 {
+    &TABLE[i % 4]
+}
+
+fn limit() -> &u32 {
+    &LIMIT
+}
+
+extern fn lookup(s: &[u8]) -> &u8;
+
+extern fn banner() -> &[u8];
+
+#[export]
+fn exported(s: &[u8]) -> &[u8] {
+    &s[1..]
+}
+
+#[naked]
+fn naked(r: &u32) -> &u32 {
+    asm("ret", options(noreturn))
+}
+
+// A reference made through a raw pointer is the program's word (ADR 0118).
+fn counter() -> &u32 {
+    &*(&raw const OWNED)
+}
+
+fn shared_counter() -> &u32 {
+    let p: *const u32 = critical { &raw const SHARED };
+    &*p
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    critical {
+        SHARED += 1;
+    }
+}
+
+// The result as a place, an argument, a receiver and a `let`.
+fn uses(s: &[u8; 3]) -> u32 {
+    let mut ring: Ring = Ring { buf: [0; 8], head: 0 };
+    *ring.slot(2) = 9;
+    *slot_of(&mut ring, 3) = 4;
+    let p: Pair = Pair { a: 1, b: 2 };
+    let held: &u8 = ring.peek();
+    let from_call: u32 = *field(&p) + *held as u32;
+    let chosen: &u8 = first(rest(s, 1));
+    let indexed: u8 = rest(s, 1)[0];
+    let a: u32 = *chosen as u32 + p_a(&p).a + indexed as u32;
+    let cfg: Config = Config { rate: 0, parity: 0 };
+    from_call + a + (*ring.buf())[2] as u32 + *cfg.rate() + *counter() + *shared_counter()
+}
+
+fn slot_of(r: &mut Ring, i: usize) -> &mut u8 {
+    &mut r.buf[i]
+}
+
+fn p_a(p: &Pair) -> &Pair {
+    p
+}
+
+fn chain(c: &mut Config) {
+    c.baud(115200).parity(2);
+    c.baud(9600).baud(1200).parity(0);
+}
+
+fn clusters(i: usize) -> u32 {
+    let ctx: &mut Context = PLIC.ctx(i);
+    ctx.threshold = 3;
+    PLIC.first().claim + PLIC.ctx(1).claim
+}
+
+fn set(r: &mut Ring) {
+    *slot_of(r, 0) = 1;
+    slot_of(r, 1);
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

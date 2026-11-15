@@ -1,0 +1,123 @@
+// emit: typeck
+// The signature rule of a returned reference (ADR 0118): `ty::reference-return`
+// at the return type, with a label at each parameter that is a reference, for
+// two or more of them, for a `&mut` result of a `&` parameter, and for a
+// `&mut` or volatile result with none. It is the same for a function with a
+// body, an `extern fn` and an `#[export]` function, and for a method, whose
+// `&self` is a parameter. A signature with a type in error is not judged:
+// `unsized` has two reference parameters and a parameter of type `[u8]`, and
+// only the latter is reported. The type of a `const` or a `static` is not a
+// return type: those stay `ty::reference-position`. So does a reference below
+// the top of a return type, at the inner reference, as a type argument, a
+// referent, an element and a pointee, and `&f(&x)`, a reference to the
+// reference `f` returns.
+static VALUE: u32 = 1;
+
+struct Ring {
+    buf: [u8; 8],
+}
+
+impl Ring {
+    fn two(&self, other: &u32) -> &u32 {
+        other
+    }
+
+    fn mutable(&self) -> &mut u8 {
+        loop {}
+    }
+}
+
+fn several(a: &u32, b: &u32) -> &u32 {
+    a
+}
+
+fn three(a: &u32, part: &mut u32, c: &[u8]) -> &mut u32 {
+    part
+}
+
+fn counted(a: &u32, n: u32, p: *const u32, b: &u32) -> &[u8] {
+    &b"counted"
+}
+
+fn shared_to_mutable(a: &u32) -> &mut u32 {
+    loop {}
+}
+
+fn nothing() -> &mut u32 {
+    loop {}
+}
+
+fn volatile_nothing() -> &volatile u32 {
+    loop {}
+}
+
+fn mutable_slice() -> &mut [u8] {
+    loop {}
+}
+
+extern fn outside(a: &u8, b: &u8) -> &u8;
+
+extern fn outside_mutable() -> &mut u8;
+
+#[export]
+fn exported(a: &u8, b: &u8) -> &u8 {
+    a
+}
+
+#[export]
+fn exported_mutable(a: &u8) -> &mut u8 {
+    loop {}
+}
+
+// Accepted beside them: one reference parameter, whatever the others are.
+fn accepted(a: &u32, n: u32, p: *const u32) -> &u32 {
+    a
+}
+
+fn unsized(a: &u8, b: &u8, c: [u8]) -> &u8 {
+    a
+}
+
+// A reference below the top of a return type.
+fn optional() -> Option(&u32) {
+    .None
+}
+
+fn referent(r: &u32) -> &&u32 {
+    &r
+}
+
+fn element(r: &u32) -> [&u32; 2] {
+    [r, r]
+}
+
+fn pointee() -> *const &u32 {
+    loop {}
+}
+
+fn slice_pointee() -> *const [&u32] {
+    loop {}
+}
+
+fn of_a_result(x: &u32) -> u32 {
+    let r: &&u32 = &same(x);
+    **r
+}
+
+fn same(r: &u32) -> &u32 {
+    r
+}
+
+// The type of a constant or a static is not a return type.
+const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+static HELD_VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

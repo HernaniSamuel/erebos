@@ -1,27 +1,30 @@
-//! Where a reference may be (ADR 0094, 0105): only the type of a parameter or
-//! of a `let` that is not `mut`, and the value of an expression that is an
-//! argument, an initializer, the operand of `*` or `as`, the base of a field,
-//! an index or a range in an index, the receiver of a method call (ADR 0114),
-//! or yields one of those. A reference held anywhere else is
-//! `ty::reference-position`.
+//! Where a reference may be (ADR 0094, 0105, 0118): only the type of a
+//! parameter or of a `let` that is not `mut`, the top of a return type, and
+//! the value of an expression that is an argument, an initializer, the operand
+//! of `*` or `as`, the base of a field, an index or a range in an index, the
+//! receiver of a method call (ADR 0114), the value a function returns, or
+//! yields one of those. A reference held anywhere else is
+//! `ty::reference-position`. Which references a function may return is the
+//! signature's rule (`ty::reference-return`, `Checker::reference_return`).
 
 use std::collections::HashSet;
 
 use crate::diag::Diagnostic;
+use crate::hir::Fn;
 use crate::hir::{Block, ExprId, ExprKind, NeverPosition, ReferencePosition, Ty};
 use crate::query::Queries;
+use crate::span::Span;
 
 use super::{Checker, memory_position};
 
 /// What `ty::reference-position` suggests instead of a reference written or
 /// made in a position of memory.
-const MEMORY_HELP: &str = "a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR 0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`";
+const MEMORY_HELP: &str = "a reference is held only by a parameter, a `let` without `mut` or the result of a call, and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const T` or `*mut T`";
 
 /// How the diagnostic names `position`.
 fn describe(position: ReferencePosition) -> String {
     match position {
         ReferencePosition::Memory(position) => memory_position(position),
-        ReferencePosition::Return => "a return type".to_owned(),
         ReferencePosition::MutParameter => "the type of a `mut` parameter".to_owned(),
         ReferencePosition::MutVariable => "the type of a `mut` variable".to_owned(),
     }
@@ -37,9 +40,6 @@ fn help(position: ReferencePosition) -> &'static str {
             "a reference has no layout of its own (ADR 0105); it is laid out as a raw pointer is, so ask for `*const T`"
         }
         ReferencePosition::Memory(_) => MEMORY_HELP,
-        ReferencePosition::Return => {
-            "no function returns a reference (ADR 0094, 0105); return the value, or a raw pointer, `*const T` or `*mut T`"
-        }
         ReferencePosition::MutParameter | ReferencePosition::MutVariable => {
             "a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut` instead of changing this one"
         }
@@ -97,6 +97,78 @@ fn breaks_out_of(block: &Block) -> Vec<ExprId> {
 }
 
 impl Checker<'_, '_> {
+    /// The signature rule of a function that returns a reference (ADR 0118,
+    /// "The rule, read off the signature"): `ty::reference-return`, at the
+    /// return type, with a label at each parameter of a reference type, for
+    /// two or more of them; for a `&mut` result of one `&` parameter; for a
+    /// `&mut` or volatile result with none. The parameters that are not
+    /// references count for nothing. A volatile result of one reference
+    /// parameter is not judged by its volatility: a `Ref` that is not that of
+    /// its tied parameter fails to type, as any reference does (ADR 0110).
+    ///
+    /// Judged for a function written with a return type, `extern fn`,
+    /// `#[export]` and `#[naked]` included; the `Fn` that holds a constant's
+    /// value or a `comptime` expression is not (its type is not a return
+    /// type), and a signature with an `{error}` type in it was reported.
+    pub(super) fn reference_return(&mut self, f: &Fn) {
+        let (Some(at), None) = (f.ret_span, f.comptime) else {
+            return;
+        };
+        let Ty::Ref(result) = self.ret else {
+            return;
+        };
+        let mut tied: Vec<(Span, Ty)> = Vec::new();
+        for param in f.params() {
+            match self.norm(param.ty) {
+                Ty::Error => return,
+                ty @ Ty::Ref(_) => tied.push((param.span, ty)),
+                _ => {}
+            }
+        }
+        let ret = self.ret;
+        let diag = match tied.as_slice() {
+            [] if result.mutable || result.volatile => {
+                let what = if result.mutable {
+                    "a `&mut`"
+                } else {
+                    "a volatile reference"
+                };
+                Diagnostic::error(
+                    "ty::reference-return",
+                    format!("cannot return {what} when no parameter is a reference"),
+                )
+                .label(at, format!("returns `{ret}`, with nothing to be tied to"))
+                .help("with no reference parameter, a returned reference borrows read-only static data, which is never `&mut` or volatile: return a raw pointer")
+            }
+            [(param, Ty::Ref(lender))] if result.mutable && !lender.mutable => Diagnostic::error(
+                "ty::reference-return",
+                "cannot return a `&mut` tied to a `&` parameter",
+            )
+            .label(at, format!("returns `{ret}`"))
+            .label(
+                *param,
+                format!("`{}` lends only a shared reference", Ty::Ref(*lender)),
+            )
+            .help("make the parameter `&mut`, or return a `&`"),
+            [_, _, ..] => {
+                let mut diag = Diagnostic::error(
+                    "ty::reference-return",
+                    format!(
+                        "cannot return a reference when {} parameters are references",
+                        tied.len()
+                    ),
+                )
+                .label(at, format!("returns `{ret}`, tied to which one?"));
+                for (param, ty) in &tied {
+                    diag = diag.label(*param, format!("`{ty}` is a reference parameter"));
+                }
+                diag.help("a returned reference is tied to the one reference parameter: pass one reference, or return an index or a copy")
+            }
+            _ => return,
+        };
+        self.q.diags.push(diag);
+    }
+
     /// Reports, in the body of a function, the expressions that make a type
     /// holding a reference below its top, at the innermost one, and the
     /// values of a `critical` block and of a `comptime` expression that are

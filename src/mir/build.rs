@@ -32,7 +32,10 @@ pub fn build_body(q: &mut Queries, id: hir::FnId) -> Option<Body> {
         builder.current = Some(start);
         let value = builder.block(body);
         if ret != Ty::Unit {
-            builder.assign(Place::local(Local::RETURN), Rvalue::Use(value));
+            // The write is at the value it writes, so that the borrow
+            // analysis points at it as "returned here" (ADR 0118).
+            let at = body.tail.as_ref().map_or(body.span, |tail| tail.span);
+            builder.assign_at(at, Place::local(Local::RETURN), Rvalue::Use(value));
         }
         if builder.current.is_some() {
             builder.terminate(Terminator::Return);
@@ -291,6 +294,13 @@ impl Builder<'_, '_> {
 
     fn assign(&mut self, place: Place, rvalue: Rvalue) {
         self.push(Statement::Assign(place, rvalue));
+    }
+
+    /// `assign`, with the statement at `span`.
+    fn assign_at(&mut self, span: Span, place: Place, rvalue: Rvalue) {
+        let outer = std::mem::replace(&mut self.span, span);
+        self.assign(place, rvalue);
+        self.span = outer;
     }
 
     fn push(&mut self, statement: Statement) {
@@ -1153,11 +1163,13 @@ impl Builder<'_, '_> {
             }
             hir::ExprKind::Asm(asm) => self.asm(expr, asm),
             hir::ExprKind::Return(value) => {
-                let value = value.as_ref().map(|v| self.expr(v));
-                if let Some(value) = value
+                let value = value.as_ref().map(|v| (self.expr(v), v.span));
+                if let Some((value, at)) = value
                     && self.locals[0].ty != Ty::Unit
                 {
-                    self.assign(Place::local(Local::RETURN), Rvalue::Use(value));
+                    // At the operand, as the write of a body's tail is
+                    // (ADR 0118).
+                    self.assign_at(at, Place::local(Local::RETURN), Rvalue::Use(value));
                 }
                 if self.current.is_some() {
                     self.leave_criticals(0);

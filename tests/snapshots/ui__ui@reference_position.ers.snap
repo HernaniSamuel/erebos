@@ -7,202 +7,199 @@ input_file: tests/ui/reference_position.ers
 ty::reference-position
 
   × a reference cannot be the type of a field
-    ╭─[reference_position.ers:18:8]
- 17 │ struct Holder {
- 18 │     r: &u32,
+    ╭─[reference_position.ers:20:8]
+ 19 │ struct Holder {
+ 20 │     r: &u32,
     ·        ──┬─
     ·          ╰── `&u32` is a reference
- 19 │ }
+ 21 │ }
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the type of a field
-    ╭─[reference_position.ers:22:8]
- 21 │ struct Nested {
- 22 │     r: &&u32,
+    ╭─[reference_position.ers:24:8]
+ 23 │ struct Nested {
+ 24 │     r: &&u32,
     ·        ──┬──
     ·          ╰── `&&u32` is a reference
- 23 │ }
+ 25 │ }
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be an array element
-    ╭─[reference_position.ers:26:13]
- 25 │ struct Elements {
- 26 │     items: [&u32; 2],
+    ╭─[reference_position.ers:28:13]
+ 27 │ struct Elements {
+ 28 │     items: [&u32; 2],
     ·             ──┬─
     ·               ╰── `&u32` is a reference
- 27 │ }
+ 29 │ }
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the pointee of a pointer
-    ╭─[reference_position.ers:30:15]
- 29 │ struct Behind {
- 30 │     p: *const &u32,
+    ╭─[reference_position.ers:32:15]
+ 31 │ struct Behind {
+ 32 │     p: *const &u32,
     ·               ──┬─
     ·                 ╰── `&u32` is a reference
- 31 │     s: *const [&u32],
+ 33 │     s: *const [&u32],
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the element type of a slice
-    ╭─[reference_position.ers:31:16]
- 30 │     p: *const &u32,
- 31 │     s: *const [&u32],
+    ╭─[reference_position.ers:33:16]
+ 32 │     p: *const &u32,
+ 33 │     s: *const [&u32],
     ·                ──┬─
     ·                  ╰── `&u32` is a reference
- 32 │ }
+ 34 │ }
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be a payload type
-    ╭─[reference_position.ers:35:10]
- 34 │ enum Slot: u8 {
- 35 │     Full(&u32) = 0,
+    ╭─[reference_position.ers:37:10]
+ 36 │ enum Slot: u8 {
+ 37 │     Full(&u32) = 0,
     ·          ──┬─
     ·            ╰── `&u32` is a reference
- 36 │     Empty = 1,
+ 38 │     Empty = 1,
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the type of a static
-    ╭─[reference_position.ers:39:14]
- 38 │ 
- 39 │ static HELD: &u32 = &VALUE;
+    ╭─[reference_position.ers:41:14]
+ 40 │ 
+ 41 │ static HELD: &u32 = &VALUE;
     ·              ──┬─
     ·                ╰── `&u32` is a reference
- 40 │ extern static OUTSIDE: &u32;
+ 42 │ extern static OUTSIDE: &u32;
     ╰────
   help: a static or a constant holds a value computed at compile time, which is never a reference
         (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
 ty::reference-position
 
   × a reference cannot be the type of a static
-    ╭─[reference_position.ers:40:24]
- 39 │ static HELD: &u32 = &VALUE;
- 40 │ extern static OUTSIDE: &u32;
+    ╭─[reference_position.ers:42:24]
+ 41 │ static HELD: &u32 = &VALUE;
+ 42 │ extern static OUTSIDE: &u32;
     ·                        ──┬─
     ·                          ╰── `&u32` is a reference
- 41 │ const KEPT: &u32 = &VALUE;
+ 43 │ const KEPT: &u32 = &VALUE;
     ╰────
   help: a static or a constant holds a value computed at compile time, which is never a reference
         (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
 ty::reference-position
 
   × a reference cannot be the type of a constant
-    ╭─[reference_position.ers:41:13]
- 40 │ extern static OUTSIDE: &u32;
- 41 │ const KEPT: &u32 = &VALUE;
+    ╭─[reference_position.ers:43:13]
+ 42 │ extern static OUTSIDE: &u32;
+ 43 │ const KEPT: &u32 = &VALUE;
     ·             ──┬─
     ·               ╰── `&u32` is a reference
- 42 │ 
+ 44 │ 
     ╰────
   help: a static or a constant holds a value computed at compile time, which is never a reference
         (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
 ty::reference-position
 
   × a reference cannot be a type argument
-    ╭─[reference_position.ers:43:23]
- 42 │ 
- 43 │ fn argument(o: Option(&u32)) {}
+    ╭─[reference_position.ers:45:23]
+ 44 │ 
+ 45 │ fn argument(o: Option(&u32)) {}
     ·                       ──┬─
     ·                         ╰── `&u32` is a reference
- 44 │ 
+ 46 │ 
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be a type argument
-    ╭─[reference_position.ers:45:24]
- 44 │ 
- 45 │ fn wrapped() -> Option(&&u32) {
+    ╭─[reference_position.ers:47:24]
+ 46 │ 
+ 47 │ fn wrapped() -> Option(&&u32) {
     ·                        ──┬──
     ·                          ╰── `&&u32` is a reference
- 46 │     .None
+ 48 │     .None
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
-ty::reference-position
-
-  × a reference cannot be a return type
-    ╭─[reference_position.ers:49:14]
- 48 │ 
- 49 │ fn pick() -> &u32 {
-    ·              ──┬─
-    ·                ╰── `&u32` is a reference
- 50 │     &VALUE
-    ╰────
-  help: no function returns a reference (ADR 0094, 0105); return the value, or a raw pointer,
-        `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the referent of a reference
-    ╭─[reference_position.ers:53:16]
- 52 │ 
- 53 │ fn through(r: &&u32) {}
+    ╭─[reference_position.ers:51:16]
+ 50 │ 
+ 51 │ fn through(r: &&u32) {}
     ·                ──┬─
     ·                  ╰── `&u32` is a reference
- 54 │ 
+ 52 │ 
     ╰────
-  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
-        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+  help: a reference is held only by a parameter, a `let` without `mut` or the result of a call,
+        and lent to calls (ADR 0094, 0105, 0118); to keep an address, use a raw pointer, `*const
+        T` or `*mut T`
 ty::reference-position
 
   × a reference cannot be the operand of `size_of`
-    ╭─[reference_position.ers:56:13]
- 55 │ fn layout() -> usize {
- 56 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
+    ╭─[reference_position.ers:54:13]
+ 53 │ fn layout() -> usize {
+ 54 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
     ·             ──┬─
     ·               ╰── `&u32` is a reference
- 57 │ }
+ 55 │ }
     ╰────
   help: a reference has no layout of its own (ADR 0105); it is laid out as a raw pointer is, so
         ask for `*const T`
 ty::reference-position
 
   × a reference cannot be the operand of `align_of`
-    ╭─[reference_position.ers:56:30]
- 55 │ fn layout() -> usize {
- 56 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
+    ╭─[reference_position.ers:54:30]
+ 53 │ fn layout() -> usize {
+ 54 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
     ·                              ──┬──
     ·                                ╰── `&Pair` is a reference
- 57 │ }
+ 55 │ }
     ╰────
   help: a reference has no layout of its own (ADR 0105); it is laid out as a raw pointer is, so
         ask for `*const T`
 ty::reference-position
 
   × a reference cannot be the operand of `offset_of`
-    ╭─[reference_position.ers:56:49]
- 55 │ fn layout() -> usize {
- 56 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
+    ╭─[reference_position.ers:54:49]
+ 53 │ fn layout() -> usize {
+ 54 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
     ·                                                 ──┬──
     ·                                                   ╰── `&Pair` is a reference
- 57 │ }
+ 55 │ }
     ╰────
   help: a reference has no layout of its own (ADR 0105); it is laid out as a raw pointer is, so
         ask for `*const T`
 ty::no-fields
 
   × `&Pair` has no fields
-    ╭─[reference_position.ers:56:56]
- 55 │ fn layout() -> usize {
- 56 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
+    ╭─[reference_position.ers:54:56]
+ 53 │ fn layout() -> usize {
+ 54 │     size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
     ·                                                        ┬
     ·                                                        ╰── no such field
- 57 │ }
+ 55 │ }
     ╰────

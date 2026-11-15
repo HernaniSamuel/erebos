@@ -1,0 +1,145 @@
+// emit: mir
+// What a function may return (ADR 0118): a reference whose value may hold a
+// borrow of the function's own memory, of a `static mut` or of a peripheral is
+// `analysis::returned-borrow`, at the borrow, with the place the value is
+// returned at. A variable, a parameter that is not a reference, `self` by
+// value, a temporary (`&f()`, a struct literal, a constant, which is copied
+// into a temporary to be borrowed) and a reborrow of a local's borrow, kept in
+// a `let`, copied or passed through a call, are all a local. A site that
+// reaches two `return`s is two errors, and one that reaches one `return`
+// through two paths is one. The accepted returns are in
+// `returned_references.ers`.
+const LIMITS: [u8; 2] = [1, 2];
+static mut COUNT: u32 = 0;
+extern static mut OUTSIDE: u32;
+
+struct Config {
+    rate: u32,
+}
+
+impl Config {
+    fn consumed(self) -> &u32 {
+        &self.rate
+    }
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral Uart {
+    read write data: u32 at 0,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral PLIC: Plic at 0x0C00_0000;
+
+fn first(s: &[u8]) -> &u8 {
+    &s[0]
+}
+
+fn make() -> u32 {
+    7
+}
+
+fn variable(x: u32) -> &u32 {
+    let total: u32 = x + 1;
+    &total
+}
+
+fn by_value(x: u32) -> &u32 {
+    &x
+}
+
+fn temporary() -> &u32 {
+    &make()
+}
+
+fn literal() -> &Config {
+    &Config { rate: 1 }
+}
+
+fn constant() -> &[u8; 2] {
+    &LIMITS
+}
+
+fn static_mut() -> &u32 {
+    &COUNT
+}
+
+fn extern_static_mut() -> &u32 {
+    &OUTSIDE
+}
+
+fn peripheral() -> &Uart {
+    &UART0
+}
+
+fn cluster() -> &Context {
+    &PLIC.first
+}
+
+fn element() -> &Context {
+    &PLIC.ctx[1]
+}
+
+fn a_branch(c: bool, r: &u32) -> &u32 {
+    let local: u32 = 1;
+    if c { &local } else { r }
+}
+
+fn through_a_copy(r: &u32) -> &u32 {
+    let local: u32 = 1;
+    let t: &u32 = &local;
+    let copy: &u32 = t;
+    copy
+}
+
+fn a_reborrow(r: &[u8; 4]) -> &[u8] {
+    let local: [u8; 4] = [1, 2, 3, 4];
+    let t: &[u8; 4] = &local;
+    &t[1..]
+}
+
+fn through_a_call(r: &[u8]) -> &u8 {
+    let local: [u8; 2] = [1, 2];
+    first(&local)
+}
+
+// One borrow, two `return`s: two errors, in order.
+fn two_returns(c: bool, r: &u32) -> &u32 {
+    let local: u32 = 1;
+    let t: &u32 = &local;
+    if c {
+        return t;
+    }
+    t
+}
+
+// One borrow reaching one `return` through two paths: one error.
+fn two_paths(c: bool, r: &u32) -> &u32 {
+    let local: u32 = 1;
+    let t: &u32 = &local;
+    let chosen: &u32 = if c { t } else { t };
+    chosen
+}
+
+// Accepted beside them, so that the errors above are what is rejected.
+fn accepted(r: &u32) -> &u32 {
+    let local: u32 = *r + 1;
+    let t: &u32 = r;
+    t
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

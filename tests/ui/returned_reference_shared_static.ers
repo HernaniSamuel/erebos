@@ -1,0 +1,41 @@
+// emit: mir
+// A reference made through a raw pointer may be returned (ADR 0118): `counter`
+// returns `&*(&raw const COUNT)`, which is the program's word, given once, for
+// every caller. It has no borrow to check, but the rule of shared statics sees
+// the name `COUNT`: where a handler also reaches the static, naming it outside
+// `critical` is `analysis::unprotected-static`, and the form that takes the
+// pointer inside `critical` and leaves with the raw pointer is accepted. A
+// static that one context owns needs neither.
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+static mut OWNED: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    COUNT += 1;
+}
+
+fn unprotected() -> &u32 {
+    &*(&raw const COUNT)
+}
+
+fn protected() -> &u32 {
+    let p: *const u32 = critical { &raw const COUNT };
+    &*p
+}
+
+fn owned() -> &u32 {
+    &*(&raw const OWNED)
+}
+
+entry fn main() -> ! {
+    OWNED = 1;
+    let a: &u32 = unprotected();
+    let b: &u32 = protected();
+    let c: &u32 = owned();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

@@ -1,0 +1,240 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/returned_borrow_errors.ers
+---
+--- errors ---
+analysis::returned-borrow
+
+  × cannot return a reference to `self`, a local of this function
+    ╭─[returned_borrow_errors.ers:22:9]
+ 21 │     fn consumed(self) -> &u32 {
+ 22 │         &self.rate
+    ·         ─────┬────┬
+    ·              │    ╰── returned here
+    ·              ╰── `self.rate` is borrowed here
+ 23 │     }
+    ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `total`, a local of this function
+    ╭─[returned_borrow_errors.ers:52:5]
+ 51 │     let total: u32 = x + 1;
+ 52 │     &total
+    ·     ───┬──┬
+    ·        │  ╰── returned here
+    ·        ╰── `total` is borrowed here
+ 53 │ }
+    ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `x`, a local of this function
+    ╭─[returned_borrow_errors.ers:56:5]
+ 55 │ fn by_value(x: u32) -> &u32 {
+ 56 │     &x
+    ·     ─┬┬
+    ·      │╰── returned here
+    ·      ╰── `x` is borrowed here
+ 57 │ }
+    ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to a temporary value of this function
+    ╭─[returned_borrow_errors.ers:60:5]
+ 59 │ fn temporary() -> &u32 {
+ 60 │     &make()
+    ·     ───┬───┬
+    ·        │   ╰── returned here
+    ·        ╰── this value is borrowed here
+ 61 │ }
+    ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to a temporary value of this function
+    ╭─[returned_borrow_errors.ers:64:5]
+ 63 │ fn literal() -> &Config {
+ 64 │     &Config { rate: 1 }
+    ·     ─────────┬─────────┬
+    ·              │         ╰── returned here
+    ·              ╰── this value is borrowed here
+ 65 │ }
+    ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to a constant, which has no address of its own
+    ╭─[returned_borrow_errors.ers:68:5]
+ 67 │ fn constant() -> &[u8; 2] {
+ 68 │     &LIMITS
+    ·     ───┬───┬
+    ·        │   ╰── returned here
+    ·        ╰── this value is borrowed here
+ 69 │ }
+    ╰────
+  help: declare a `static` to return a reference to it
+analysis::returned-borrow
+
+  × cannot return a reference to `COUNT`, a `static mut`
+    ╭─[returned_borrow_errors.ers:72:5]
+ 71 │ fn static_mut() -> &u32 {
+ 72 │     &COUNT
+    ·     ───┬──┬
+    ·        │  ╰── returned here
+    ·        ╰── `COUNT` is borrowed here
+ 73 │ }
+    ╰────
+  help: a returned reference cannot borrow a `static mut`: borrow it in the caller and pass the
+        reference in, or return a raw pointer and write `&*p` where it is used
+analysis::returned-borrow
+
+  × cannot return a reference to `OUTSIDE`, an `extern static mut`
+    ╭─[returned_borrow_errors.ers:76:5]
+ 75 │ fn extern_static_mut() -> &u32 {
+ 76 │     &OUTSIDE
+    ·     ────┬───┬
+    ·         │   ╰── returned here
+    ·         ╰── `OUTSIDE` is borrowed here
+ 77 │ }
+    ╰────
+  help: a returned reference cannot borrow a `static mut`: borrow it in the caller and pass the
+        reference in, or return a raw pointer and write `&*p` where it is used
+analysis::returned-borrow
+
+  × cannot return a reference to `UART0`, a peripheral
+    ╭─[returned_borrow_errors.ers:80:5]
+ 79 │ fn peripheral() -> &Uart {
+ 80 │     &UART0
+    ·     ───┬──┬
+    ·        │  ╰── returned here
+    ·        ╰── `UART0` is borrowed here
+ 81 │ }
+    ╰────
+  help: borrow the peripheral or its cluster in the caller and pass the reference in
+analysis::returned-borrow
+
+  × cannot return a reference to `PLIC`, a peripheral
+    ╭─[returned_borrow_errors.ers:84:5]
+ 83 │ fn cluster() -> &Context {
+ 84 │     &PLIC.first
+    ·     ─────┬─────┬
+    ·          │     ╰── returned here
+    ·          ╰── `PLIC.first` is borrowed here
+ 85 │ }
+    ╰────
+  help: borrow the peripheral or its cluster in the caller and pass the reference in
+analysis::returned-borrow
+
+  × cannot return a reference to `PLIC`, a peripheral
+    ╭─[returned_borrow_errors.ers:88:5]
+ 87 │ fn element() -> &Context {
+ 88 │     &PLIC.ctx[1]
+    ·     ──────┬─────┬
+    ·           │     ╰── returned here
+    ·           ╰── `PLIC.ctx[_]` is borrowed here
+ 89 │ }
+    ╰────
+  help: borrow the peripheral or its cluster in the caller and pass the reference in
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+    ╭─[returned_borrow_errors.ers:93:12]
+ 92 │     let local: u32 = 1;
+ 93 │     if c { &local } else { r }
+    ·     ─────────────┬────────────┬
+    ·                  │            ╰── `local` is borrowed here
+    ·                  ╰── returned here
+ 94 │ }
+    ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+     ╭─[returned_borrow_errors.ers:98:19]
+  97 │     let local: u32 = 1;
+  98 │     let t: &u32 = &local;
+     ·                   ───┬──
+     ·                      ╰── `local` is borrowed here
+  99 │     let copy: &u32 = t;
+ 100 │     copy
+     ·     ──┬─
+     ·       ╰── returned here
+ 101 │ }
+     ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+     ╭─[returned_borrow_errors.ers:105:23]
+ 104 │     let local: [u8; 4] = [1, 2, 3, 4];
+ 105 │     let t: &[u8; 4] = &local;
+     ·                       ───┬──
+     ·                          ╰── `local` is borrowed here
+ 106 │     &t[1..]
+     ·     ───┬───
+     ·        ╰── returned here
+ 107 │ }
+     ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+     ╭─[returned_borrow_errors.ers:111:11]
+ 110 │     let local: [u8; 2] = [1, 2];
+ 111 │     first(&local)
+     ·     ──────┬──────┬
+     ·           │      ╰── `local` is borrowed here
+     ·           ╰── returned here
+ 112 │ }
+     ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+     ╭─[returned_borrow_errors.ers:117:19]
+ 116 │     let local: u32 = 1;
+ 117 │     let t: &u32 = &local;
+     ·                   ───┬──
+     ·                      ╰── `local` is borrowed here
+ 118 │     if c {
+ 119 │         return t;
+     ·                ┬
+     ·                ╰── returned here
+ 120 │     }
+     ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+     ╭─[returned_borrow_errors.ers:117:19]
+ 116 │     let local: u32 = 1;
+ 117 │     let t: &u32 = &local;
+     ·                   ───┬──
+     ·                      ╰── `local` is borrowed here
+ 118 │     if c {
+ 119 │         return t;
+ 120 │     }
+ 121 │     t
+     ·     ┬
+     ·     ╰── returned here
+ 122 │ }
+     ╰────
+  help: return the value, or a part of the reference parameter
+analysis::returned-borrow
+
+  × cannot return a reference to `local`, a local of this function
+     ╭─[returned_borrow_errors.ers:127:19]
+ 126 │     let local: u32 = 1;
+ 127 │     let t: &u32 = &local;
+     ·                   ───┬──
+     ·                      ╰── `local` is borrowed here
+ 128 │     let chosen: &u32 = if c { t } else { t };
+ 129 │     chosen
+     ·     ───┬──
+     ·        ╰── returned here
+ 130 │ }
+     ╰────
+  help: return the value, or a part of the reference parameter
