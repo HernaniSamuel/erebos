@@ -287,6 +287,22 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   } else { other(&buf) }; buf[0] = 1; *b`) repeats the label "the borrow is
   used later here" once per site, at the same `*b`; the older snapshots with
   several sites do the same, so it was left. (M5.8, step 6)
+- `src/mir/validate.rs`, R5: the message for two or more reference parameters
+  reads "returns the shared reference `T`, but has 2 reference parameters,
+  `_1` (...), `_2` (...), not at most one"; "has 2 reference parameters (...),
+  but at most one is allowed" reads better. The tests match substrings only.
+  (M5.8, step 1)
+- `src/analysis/borrows.rs`, `call_def_of`: it takes `args.first()` and drops
+  any other reference argument without saying so. It is sound only because R5
+  and P3 leave at most one for a callee that returns a reference; a
+  `debug_assert!` or a pointer to R5 at the call site would say it. (M5.8,
+  step 2)
+- `src/analysis/borrows.rs`, `returned_borrows`: the `seen` deduplication
+  cannot fire for one site reaching one `Return` by two paths, because the
+  held state at a block start is already merged. It matters only for two
+  `Return` blocks with the same borrow span and the same "returned here" span,
+  and it is redundant for the borrow's span, which is already in the labels.
+  (M5.8, step 2)
 
 ## Tests
 
@@ -460,6 +476,32 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `tests/e2e/assert_message.ers`, line 3: the header still says the message is
   dropped "until M2.6", which is old; `docs/roadmap.md` (the M2.6 row) shows
   `info: *const PanicInfo` as history. (M5.7, final review)
+- `src/mir/validate.rs`: no test shows that a volatile result with one
+  reference parameter that is not volatile is accepted by R5, as the step's
+  Decisions say; type checking ties the two. (M5.8, step 1)
+- `src/analysis/borrows.rs`, the test
+  `a_borrow_held_without_a_call_gets_no_call_label`: its `apart` case does not
+  test what its comment says (the walk starts from a local defined by the
+  `Ref` itself, so the call on another local is never visited); and no test
+  makes the call label come from the next-iteration branch of `holding_call`
+  (`round: true`). (M5.8, step 3)
+- `src/analysis/borrows.rs`, the test
+  `a_temporary_copied_from_a_constant_is_the_constant_whatever_borrows_it`:
+  its comment says "A part of it, `&CONST[1]`", but the case borrows the whole
+  temporary through a reborrow in a `let`. (M5.8, step 4)
+- `src/ty/reference.rs`, `report_made_references`: a `return` inside a
+  `comptime` expression inside a `critical` block is recorded by the walk;
+  that expression is its own `Fn`, so it is judged unreachable, and no test
+  shows it. (M5.8, step 5)
+- `tests/ui/returned_reference_borrows_accepted.ers`: the twins `lent`
+  (`poke(slot(r, 0))`) and `no_parameter` (`table()`) are accepted because
+  they leave nothing for a conflict to attach to; their snapshots are a MIR
+  dump and would not show a result that held too much. The unit tests of steps
+  2 and 3 cover the mechanism. (M5.8, step 6)
+- The LLVM snapshots of step 7 have no volatile result and no `&mut` result
+  through an `extern fn`, and the C program of step 8 runs only a `&[u8]`
+  result across the ABI; the ABI reads the signature, so kind and linkage add
+  nothing, but no test says so. (M5.8, steps 7 and 8)
 
 ## Docs
 
@@ -609,3 +651,15 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   split it into plain counts. ADR 0095's status line does not name P5, though
   the validator now rejects a raw pointer as the panic function's parameter;
   the change is the user's (see the report of M5.7). (M5.7, final review)
+- `docs/roadmap.md` (the "After M5" entry, around lines 317-322): the sentence
+  "A reference that is stored is what still holds them" is not true of the 3
+  sites of `erebos_skip`: nothing is stored there, and it stays raw because C
+  calls it and `slices.ers` tests the cast. The recount keeps M5.7's reading
+  (reason 8: 19 sites, 45 lines in `tests/e2e/`) so the counts compare; step 9
+  reads it as reason 1 (16 sites, 43 lines). Both are in the plan and the
+  roadmap; which one the roadmap commits to is the user's. (M5.8, step 10)
+- `.claude/plans/M5.8.md`: step 6's header says "no compiler code" though a
+  `fix(analysis)` precedes it; step 9 calls `x` of `byte_strings.ers` a
+  `-> *const [u8]` while it returns `*const [u8; 1]`; the 45 lines of step
+  10's recount include `parse.ers:13`, a cast line with no site, so a reader
+  who recounts lines by kind finds 44. (M5.8, final review)
