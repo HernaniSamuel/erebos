@@ -28,6 +28,11 @@
 //! `static` without `mut`, may be returned; a borrow of a local, of a
 //! `static mut` or of a peripheral may not.
 //!
+//! The sets keep no provenance, so an error whose borrow is held through a
+//! call's result finds the call afterwards, only for the error: a walk back
+//! from the later use over the definitions that hold the borrow, and the call
+//! found is labelled (ADR 0118).
+//!
 //! The same collection feeds the check of the conflicts across calls (ADR
 //! 0112): `facts` gives, for a body, its accesses rooted at a static or a
 //! peripheral and the sites rooted at one that are in use at each call.
@@ -346,6 +351,18 @@ struct Point {
     /// The point is a whole call: the write of its result, which happens
     /// after the callee returns, is a later use.
     whole_call: bool,
+}
+
+/// A read of a local that holds a site, after an access: what `later_use`
+/// answers, with where the read is and the local it reads (among those of a
+/// reference type), which the walk to the call that holds the site starts from.
+#[derive(Clone, Copy)]
+struct Later {
+    span: Span,
+    /// Reached in a later iteration of a loop.
+    round: bool,
+    at: Loc,
+    local: usize,
 }
 
 /// An access in conflict, and the sites in use it conflicts with.
@@ -1086,6 +1103,18 @@ impl<'b> Flow<'b> {
         before: &[Vec<State>],
         reached: &[bool],
     ) -> Option<(Span, bool)> {
+        let later = self.later_read(fault, site, before, reached)?;
+        Some((later.span, later.round))
+    }
+
+    /// `later_use` with the read it found: where it is and the local it reads.
+    fn later_read(
+        &self,
+        fault: Point,
+        site: usize,
+        before: &[Vec<State>],
+        reached: &[bool],
+    ) -> Option<Later> {
         let (fault_block, fault_index, fault_access) = fault.at;
         let mut ahead = Vec::new();
         let mut round = Vec::new();
@@ -1111,7 +1140,16 @@ impl<'b> Flow<'b> {
                         continue;
                     }
                     let span = if stmt.call { stmt.span } else { access.span };
-                    let found = (key(span), (block, index, k), span);
+                    let found = (
+                        key(span),
+                        (block, index, k),
+                        Later {
+                            span,
+                            round: false,
+                            at: (block, index, k),
+                            local,
+                        },
+                    );
                     let starts_after = span.file == fault.span.file && span.lo >= fault.span.lo;
                     // Outside a loop, whatever the access reaches comes after
                     // it, wherever its span starts: a call starts before its
@@ -1128,12 +1166,88 @@ impl<'b> Flow<'b> {
             .into_iter()
             .min_by_key(|&(order, loc, _)| (order, loc))
         {
-            Some((_, _, span)) => Some((span, false)),
+            Some((_, _, later)) => Some(later),
             None => (round
                 .into_iter()
                 .min_by_key(|&(order, loc, _)| (order, loc)))
-            .map(|(_, _, span)| (span, true)),
+            .map(|(_, _, later)| Later {
+                round: true,
+                ..later
+            }),
         }
+    }
+
+    /// The call whose result carries `site` to the read `later`, to be
+    /// labelled in an error (ADR 0118, "The borrow analysis", item 4).
+    ///
+    /// `State` keeps no provenance, so the answer is found backwards from the
+    /// read, over the definitions of the local it reads, where the value still
+    /// holds the site: a copy goes to the local copied, a reborrow to the
+    /// local it was made through, a call's result to the call's reference
+    /// argument. The first call met on a branch is the nearest and ends it; of
+    /// the calls met on all the branches the one with the lowest block, then
+    /// statement, is the answer, so that it does not depend on the order of
+    /// the visits. Each definition and each block entry is visited once, so a
+    /// loop ends the walk. None when the site is held without a call, which is
+    /// the case when the walk reaches the `Ref` of the site itself.
+    fn holding_call(&self, later: &Later, site: usize, before: &[Vec<State>]) -> Option<Span> {
+        let mut predecessors = vec![Vec::new(); self.body.blocks.len()];
+        for &block in &self.blocks {
+            for &next in &self.successors[block] {
+                predecessors[next].push(block);
+            }
+        }
+        // Where a read of `local` is looked for: before the statement `index`
+        // of `block`, or, for `index == len`, at the end of the block.
+        let mut work = vec![(later.local, later.at.0, later.at.1)];
+        let mut visited = HashSet::new();
+        let mut calls: Vec<(usize, usize)> = Vec::new();
+        while let Some((local, block, index)) = work.pop() {
+            let code = &self.code[block];
+            let found = (code.iter().enumerate().take(index).rev())
+                .find(|(_, stmt)| stmt.def.as_ref().is_some_and(|def| def.local == local));
+            let Some((at, stmt)) = found else {
+                // Defined above the block: in each predecessor that still
+                // holds the site at its end.
+                if !visited.insert((block, usize::MAX, local)) {
+                    continue;
+                }
+                for &pred in &predecessors[block] {
+                    let Some(mut state) = before[pred].last().cloned() else {
+                        continue;
+                    };
+                    if let Some(last) = self.code[pred].last() {
+                        self.apply(&mut state, last);
+                    }
+                    if state[local].contains(site) {
+                        work.push((local, pred, self.code[pred].len()));
+                    }
+                }
+                continue;
+            };
+            if !visited.insert((block, at, local)) {
+                continue;
+            }
+            let mut after = before[block][at].clone();
+            self.apply(&mut after, stmt);
+            if !after[local].contains(site) {
+                continue;
+            }
+            let Some(def) = &stmt.def else {
+                continue;
+            };
+            match def.holds {
+                Holds::Copy(_) if stmt.call => calls.push((block, at)),
+                Holds::Copy(from) => work.push((from, block, at)),
+                Holds::Site {
+                    site: made,
+                    through: Some(from),
+                } if made != site => work.push((from, block, at)),
+                Holds::Site { .. } | Holds::Nothing => {}
+            }
+        }
+        let (block, index) = calls.into_iter().min()?;
+        Some(self.code[block][index].span)
     }
 
     /// The errors, in the order of the spans of the accesses, then of their
@@ -1152,17 +1266,19 @@ impl<'b> Flow<'b> {
             sites.sort_by_key(|&site| (key(self.sites[site].span), site));
             for site in sites {
                 labels.push((self.sites[site].span, self.site_label(&self.sites[site])));
-                if let Some((span, round)) = self.later_use(fault.point(), site, &before, &reached)
-                {
+                if let Some(later) = self.later_read(fault.point(), site, &before, &reached) {
                     labels.push((
-                        span,
-                        if round {
+                        later.span,
+                        if later.round {
                             "the borrow is used in the next iteration of the loop"
                         } else {
                             "the borrow is used later here"
                         }
                         .to_owned(),
                     ));
+                    if let Some(span) = self.holding_call(&later, site, &before) {
+                        labels.push((span, "the result of this call holds the borrow".to_owned()));
+                    }
                 }
             }
             if !seen.insert((fault.span, message.clone(), labels.clone())) {
@@ -3351,7 +3467,8 @@ mod tests {
             [
                 "assigned here",
                 "`x` is borrowed as mutable here",
-                "the borrow is used later here"
+                "the borrow is used later here",
+                "the result of this call holds the borrow"
             ]
         );
         accepted(&call_(vec![set(deref(4)), set(local(1))]));
@@ -3809,5 +3926,282 @@ mod tests {
         // `s` is live where it is read later: from the end of bb2 to bb4.
         assert!(backward[3].contains(1) && backward[4].contains(1));
         assert!(!backward[5].contains(1));
+    }
+
+    const CALL_HOLDS: &str = "the result of this call holds the borrow";
+
+    /// `x: u32` is `_1`; `r`, `b` and `c` are `_2`, `_3` and `_4`, `&mut u32`.
+    fn holders(blocks: Vec<BasicBlockData>) -> Body {
+        body(
+            vec![
+                decl(u32_ty(), Some("x")),
+                decl(mut_ref(), Some("r")),
+                decl(mut_ref(), Some("b")),
+                decl(mut_ref(), Some("c")),
+            ],
+            blocks,
+        )
+    }
+
+    /// The labels of the only error of `body`, an `analysis::borrow-conflict`.
+    fn conflict_labels(body: &Body) -> Vec<(String, u32)> {
+        let list = diagnostics_of(body);
+        assert_eq!(list.len(), 1, "{list:?}");
+        assert_eq!(list[0].code, BORROW_CONFLICT);
+        labels_of(&list[0])
+    }
+
+    fn at(text: &str, lo: u32) -> (String, u32) {
+        (text.to_owned(), lo)
+    }
+
+    #[test]
+    fn the_call_whose_result_holds_the_borrow_is_labelled_through_a_copy_and_a_reborrow() {
+        // r = &mut x; b = f(move r); c = copy b; x = 1; *c = 2.
+        let copied = holders(vec![block(
+            vec![
+                mutable(2, local(1)),
+                call(Some(local(3)), vec![mv(2)]),
+                copy(4, 3),
+                set(local(1)),
+                set(deref(4)),
+            ],
+            Terminator::Return,
+        )]);
+        assert_eq!(
+            conflict_labels(&copied),
+            [
+                at("assigned here", 103),
+                at("`x` is borrowed as mutable here", 100),
+                at("the borrow is used later here", 104),
+                at(CALL_HOLDS, 101),
+            ]
+        );
+        // r = &mut x; b = f(move r); c = &mut *b; x = 1; *c = 2: `c` holds the
+        // borrow of `x` through `b`.
+        let reborrowed = holders(vec![block(
+            vec![
+                mutable(2, local(1)),
+                call(Some(local(3)), vec![mv(2)]),
+                mutable(4, deref(3)),
+                set(local(1)),
+                set(deref(4)),
+            ],
+            Terminator::Return,
+        )]);
+        assert_eq!(
+            conflict_labels(&reborrowed),
+            [
+                at("assigned here", 103),
+                at("`x` is borrowed as mutable here", 100),
+                at("the borrow is used later here", 104),
+                at(CALL_HOLDS, 101),
+            ]
+        );
+    }
+
+    #[test]
+    fn only_the_nearest_call_is_labelled_where_one_result_goes_to_another() {
+        // r = &mut x; b = f(move r); c = g(move b); x = 1; *c = 2.
+        let chained = holders(vec![block(
+            vec![
+                mutable(2, local(1)),
+                call(Some(local(3)), vec![mv(2)]),
+                call(Some(local(4)), vec![mv(3)]),
+                set(local(1)),
+                set(deref(4)),
+            ],
+            Terminator::Return,
+        )]);
+        assert_eq!(
+            conflict_labels(&chained),
+            [
+                at("assigned here", 103),
+                at("`x` is borrowed as mutable here", 100),
+                at("the borrow is used later here", 104),
+                at(CALL_HOLDS, 102),
+            ]
+        );
+    }
+
+    #[test]
+    fn at_a_join_of_two_calls_each_site_is_labelled_at_its_own_call() {
+        // if c { r = &mut x; b = f(move r) } else { r = &mut x; b = g(move r) };
+        // x = 1; *b = 2. The two borrows are two sites, each held through one
+        // call only.
+        let joined = holders(vec![
+            block(vec![], branch(1, 2)),
+            block_at(
+                200,
+                vec![mutable(2, local(1)), call(Some(local(3)), vec![mv(2)])],
+                goto(3),
+            ),
+            block_at(
+                300,
+                vec![mutable(2, local(1)), call(Some(local(3)), vec![mv(2)])],
+                goto(3),
+            ),
+            block_at(400, vec![set(local(1)), set(deref(3))], Terminator::Return),
+        ]);
+        assert_eq!(
+            conflict_labels(&joined),
+            [
+                at("assigned here", 400),
+                at("`x` is borrowed as mutable here", 200),
+                at("the borrow is used later here", 401),
+                at(CALL_HOLDS, 201),
+                at("`x` is borrowed as mutable here", 300),
+                at("the borrow is used later here", 401),
+                at(CALL_HOLDS, 301),
+            ]
+        );
+    }
+
+    #[test]
+    fn of_the_calls_met_on_several_branches_the_lowest_block_is_labelled_whatever_the_numbering() {
+        // One site, borrowed before the branch and passed to a call on each
+        // arm. The arm with the call at 200 is bb1 in one body and bb2 in the
+        // other, so the answer is the call of the lower numbered block.
+        let arms = |first: u32, second: u32| {
+            let mut blocks = vec![
+                block(vec![mutable(2, local(1))], branch(first, second)),
+                block_at(0, vec![], Terminator::Return),
+                block_at(0, vec![], Terminator::Return),
+                block_at(500, vec![set(local(1)), set(deref(3))], Terminator::Return),
+            ];
+            blocks[first as usize] = block_at(
+                200,
+                vec![call(Some(local(3)), vec![mv(2)])],
+                Terminator::Goto(BasicBlock(3)),
+            );
+            blocks[second as usize] = block_at(
+                300,
+                vec![call(Some(local(3)), vec![mv(2)])],
+                Terminator::Goto(BasicBlock(3)),
+            );
+            holders(blocks)
+        };
+        for (body, call_at) in [(arms(1, 2), 200), (arms(2, 1), 300)] {
+            assert_eq!(
+                conflict_labels(&body),
+                [
+                    at("assigned here", 500),
+                    at("`x` is borrowed as mutable here", 100),
+                    at("the borrow is used later here", 501),
+                    at(CALL_HOLDS, call_at),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn of_two_definitions_of_one_local_in_a_block_the_later_one_is_followed() {
+        // r = &mut x; b = f(move r); c = copy b; b = g(move c); x = 1; *b = 2:
+        // `b` holds the borrow after both calls, and the second reaches the
+        // use.
+        let twice = holders(vec![block(
+            vec![
+                mutable(2, local(1)),
+                call(Some(local(3)), vec![mv(2)]),
+                copy(4, 3),
+                call(Some(local(3)), vec![mv(4)]),
+                set(local(1)),
+                set(deref(3)),
+            ],
+            Terminator::Return,
+        )]);
+        assert_eq!(
+            conflict_labels(&twice),
+            [
+                at("assigned here", 104),
+                at("`x` is borrowed as mutable here", 100),
+                at("the borrow is used later here", 105),
+                at(CALL_HOLDS, 103),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_cycle_of_definitions_ends_the_walk_and_finds_the_call_outside_it() {
+        // bb0: r = &mut x; c = f(move r). bb1, a loop: b = copy c; c = copy b;
+        // x = 1; *c = 2. Each of `b` and `c` is defined from the other round
+        // the loop.
+        let looped = holders(vec![
+            block(
+                vec![mutable(2, local(1)), call(Some(local(4)), vec![mv(2)])],
+                goto(1),
+            ),
+            block_at(
+                200,
+                vec![copy(3, 4), copy(4, 3), set(local(1)), set(deref(4))],
+                branch(1, 2),
+            ),
+            block_at(300, vec![], Terminator::Return),
+        ]);
+        let labels = conflict_labels(&looped);
+        assert_eq!(labels.last(), Some(&at(CALL_HOLDS, 101)), "{labels:?}");
+        assert_eq!(labels.len(), 4, "{labels:?}");
+    }
+
+    #[test]
+    fn a_borrow_held_without_a_call_gets_no_call_label() {
+        // r = &mut x; b = &mut *r; x = 1; *b = 2.
+        let reborrowed = holders(vec![block(
+            vec![
+                mutable(2, local(1)),
+                mutable(3, deref(2)),
+                set(local(1)),
+                set(deref(3)),
+            ],
+            Terminator::Return,
+        )]);
+        assert_eq!(
+            conflict_labels(&reborrowed),
+            [
+                at("assigned here", 102),
+                at("`x` is borrowed as mutable here", 100),
+                at("the borrow is used later here", 103),
+            ]
+        );
+        // A call that is given another borrow and not this one: `b` holds y's.
+        let apart = body(
+            vec![
+                decl(u32_ty(), Some("x")),
+                decl(u32_ty(), Some("y")),
+                decl(mut_ref(), Some("r")),
+                decl(mut_ref(), Some("s")),
+                decl(mut_ref(), Some("b")),
+            ],
+            vec![block(
+                vec![
+                    mutable(3, local(1)),
+                    mutable(4, local(2)),
+                    call(Some(local(5)), vec![mv(4)]),
+                    set(local(1)),
+                    set(deref(3)),
+                    set(deref(5)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        assert_eq!(
+            conflict_labels(&apart),
+            [
+                at("assigned here", 103),
+                at("`x` is borrowed as mutable here", 100),
+                at("the borrow is used later here", 104),
+            ]
+        );
+        // An access during a call that lends the borrow: the call is the later
+        // use, the argument is the borrow itself, and no result holds it.
+        let lent = holders(vec![block(
+            vec![mutable(2, local(1)), call(None, vec![mv(2), cp(local(1))])],
+            Terminator::Return,
+        )]);
+        let labels = conflict_labels(&lent);
+        assert!(
+            labels.iter().all(|(text, _)| text != CALL_HOLDS),
+            "{labels:?}"
+        );
     }
 }
