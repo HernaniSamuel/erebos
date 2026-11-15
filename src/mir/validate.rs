@@ -12,6 +12,8 @@
 //! them. R1 of ADR 0107 is checked through the types of locals and statics,
 //! R2 and R3 where the places they concern are: those written, and those a
 //! `Ref` borrows. R4 of ADR 0112 is checked once per body, over its statements.
+//! R5 of ADR 0118, which says what a body that returns a reference may take,
+//! is checked once per body, over its signature.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -257,6 +259,7 @@ impl<'a> Checker<'a> {
         checker.copy_kinds();
         checker.linear_kinds();
         checker.reference_positions();
+        checker.reference_return();
         checker.address_temporaries();
         checker.found
     }
@@ -774,21 +777,15 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// R1 for the type of every local: a reference is the type of a local
-    /// only, never of `_0`, the return value, and no type reaches one,
-    /// through arrays, slices, fields, payload values, pointees and
-    /// referents, each definition once. By it a place of a reference type is
-    /// a whole local.
+    /// R1 for the type of every local, `_0` included: a reference is the
+    /// type of a local, and of the return place, but no type reaches one
+    /// below its top, through arrays, slices, fields, payload values,
+    /// pointees and referents, each definition once (ADR 0118). By it a place
+    /// of a reference type is a whole local.
     fn reference_positions(&mut self) {
         let body = self.body;
         let mut seen = HashSet::new();
         for (local, decl) in body.locals() {
-            if local == Local::RETURN && matches!(decl.ty, Ty::Ref(_)) {
-                self.violation(
-                    "R1",
-                    format!("the body returns the reference `{}`", decl.ty),
-                );
-            }
             let mut found = Vec::new();
             references_below(decl.ty, &mut seen, &mut found);
             for reference in found {
@@ -797,6 +794,77 @@ impl<'a> Checker<'a> {
                     format!(
                         "the local `{local}` of type `{}` reaches the reference `{reference}`",
                         decl.ty
+                    ),
+                );
+            }
+        }
+    }
+
+    /// R5, once per body, an external one included, read off the signature:
+    /// when the return type is a reference, at most one parameter has a
+    /// reference type; when it is a `&mut`, that parameter exists and is a
+    /// `&mut`; when no parameter is a reference, the return type is a shared
+    /// reference that is not volatile (ADR 0118). Every call to such a body
+    /// then has at most one reference argument, the one the result is tied
+    /// to. One fault is one violation: the clauses on the tied parameter are
+    /// judged only when there is at most one, and the clause on a body with
+    /// none is judged for a shared result, since a `&mut` result with none
+    /// already broke the second clause. A body short of locals for its
+    /// parameters was reported by S1.
+    fn reference_return(&mut self) {
+        let body = self.body;
+        let Ty::Ref(ret) = body.ret else {
+            return;
+        };
+        let Some(params) = body.locals.get(1..=body.param_count) else {
+            return;
+        };
+        let references: Vec<(usize, Ty)> = params
+            .iter()
+            .enumerate()
+            .filter(|(_, decl)| matches!(decl.ty, Ty::Ref(_)))
+            .map(|(index, decl)| (index + 1, decl.ty))
+            .collect();
+        let shape = if ret.mutable { "`&mut`" } else { "shared" };
+        match references.as_slice() {
+            [] if ret.mutable => self.violation(
+                "R5",
+                format!(
+                    "the body returns the `&mut` reference `{}`, but has no reference parameter to tie it to",
+                    body.ret
+                ),
+            ),
+            [] if ret.volatile => self.violation(
+                "R5",
+                format!(
+                    "the body returns the volatile reference `{}`, but has no reference parameter to tie it to",
+                    body.ret
+                ),
+            ),
+            [] => {}
+            &[(index, ty)] => {
+                if ret.mutable && !matches!(ty, Ty::Ref(r) if r.mutable) {
+                    self.violation(
+                        "R5",
+                        format!(
+                            "the body returns the `&mut` reference `{}`, but its one reference parameter `_{index}` is the shared reference `{ty}`",
+                            body.ret
+                        ),
+                    );
+                }
+            }
+            many => {
+                let named: Vec<String> = many
+                    .iter()
+                    .map(|(index, ty)| format!("`_{index}` ({ty})"))
+                    .collect();
+                self.violation(
+                    "R5",
+                    format!(
+                        "the body returns the {shape} reference `{}`, but has {} reference parameters, {}, not at most one",
+                        body.ret,
+                        many.len(),
+                        named.join(", ")
                     ),
                 );
             }
@@ -5568,15 +5636,46 @@ mod tests {
         breaks_only(&body, "R1");
     }
 
-    #[test]
-    fn r1_no_body_returns_a_reference() {
-        let shared = reference(false, u32_ty());
-        // `fn f(_1: &u32) -> &u32 { _0 = copy _1; return }`
+    /// `fn f(params) -> ret`, with no statement: `_0` and the parameters are
+    /// its only locals, and `bb0` returns. An external body has no block.
+    fn signature(ret: Ty, params: &[Ty], external: bool) -> Body {
         let mut body = valid();
-        body.ret = shared;
-        body.locals[0] = decl(shared);
-        body.locals[1] = decl(shared);
-        breaks_only(&body, "R1");
+        body.ret = ret;
+        body.param_count = params.len();
+        body.locals = std::iter::once(ret)
+            .chain(params.iter().copied())
+            .map(decl)
+            .collect();
+        body.external = external;
+        body.blocks = if external {
+            Vec::new()
+        } else {
+            vec![block(Vec::new(), Terminator::Return)]
+        };
+        body
+    }
+
+    /// The rules broken by `fn f(params) -> ret`.
+    fn returning(ret: Ty, params: &[Ty]) -> Vec<&'static str> {
+        rules(&signature(ret, params, false))
+    }
+
+    #[test]
+    fn r1_a_body_returns_a_reference_at_its_top_only() {
+        let slice = |elem| Ty::Slice(Box::leak(Box::new(elem)));
+        let shared = reference(false, u32_ty());
+        let exclusive = reference(true, u32_ty());
+        let bytes = reference(false, slice(u32_ty()));
+        // `fn f(_1: &u32) -> &u32 { _0 = copy _1; return }`, and the others.
+        accepts(returning(shared, &[shared]));
+        accepts(returning(exclusive, &[exclusive]));
+        accepts(returning(bytes, &[bytes]));
+        // A referent, an element: the type's fault, once, as for any local.
+        rejects(returning(reference(false, shared), &[]), "R1");
+        rejects(
+            returning(Ty::Array(Box::leak(Box::new(shared)), 2), &[]),
+            "R1",
+        );
         // A return type that holds one is the type's fault as well, once.
         let (holder, _) = holding_references();
         let mut body = valid();
@@ -5585,6 +5684,101 @@ mod tests {
         body.locals[1] = decl(Ty::Struct(holder));
         body.blocks[0].statements[0] = Statement::Assign(local(0), Rvalue::Use(moved(local(1))));
         breaks_only(&body, "R1");
+    }
+
+    #[test]
+    fn r5_a_result_is_tied_to_at_most_one_reference_parameter() {
+        let shared = reference(false, u32_ty());
+        let exclusive = reference(true, u32_ty());
+        let bytes = reference(false, Ty::Slice(Box::leak(Box::new(u32_ty()))));
+        let raw = ptr(true, false, u32_ty());
+        // The rows of ADR 0118's table: one `&` or `&mut` parameter with a
+        // `&T` result, one `&mut` with a `&mut T`, none with a `&T`.
+        accepts(returning(shared, &[shared]));
+        accepts(returning(shared, &[exclusive]));
+        accepts(returning(exclusive, &[exclusive]));
+        accepts(returning(bytes, &[]));
+        accepts(returning(shared, &[]));
+        // A parameter that is no reference counts for nothing.
+        accepts(returning(shared, &[raw, shared, u32_ty()]));
+        accepts(returning(exclusive, &[usize_ty(), exclusive, raw]));
+        accepts(returning(shared, &[raw, Ty::Struct(pair()), u32_ty()]));
+        // A volatile result of a volatile parameter.
+        let volatile = volatile_reference(false, u32_ty());
+        let volatile_mut = volatile_reference(true, u32_ty());
+        accepts(returning(volatile, &[volatile]));
+        accepts(returning(volatile_mut, &[volatile_mut]));
+        // A body with no reference result is no concern of R5, whatever its
+        // parameters.
+        accepts(returning(u32_ty(), &[shared, exclusive]));
+        accepts(returning(raw, &[shared, exclusive]));
+        // An external body is judged by its signature too.
+        let external = |ret, params: &[Ty]| rules(&signature(ret, params, true));
+        accepts(external(shared, &[exclusive]));
+        accepts(external(exclusive, &[exclusive]));
+        accepts(external(shared, &[]));
+        rejects(external(shared, &[shared, shared]), "R5");
+        rejects(external(exclusive, &[shared]), "R5");
+        rejects(external(exclusive, &[]), "R5");
+        rejects(external(volatile, &[]), "R5");
+
+        // Two reference parameters, whatever the result.
+        rejects(returning(shared, &[shared, shared]), "R5");
+        rejects(returning(shared, &[shared, exclusive]), "R5");
+        rejects(returning(bytes, &[u32_ty(), bytes, exclusive]), "R5");
+        // The clause on the tied parameter is not judged beside the first:
+        // one fault, one violation.
+        rejects(returning(exclusive, &[shared, shared]), "R5");
+        rejects(returning(exclusive, &[exclusive, exclusive]), "R5");
+        // A `&mut` result with one `&` parameter.
+        rejects(returning(exclusive, &[shared]), "R5");
+        rejects(returning(exclusive, &[raw, shared]), "R5");
+        // A `&mut` result with no reference parameter, a raw pointer and a
+        // struct by value included.
+        rejects(returning(exclusive, &[]), "R5");
+        rejects(returning(exclusive, &[raw, u32_ty()]), "R5");
+        rejects(returning(exclusive, &[Ty::Struct(pair())]), "R5");
+        // A volatile result with no reference parameter, shared or `&mut`.
+        rejects(returning(volatile, &[]), "R5");
+        rejects(returning(volatile, &[raw]), "R5");
+        rejects(returning(volatile_mut, &[]), "R5");
+    }
+
+    #[test]
+    fn r5_names_its_clause_once_per_body() {
+        let shared = reference(false, u32_ty());
+        let exclusive = reference(true, u32_ty());
+        let texts = |body: Body| -> Vec<String> {
+            check_body(&body)
+                .into_iter()
+                .map(|violation| violation.text)
+                .collect()
+        };
+        let two = texts(signature(shared, &[shared, exclusive], false));
+        assert_eq!(two.len(), 1);
+        assert!(two[0].contains("2 reference parameters"), "{two:?}");
+        assert!(
+            two[0].contains("`_1`") && two[0].contains("`_2`"),
+            "{two:?}"
+        );
+        let tied = texts(signature(exclusive, &[shared], false));
+        assert!(tied[0].contains("`_1` is the shared reference"), "{tied:?}");
+        let none = texts(signature(exclusive, &[], false));
+        assert!(none[0].contains("no reference parameter"), "{none:?}");
+        // The violation is the body's, not a statement's.
+        let violations = check_body(&signature(exclusive, &[], false));
+        assert_eq!(violations[0].at, Location::Body);
+        assert_eq!(violations[0].rule, "R5");
+    }
+
+    #[test]
+    fn r5_leaves_a_body_short_of_locals_to_s1() {
+        // Judging the parameters of a body that has none of them would index
+        // past its locals: S1 reports it, R5 does not run.
+        let shared = reference(false, u32_ty());
+        let mut body = signature(shared, &[], false);
+        body.param_count = 3;
+        breaks_only(&body, "S1");
     }
 
     #[test]
