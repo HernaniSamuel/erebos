@@ -1,6 +1,6 @@
 # 0117. What stays a raw pointer
 
-- Status: Accepted
+- Status: Accepted; amended by 0118 (reason 8 narrows to what ADR 0118 cannot return)
 - Date: 2026-11-14
 - Amends: 0077 (every board offers `print`, and programs print byte strings
   through it)

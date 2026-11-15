@@ -1,6 +1,6 @@
 # 0113. Functions of a type
 
-- Status: Accepted
+- Status: Accepted; amended by 0118 (a getter may return a reference)
 - Date: 2026-11-13
 - Amends: 0049 (a type before `::` names one of its functions; `use` names
   none; `self`, `Self` and `impl` become keywords), 0050 (the visibility of

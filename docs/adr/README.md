@@ -123,8 +123,8 @@ Do not write one for local implementation details that the code already explains
 | 0091 | [Enabling and dispatching external interrupts](0091-enabling-and-dispatching-external-interrupts.md) | Accepted |
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted, amended by 0110, 0112, 0115 |
-| 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted, amended by 0110, 0115 |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107, 0109, 0112, 0116 |
+| 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted, amended by 0110, 0115, 0118 |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107, 0109, 0112, 0116, 0118 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
 | 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103, 0105 |
 | 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103, 0107 |
@@ -134,17 +134,17 @@ Do not write one for local implementation details that the code already explains
 | 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted, amended by 0113 |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
-| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114, 0116 |
-| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108, 0111 |
-| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109, 0112 |
-| 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110, 0116 |
+| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114, 0116, 0118 |
+| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108, 0111, 0118 |
+| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109, 0112, 0118 |
+| 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110, 0116, 0118 |
 | 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted, amended 2026-11-12, amended by 0112 |
-| 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted, amended by 0115 |
+| 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted, amended by 0115, 0118 |
 | 0111 | [Borrows of statics and peripherals, across calls](0111-borrows-of-statics-and-peripherals-across-calls.md) | Accepted, amended by 0116 |
 | 0112 | [Borrows of statics, peripherals and volatile places in MIR](0112-borrows-of-statics-in-mir-and-the-analyses.md) | Accepted |
-| 0113 | [Functions of a type](0113-functions-of-a-type.md) | Accepted |
+| 0113 | [Functions of a type](0113-functions-of-a-type.md) | Accepted, amended by 0118 |
 | 0114 | [Method calls, and places through a reference](0114-method-calls-and-places-through-references.md) | Accepted |
 | 0115 | [Peripherals owned by contexts](0115-peripherals-owned-by-contexts.md) | Accepted |
 | 0116 | [References in `assert` and the panic function](0116-references-in-assert-and-the-panic-function.md) | Accepted |
-| 0117 | [What stays a raw pointer](0117-what-stays-a-raw-pointer.md) | Accepted |
-| 0118 | [Returning references](0118-returning-references.md) | Proposed |
+| 0117 | [What stays a raw pointer](0117-what-stays-a-raw-pointer.md) | Accepted, amended by 0118 |
+| 0118 | [Returning references](0118-returning-references.md) | Accepted |

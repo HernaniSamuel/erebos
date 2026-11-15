@@ -1,6 +1,6 @@
 # 0106. The borrow check
 
-- Status: Accepted; amended on 2026-11-11 (which later use is labelled); amended by 0108 (elements and sub-slices of a slice), 0111 (statics and peripherals as roots; parts of a peripheral overlap; conflicts across calls)
+- Status: Accepted; amended on 2026-11-11 (which later use is labelled); amended by 0108 (elements and sub-slices of a slice), 0111 (statics and peripherals as roots; parts of a peripheral overlap; conflicts across calls), 0118 (a call's result holds a borrow)
 - Date: 2026-11-11
 
 ## Context

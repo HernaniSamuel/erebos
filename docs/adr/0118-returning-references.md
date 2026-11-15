@@ -1,6 +1,6 @@
 # 0118. Returning references
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Amends: 0094 ("References": a return type is a position of a reference
   where this ADR allows it; "Contexts": what a `return` may carry),
