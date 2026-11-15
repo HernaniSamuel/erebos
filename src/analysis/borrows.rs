@@ -18,6 +18,16 @@
 //! in the analysis of moves, the transfers kill and generate, so the fixed
 //! points do not depend on the order the blocks are visited in.
 //!
+//! A call's result of a reference type **holds what the call's one reference
+//! argument held** before the call, the site of its lending reborrow among it,
+//! and nothing when the call has none (ADR 0118): the signature ties the result
+//! to that argument. A `Return` reads the return place when it is a reference,
+//! so what it holds is in use until the function returns. After the fixed
+//! points, every site the return place may hold at a `Return` is classified
+//! (`analysis::returned-borrow`): a borrow through a reference, or of a
+//! `static` without `mut`, may be returned; a borrow of a local, of a
+//! `static mut` or of a peripheral may not.
+//!
 //! The same collection feeds the check of the conflicts across calls (ADR
 //! 0112): `facts` gives, for a body, its accesses rooted at a static or a
 //! peripheral and the sites rooted at one that are in use at each call.
@@ -33,9 +43,11 @@ use crate::mir::{
 use crate::span::Span;
 
 const BORROW_CONFLICT: &str = "analysis::borrow-conflict";
+const RETURNED_BORROW: &str = "analysis::returned-borrow";
 
-/// Reports the accesses of `body` that conflict with a borrow in use; whether
-/// there are none.
+/// Reports the accesses of `body` that conflict with a borrow in use, then the
+/// returned references that may hold a borrow the caller cannot keep (ADR
+/// 0118); whether there are none.
 pub fn check(body: &Body, diags: &mut Diagnostics) -> bool {
     if body.external || body.blocks.is_empty() {
         return true;
@@ -48,8 +60,13 @@ pub fn check(body: &Body, diags: &mut Diagnostics) -> bool {
     let backwards: Vec<usize> = flow.blocks.iter().rev().copied().collect();
     let live = flow.solve_live(&backwards);
     let faults = flow.faults(&held, &live);
-    let passed = faults.is_empty();
+    let mut passed = faults.is_empty();
     for diag in flow.diagnostics(faults, &held) {
+        diags.push(diag);
+    }
+    let returned = flow.returned_borrows(&held);
+    passed &= returned.is_empty();
+    for diag in returned {
         diags.push(diag);
     }
     passed
@@ -468,7 +485,7 @@ impl<'b> Flow<'b> {
                         }
                     }
                     self.access(&mut stmt, span, How::Assign, *dest, None, false);
-                    stmt.def = self.def_of(*dest, Some(rvalue), site);
+                    stmt.def = self.def_of(*dest, rvalue, site);
                 }
                 Statement::Call { dest, args, .. } => {
                     stmt.call = true;
@@ -483,7 +500,7 @@ impl<'b> Flow<'b> {
                     }
                     if let Some(dest) = dest {
                         self.access(&mut stmt, span, How::Assign, *dest, None, true);
-                        stmt.def = self.def_of(*dest, None, None);
+                        stmt.def = self.call_def_of(*dest, &stmt.args);
                     }
                 }
                 Statement::InlineAsm(asm) => self.asm(&mut stmt, asm),
@@ -502,10 +519,24 @@ impl<'b> Flow<'b> {
                 self.operand(&mut stmt, operand)
             }
             Terminator::InlineAsm(asm) => self.asm(&mut stmt, asm),
-            Terminator::Goto(_)
-            | Terminator::Return
-            | Terminator::Unreachable
-            | Terminator::Panic(..) => {}
+            // The return place is read when the function returns, so what it
+            // holds is in use until then (ADR 0118). The read has no path: it
+            // is not a place anything is borrowed through.
+            Terminator::Return => {
+                if let Some(local) = self.ref_index.first().copied().flatten() {
+                    stmt.accesses.push(Access {
+                        how: How::Use,
+                        place: Place::local(Local::RETURN),
+                        path: None,
+                        reads: Some(local),
+                        span: data.terminator_span,
+                        site: None,
+                        after_call: false,
+                        sym: None,
+                    });
+                }
+            }
+            Terminator::Goto(_) | Terminator::Unreachable | Terminator::Panic(..) => {}
         }
         code.push(stmt);
         self.code[block] = code;
@@ -704,16 +735,22 @@ impl<'b> Flow<'b> {
         if mutable { How::BorrowMut } else { How::Borrow }
     }
 
-    /// What `dest` holds after the assignment of `rvalue` (a call's result
-    /// when none: no call returns a reference), if it is a whole local of a
-    /// reference type.
-    fn def_of(&self, dest: Place, rvalue: Option<&Rvalue>, site: Option<usize>) -> Option<Def> {
-        if !dest.projection.is_empty() {
-            return None;
+    /// The number, among the locals of a reference type, of `dest`, if it is
+    /// one of them written whole.
+    fn whole_ref(&self, dest: Place) -> Option<usize> {
+        if dest.projection.is_empty() {
+            self.ref_index[dest.local.0 as usize]
+        } else {
+            None
         }
-        let local = self.ref_index[dest.local.0 as usize]?;
+    }
+
+    /// What `dest` holds after the assignment of `rvalue`, if it is a whole
+    /// local of a reference type.
+    fn def_of(&self, dest: Place, rvalue: &Rvalue, site: Option<usize>) -> Option<Def> {
+        let local = self.whole_ref(dest)?;
         let holds = match rvalue {
-            Some(Rvalue::Ref { place, .. }) => match site {
+            Rvalue::Ref { place, .. } => match site {
                 Some(site) => Holds::Site {
                     site,
                     through: match place.projection.first() {
@@ -723,14 +760,26 @@ impl<'b> Flow<'b> {
                 },
                 None => Holds::Nothing,
             },
-            Some(Rvalue::Use(operand)) => match operand.place() {
+            Rvalue::Use(operand) => match operand.place() {
                 Some(place) if place.projection.is_empty() => {
                     self.ref_index[place.local.0 as usize].map_or(Holds::Nothing, Holds::Copy)
                 }
                 _ => Holds::Nothing,
             },
-            Some(_) | None => Holds::Nothing,
+            _ => Holds::Nothing,
         };
+        Some(Def { local, holds })
+    }
+
+    /// What `dest` holds after a call whose arguments of a reference type are
+    /// `args`, if it is a whole local of a reference type: what the call's one
+    /// such argument held before the call, the tied argument of ADR 0118 (R5
+    /// and P3 leave at most one), and nothing when there is none.
+    fn call_def_of(&self, dest: Place, args: &[usize]) -> Option<Def> {
+        let local = self.whole_ref(dest)?;
+        let holds = args
+            .first()
+            .map_or(Holds::Nothing, |&from| Holds::Copy(from));
         Some(Def { local, holds })
     }
 
@@ -1131,6 +1180,129 @@ impl<'b> Flow<'b> {
         diags
     }
 
+    /// Where the return place is written in a block that returns (ADR 0118):
+    /// the last statement that writes it whole, and the terminator when the
+    /// block has none.
+    fn returned_at(&self, block: usize) -> Span {
+        let data = &self.body.blocks[block];
+        (data.statements.iter().enumerate().rev())
+            .find(|(_, statement)| {
+                let dest = match statement {
+                    Statement::Assign(dest, _) => Some(dest),
+                    Statement::Call { dest, .. } => dest.as_ref(),
+                    _ => None,
+                };
+                dest.is_some_and(|dest| dest.local == Local::RETURN && dest.projection.is_empty())
+            })
+            .and_then(|(index, _)| data.spans.get(index).copied())
+            .unwrap_or(data.terminator_span)
+    }
+
+    /// Why a returned reference may not hold `site`, as the message and the
+    /// help of the error, or `None` when it may (ADR 0118): a borrow through a
+    /// reference is the caller's, and read-only static data lasts for the run;
+    /// a local goes when the function returns, and a `static mut` or a
+    /// peripheral would hide from the caller's check what the result reaches.
+    fn refusal(&self, site: &Site) -> Option<(String, &'static str)> {
+        match site.path.root {
+            Root::Local(local) => {
+                if site.path.steps.first() == Some(&Step::Deref) {
+                    return None;
+                }
+                let decl = self.body.locals.get(local.0 as usize);
+                if decl.is_some_and(|decl| decl.constant.is_some()) {
+                    return Some((
+                        "cannot return a reference to a constant, which has no address of its own"
+                            .to_owned(),
+                        "declare a `static` to return a reference to it",
+                    ));
+                }
+                let message = if self.named(local) {
+                    let name = self.name(Place::local(local));
+                    format!("cannot return a reference to {name}, a local of this function")
+                } else {
+                    "cannot return a reference to a temporary value of this function".to_owned()
+                };
+                Some((
+                    message,
+                    "return the value, or a part of the reference parameter",
+                ))
+            }
+            Root::Static(s) if s.def().mutable => {
+                let kind = if s.def().external {
+                    "an `extern static mut`"
+                } else {
+                    "a `static mut`"
+                };
+                let name = Root::Static(s).name().unwrap_or_default();
+                let name = format!("`{name}`");
+                Some((
+                    format!("cannot return a reference to {name}, {kind}"),
+                    "a returned reference cannot borrow a `static mut`: borrow it in the caller and \
+                     pass the reference in, or return a raw pointer and write `&*p` where it is used",
+                ))
+            }
+            Root::Static(_) => None,
+            Root::Peripheral(p) => {
+                let name = format!("`{}`", shown(&p.def().name));
+                Some((
+                    format!("cannot return a reference to {name}, a peripheral"),
+                    "borrow the peripheral or its cluster in the caller and pass the reference in",
+                ))
+            }
+        }
+    }
+
+    /// The errors of the references the body returns (ADR 0118): for each
+    /// `Return` the blocks reach, every site the return place may hold there
+    /// that `refusal` refuses. One error per site and return, in the order of
+    /// the spans of the borrows, then of the returns, one for two that have the
+    /// same span, message and labels.
+    fn returned_borrows(&self, held: &[Option<State>]) -> Vec<Diagnostic> {
+        let Some(ret) = self.ref_index.first().copied().flatten() else {
+            return Vec::new();
+        };
+        let mut found = Vec::new();
+        for &block in &self.blocks {
+            if !matches!(self.body.blocks[block].terminator, Terminator::Return) {
+                continue;
+            }
+            let Some(mut state) = held[block].clone() else {
+                continue;
+            };
+            for stmt in &self.code[block] {
+                self.apply(&mut state, stmt);
+            }
+            let returned = self.returned_at(block);
+            for site in (0..self.sites.len()).filter(|&site| state[ret].contains(site)) {
+                if let Some((message, help)) = self.refusal(&self.sites[site]) {
+                    found.push((block, site, returned, message, help));
+                }
+            }
+        }
+        found.sort_by_key(|&(block, site, returned, ..)| {
+            (key(self.sites[site].span), key(returned), block, site)
+        });
+        let mut seen = HashSet::new();
+        let mut diags = Vec::new();
+        for (_, site, returned, message, help) in found {
+            let made = &self.sites[site];
+            let labels = vec![
+                (made.span, self.site_label(made)),
+                (returned, "returned here".to_owned()),
+            ];
+            if !seen.insert((made.span, message.clone(), labels.clone())) {
+                continue;
+            }
+            let mut diag = Diagnostic::error(RETURNED_BORROW, message);
+            for (span, text) in labels {
+                diag = diag.label(span, text);
+            }
+            diags.push(diag.help(help));
+        }
+        diags
+    }
+
     /// The message of an access in conflict, and the label at the access.
     fn message(&self, fault: &Fault) -> (String, &'static str) {
         let name = self.access_name(fault.sym, fault.place);
@@ -1315,8 +1487,9 @@ pub(super) use tests::{
 mod tests {
     use super::*;
     use crate::mir::{
-        AsmOperand, AsmOptions, AsmReg, BasicBlock, BasicBlockData, BodyId, Const, Field, IntTy,
-        Layout, LocalDecl, PeripheralLayout, PeripheralTypeRef, Ref, Register, StaticId, StructRef,
+        AsmOperand, AsmOptions, AsmReg, BasicBlock, BasicBlockData, BodyId, Const, DataId, Field,
+        IntTy, Layout, LocalDecl, PeripheralLayout, PeripheralTypeRef, Ref, Register, StaticId,
+        StructRef,
     };
     use crate::span::SourceMap;
 
@@ -3040,5 +3213,601 @@ mod tests {
         );
         let seen = facts(&round);
         assert_eq!(seen.calls[0].held[0].later, Some((span(200), true)));
+    }
+
+    /// `body` with `ret` as its return type and as the type of `_0`.
+    fn returning(ret: Ty, locals: Vec<LocalDecl>, blocks: Vec<BasicBlockData>) -> Body {
+        let mut returning = body(locals, blocks);
+        returning.ret = ret;
+        returning.locals[0].ty = ret;
+        returning
+    }
+
+    /// `fn f(p: &Pair) -> &u32`: `_1` is `p`, `_2: u32` is `x`, `_3: &u32` is
+    /// `t`, `_4: &u32` and `_5: u32` have no name, `extra` are `_6` on; one
+    /// block of `statements`.
+    fn returning_shared(extra: Vec<LocalDecl>, statements: Vec<Statement>) -> Body {
+        let mut locals = vec![
+            decl(reference(false, pair()), Some("p")),
+            decl(u32_ty(), Some("x")),
+            decl(shared_ref(), Some("t")),
+            decl(shared_ref(), None),
+            decl(u32_ty(), None),
+        ];
+        locals.extend(extra);
+        let mut shared = returning(
+            shared_ref(),
+            locals,
+            vec![block(statements, Terminator::Return)],
+        );
+        shared.param_count = 1;
+        shared
+    }
+
+    /// Every error of `body`, which passed if and only if there are none.
+    fn diagnostics_of(body: &Body) -> Vec<Diagnostic> {
+        let mut diags = Diagnostics::default();
+        let passed = check(body, &mut diags);
+        let list = diags.into_vec();
+        assert_eq!(passed, list.is_empty());
+        list
+    }
+
+    /// The labels of an error, as their texts and where each starts.
+    fn labels_of(diag: &Diagnostic) -> Vec<(String, u32)> {
+        (diag.labels.iter())
+            .map(|label| (label.message.clone(), label.span.lo))
+            .collect()
+    }
+
+    /// The only error of `body`, an `analysis::returned-borrow`.
+    fn refused(body: &Body) -> Diagnostic {
+        let mut list = diagnostics_of(body);
+        assert_eq!(list.len(), 1, "{list:?}");
+        let diag = list.remove(0);
+        assert_eq!(diag.code, RETURNED_BORROW);
+        diag
+    }
+
+    /// The sets of the locals of a reference type at the start of `bb1`, for a
+    /// body whose `bb0` goes there.
+    fn held_at_bb1(body: &Body) -> State {
+        let flow = Flow::of(body);
+        let held = flow.solve_held(&flow.blocks);
+        held[1].clone().unwrap()
+    }
+
+    #[test]
+    fn a_calls_result_takes_its_arguments_sites_and_nothing_without_one() {
+        // r = &mut x; a = &mut *r (lent); b = f(move a): `b` holds the borrow of
+        // `x` and the lending reborrow, which `a` held. Among the locals of a
+        // reference type `r` is 0, `a` is 1 and `b` is 2.
+        let locals = || {
+            vec![
+                decl(u32_ty(), Some("x")),
+                decl(mut_ref(), Some("r")),
+                decl(mut_ref(), None),
+                decl(mut_ref(), Some("b")),
+            ]
+        };
+        let tied = body(
+            locals(),
+            vec![
+                block(
+                    vec![
+                        mutable(2, local(1)),
+                        mutable(3, deref(2)),
+                        call(Some(local(4)), vec![mv(3)]),
+                    ],
+                    goto(1),
+                ),
+                block_at(200, vec![], Terminator::Return),
+            ],
+        );
+        let state = held_at_bb1(&tied);
+        assert_eq!(state.len(), 3);
+        assert!(state[2].contains(0) && state[2].contains(1), "{state:?}");
+        // The same call with no argument of a reference type holds nothing.
+        let free = body(
+            locals(),
+            vec![
+                block(
+                    vec![mutable(2, local(1)), call(Some(local(4)), Vec::new())],
+                    goto(1),
+                ),
+                block_at(200, vec![], Terminator::Return),
+            ],
+        );
+        let state = held_at_bb1(&free);
+        assert!(!state[2].contains(0) && !state[2].contains(1), "{state:?}");
+        assert!(state[0].contains(0), "r still holds its own borrow");
+    }
+
+    #[test]
+    fn a_write_of_the_argument_while_the_result_is_read_later_is_a_conflict() {
+        // r = &mut x; a = &mut *r; b = f(move a); then `x = 1` and `*b = 2` in
+        // either order.
+        let call_ = |after: Vec<Statement>| {
+            let mut statements = vec![
+                mutable(2, local(1)),
+                mutable(3, deref(2)),
+                call(Some(local(4)), vec![mv(3)]),
+            ];
+            statements.extend(after);
+            body(
+                vec![
+                    decl(u32_ty(), Some("x")),
+                    decl(mut_ref(), Some("r")),
+                    decl(mut_ref(), None),
+                    decl(mut_ref(), Some("b")),
+                ],
+                vec![block(statements, Terminator::Return)],
+            )
+        };
+        let (message, labels) = only(&call_(vec![set(local(1)), set(deref(4))]));
+        assert_eq!(message, "cannot assign to `x` while it is borrowed");
+        assert_eq!(
+            labels,
+            [
+                "assigned here",
+                "`x` is borrowed as mutable here",
+                "the borrow is used later here"
+            ]
+        );
+        accepted(&call_(vec![set(deref(4)), set(local(1))]));
+    }
+
+    #[test]
+    fn a_return_reads_the_return_place_so_what_it_holds_is_in_use_until_then() {
+        // fn f(r: &mut u32) -> &mut u32 { _2 = &mut *r; _0 = move _2; *r = 1 }
+        // The write comes after the write of `_0` and before the `Return`, as
+        // a `critical_exit` or an `End` would: it is a conflict only because
+        // the `Return` reads `_0`.
+        let locals = || vec![decl(mut_ref(), Some("r")), decl(mut_ref(), None)];
+        let statements = || vec![mutable(2, deref(1)), take(0, 2, 10), set(deref(1))];
+        let returns = returning(
+            mut_ref(),
+            locals(),
+            vec![block(statements(), Terminator::Return)],
+        );
+        let list = diagnostics_of(&returns);
+        assert_eq!(list.len(), 1, "{list:?}");
+        assert_eq!(list[0].code, BORROW_CONFLICT);
+        assert_eq!(
+            list[0].message,
+            "cannot assign to `*r` while it is borrowed"
+        );
+        // The same statements in a body that returns nothing: `_0` is no
+        // reference, the move of `_2` is its last use, and there is no error.
+        accepted(&body(
+            locals(),
+            vec![block(statements(), Terminator::Return)],
+        ));
+        // The write before the write of `_0`: `_2` is read after it.
+        let before = returning(
+            mut_ref(),
+            locals(),
+            vec![block(
+                vec![mutable(2, deref(1)), set(deref(1)), take(0, 2, 10)],
+                Terminator::Return,
+            )],
+        );
+        assert_eq!(diagnostics_of(&before).len(), 1);
+        // Nothing between them: accepted.
+        let none = returning(
+            mut_ref(),
+            locals(),
+            vec![block(
+                vec![set(deref(1)), mutable(2, deref(1)), take(0, 2, 10)],
+                Terminator::Return,
+            )],
+        );
+        assert!(diagnostics_of(&none).is_empty());
+    }
+
+    #[test]
+    fn what_is_borrowed_through_a_reference_or_is_read_only_data_may_be_returned() {
+        let table = static_(1, "TABLE", false);
+        let text = StaticRef::byte_string(StaticId(2), b"abc".to_vec());
+        let raw_local = || vec![decl(raw(), None)];
+        let cases: Vec<(Vec<LocalDecl>, Vec<Statement>)> = vec![
+            // A part of the reference parameter, the parameter itself and a copy
+            // of it (with a site beside that is not returned).
+            (vec![], vec![shared(0, through(1, 0))]),
+            (vec![], vec![shared(0, deref(1))]),
+            (vec![], vec![copy(0, 1)]),
+            (vec![], vec![shared(3, local(2)), copy(0, 1)]),
+            (vec![], vec![shared(3, local(2)), shared(0, deref(1))]),
+            // A reborrow held in a `let`, copied or borrowed again.
+            (vec![], vec![shared(3, deref(1)), copy(0, 3)]),
+            (vec![], vec![shared(3, deref(1)), shared(0, deref(3))]),
+            // A call's result tied to the parameter's reborrow.
+            (
+                vec![],
+                vec![shared(3, deref(1)), call(Some(local(0)), vec![mv(3)])],
+            ),
+            // A static without `mut`, a part of it and a byte string.
+            (raw_local(), vec![address(6, table), shared(0, deref(6))]),
+            (
+                raw_local(),
+                vec![
+                    address(6, table),
+                    shared(
+                        0,
+                        projected(6, &[PlaceElem::Deref, PlaceElem::ConstIndex(1)]),
+                    ),
+                ],
+            ),
+            (raw_local(), vec![address(6, text), shared(0, deref(6))]),
+            // A reference made through a raw pointer, beside a site that is
+            // not returned.
+            (raw_local(), vec![shared(3, local(2)), shared(0, deref(6))]),
+        ];
+        for (n, (extra, statements)) in cases.into_iter().enumerate() {
+            let body = returning_shared(extra, statements);
+            let list = diagnostics_of(&body);
+            assert!(list.is_empty(), "case {n}: {list:?}");
+        }
+    }
+
+    #[test]
+    fn a_body_that_returns_a_pointer_to_a_static_has_no_site_and_is_not_analysed() {
+        // fn counter() -> &u32 { &*(&raw const COUNT) }, COUNT a `static mut`.
+        let count = static_(0, "COUNT", true);
+        let counter = returning(
+            shared_ref(),
+            vec![decl(raw(), None), decl(raw(), None)],
+            vec![block(
+                vec![
+                    address(1, count),
+                    Statement::Assign(
+                        local(2),
+                        Rvalue::AddressOf {
+                            mutable: false,
+                            place: deref(1),
+                        },
+                    ),
+                    shared(0, deref(2)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        assert!(Flow::of(&counter).sites.is_empty());
+        assert!(diagnostics_of(&counter).is_empty());
+    }
+
+    #[test]
+    fn a_borrow_of_a_local_may_not_be_returned_whatever_the_name_it_goes_by() {
+        let local_help = "return the value, or a part of the reference parameter";
+        let x_borrowed = [
+            ("`x` is borrowed here".to_owned(), 100),
+            ("returned here".to_owned(), 100),
+        ];
+        // A variable.
+        let diag = refused(&returning_shared(vec![], vec![shared(0, local(2))]));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to `x`, a local of this function"
+        );
+        assert_eq!(labels_of(&diag), x_borrowed);
+        assert_eq!(diag.help.as_deref(), Some(local_help));
+        // A part of it, through a copy into a `let`.
+        let diag = refused(&returning_shared(
+            vec![],
+            vec![shared(3, local(2)), copy(0, 3)],
+        ));
+        assert_eq!(
+            labels_of(&diag),
+            [
+                ("`x` is borrowed here".to_owned(), 100),
+                ("returned here".to_owned(), 101)
+            ]
+        );
+        // A parameter that is not a reference.
+        let by_value = returning(
+            shared_ref(),
+            vec![decl(u32_ty(), Some("n"))],
+            vec![block(vec![shared(0, local(1))], Terminator::Return)],
+        );
+        let diag = refused(&by_value);
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to `n`, a local of this function"
+        );
+        // A temporary the compiler keeps.
+        let diag = refused(&returning_shared(vec![], vec![shared(0, local(5))]));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to a temporary value of this function"
+        );
+        assert_eq!(labels_of(&diag)[0].0, "this value is borrowed here");
+        assert_eq!(diag.help.as_deref(), Some(local_help));
+        // A local that holds a constant's data.
+        let constant = LocalDecl {
+            ty: u32_ty(),
+            name: None,
+            constant: Some(DataId(0)),
+        };
+        let diag = refused(&returning_shared(vec![constant], vec![shared(0, local(6))]));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to a constant, which has no address of its own"
+        );
+        assert_eq!(
+            diag.help.as_deref(),
+            Some("declare a `static` to return a reference to it")
+        );
+    }
+
+    #[test]
+    fn a_borrow_of_a_static_mut_or_a_peripheral_may_not_be_returned() {
+        let raw_local = || vec![decl(raw(), None)];
+        let count = static_(0, "m.COUNT", true);
+        let diag = refused(&returning_shared(
+            raw_local(),
+            vec![address(6, count), shared(0, deref(6))],
+        ));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to `m::COUNT`, a `static mut`"
+        );
+        assert_eq!(
+            labels_of(&diag),
+            [
+                ("`m::COUNT` is borrowed here".to_owned(), 101),
+                ("returned here".to_owned(), 101)
+            ]
+        );
+        assert!(diag.help.unwrap().contains("a `static mut`"));
+        let external = StaticRef::new(StaticId(3), "EXT".to_owned(), u32_ty(), true, true);
+        let diag = refused(&returning_shared(
+            raw_local(),
+            vec![address(6, external), shared(0, deref(6))],
+        ));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to `EXT`, an `extern static mut`"
+        );
+        // A register of a named peripheral, and an element of one.
+        let uart = peripheral("UART0", 0x1000);
+        let device_ptr = || vec![decl(pointer_to(Ty::Peripheral(uart.def().ty)), None)];
+        for (place, label) in [
+            (
+                projected(6, &[PlaceElem::Deref, PlaceElem::Field(1)]),
+                "`UART0.data` is borrowed here",
+            ),
+            (
+                projected(6, &[PlaceElem::Deref, PlaceElem::ConstElement(0, 1)]),
+                "`UART0.ctrl[_]` is borrowed here",
+            ),
+        ] {
+            let diag = refused(&returning_shared(
+                device_ptr(),
+                vec![device_address(6, uart), shared(0, place)],
+            ));
+            assert_eq!(
+                diag.message,
+                "cannot return a reference to `UART0`, a peripheral"
+            );
+            assert_eq!(labels_of(&diag)[0].0, label);
+            assert_eq!(
+                diag.help.as_deref(),
+                Some(
+                    "borrow the peripheral or its cluster in the caller and pass the reference in"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn a_return_holding_a_borrow_of_a_local_through_another_borrow_or_a_call_is_refused() {
+        // t = &x; _0 = &*t: the reborrow is through a reference and is fine,
+        // the borrow of `x` it holds is not.
+        let diag = refused(&returning_shared(
+            vec![],
+            vec![shared(3, local(2)), shared(0, deref(3))],
+        ));
+        assert_eq!(
+            labels_of(&diag),
+            [
+                ("`x` is borrowed here".to_owned(), 100),
+                ("returned here".to_owned(), 101)
+            ]
+        );
+        // _0 = f(t): the result is tied to the argument, which holds it.
+        let diag = refused(&returning_shared(
+            vec![],
+            vec![shared(3, local(2)), call(Some(local(0)), vec![mv(3)])],
+        ));
+        assert_eq!(
+            labels_of(&diag),
+            [
+                ("`x` is borrowed here".to_owned(), 100),
+                ("returned here".to_owned(), 101)
+            ]
+        );
+        // The same call with no argument holds nothing.
+        let free = returning_shared(
+            vec![],
+            vec![shared(3, local(2)), call(Some(local(0)), Vec::new())],
+        );
+        assert!(diagnostics_of(&free).is_empty());
+    }
+
+    #[test]
+    fn the_write_of_the_return_place_is_the_last_one_of_the_block_or_the_terminators() {
+        // The last write of `_0` in the block is the one named.
+        let diag = refused(&returning_shared(
+            vec![],
+            vec![
+                shared(0, deref(1)),
+                shared(0, local(2)),
+                shared(4, local(2)),
+            ],
+        ));
+        assert_eq!(labels_of(&diag)[1], ("returned here".to_owned(), 101));
+        // A `Return` block with no write of `_0`: the terminator.
+        let mut apart = returning_shared(vec![], vec![]);
+        apart.blocks = vec![
+            block(vec![shared(0, local(2))], goto(1)),
+            block_at(200, vec![], Terminator::Return),
+        ];
+        let diag = refused(&apart);
+        assert_eq!(labels_of(&diag)[1], ("returned here".to_owned(), 250));
+    }
+
+    #[test]
+    fn one_branch_among_two_is_refused_where_the_branches_join() {
+        // t = if c { &*p } else { &x }; t
+        let mut joined = returning_shared(vec![], vec![]);
+        joined.blocks = vec![
+            block(vec![], branch(1, 2)),
+            block_at(200, vec![shared(3, deref(1))], goto(3)),
+            block_at(300, vec![shared(3, local(2))], goto(3)),
+            block_at(400, vec![copy(0, 3)], Terminator::Return),
+        ];
+        let diag = refused(&joined);
+        assert_eq!(
+            labels_of(&diag),
+            [
+                ("`x` is borrowed here".to_owned(), 300),
+                ("returned here".to_owned(), 400)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_site_reaching_two_returns_is_two_errors_and_one_return_reached_twice_is_one() {
+        let two = {
+            let mut two = returning_shared(vec![], vec![]);
+            two.blocks = vec![
+                block(vec![shared(3, local(2))], branch(1, 2)),
+                block_at(400, vec![copy(0, 3)], Terminator::Return),
+                block_at(300, vec![copy(0, 3)], Terminator::Return),
+            ];
+            two
+        };
+        let list = diagnostics_of(&two);
+        assert_eq!(list.len(), 2, "{list:?}");
+        // The same borrow, ordered by where the return is, not by block.
+        for (diag, returned) in list.iter().zip([300, 400]) {
+            assert_eq!(diag.code, RETURNED_BORROW);
+            assert_eq!(
+                labels_of(diag),
+                [
+                    ("`x` is borrowed here".to_owned(), 100),
+                    ("returned here".to_owned(), returned)
+                ]
+            );
+        }
+        let once = {
+            let mut once = returning_shared(vec![], vec![]);
+            once.blocks = vec![
+                block(vec![shared(3, local(2))], branch(1, 2)),
+                block_at(200, vec![], goto(3)),
+                block_at(300, vec![], goto(3)),
+                block_at(400, vec![copy(0, 3)], Terminator::Return),
+            ];
+            once
+        };
+        let diag = refused(&once);
+        assert_eq!(labels_of(&diag)[1], ("returned here".to_owned(), 400));
+    }
+
+    #[test]
+    fn a_returned_borrow_and_a_conflict_in_one_body_are_both_reported() {
+        // t = &x; x = 1; _0 = copy t: the write of `x` while `t` is used
+        // later, and the return of the borrow. The sink orders them by their
+        // primary labels: the borrow comes first.
+        let both = returning_shared(vec![], vec![shared(3, local(2)), set(local(2)), copy(0, 3)]);
+        let list = diagnostics_of(&both);
+        let codes: Vec<_> = list.iter().map(|diag| diag.code).collect();
+        assert_eq!(codes, [RETURNED_BORROW, BORROW_CONFLICT]);
+    }
+
+    #[test]
+    fn a_site_rooted_at_a_static_and_held_by_a_calls_result_is_in_use_during_a_later_call() {
+        // r = &mut COUNT; b = f(move r); g(); *b = 1: the result keeps the
+        // borrow in use during `g`, as `r` would have.
+        let count = static_(0, "m.COUNT", true);
+        let held = body(
+            vec![
+                decl(raw(), None),
+                decl(mut_ref(), Some("r")),
+                decl(mut_ref(), Some("b")),
+            ],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    call(Some(local(3)), vec![mv(2)]),
+                    call(None, Vec::new()),
+                    set(deref(3)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        let seen = facts(&held);
+        assert_eq!(seen.calls.len(), 2);
+        assert_eq!(seen.calls[1].span, span(103));
+        assert_eq!(seen.calls[1].held.len(), 1);
+        assert_eq!(seen.calls[1].held[0].how, How::BorrowMut);
+        assert_eq!(seen.calls[1].held[0].later, Some((span(104), false)));
+        // A result that holds nothing leaves the later call alone.
+        let apart = body(
+            vec![
+                decl(raw(), None),
+                decl(mut_ref(), Some("r")),
+                decl(mut_ref(), Some("b")),
+            ],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    call(Some(local(3)), Vec::new()),
+                    call(None, Vec::new()),
+                    set(deref(3)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        assert!(facts(&apart).calls.is_empty());
+    }
+
+    #[test]
+    fn the_fixed_points_with_a_calls_result_do_not_depend_on_the_order_of_the_blocks() {
+        // r = &mut x; loop { s = f(move r) }; then `*s` read after the loop. The
+        // result holds the borrow round the loop and out of it.
+        let looped = plain(vec![
+            block(vec![mutable(2, local(1))], goto(1)),
+            block_at(200, vec![], branch(2, 3)),
+            block_at(300, vec![call(Some(local(3)), vec![mv(2)])], goto(1)),
+            block_at(400, vec![], branch(4, 5)),
+            block_at(500, vec![set(deref(3))], goto(5)),
+            block_at(600, vec![], Terminator::Return),
+        ]);
+        let flow = Flow::of(&looped);
+        let forward = flow.solve_held(&[0, 1, 2, 3, 4, 5]);
+        let backward = flow.solve_live(&[5, 4, 3, 2, 1, 0]);
+        for order in [
+            [5, 4, 3, 2, 1, 0],
+            [2, 4, 0, 5, 3, 1],
+            [3, 1, 5, 0, 2, 4],
+            [1, 1, 2, 2, 0, 0],
+        ] {
+            let mut order = order.to_vec();
+            order.extend(0..6);
+            assert_eq!(flow.solve_held(&order), forward, "order {order:?}");
+            assert_eq!(flow.solve_live(&order), backward, "order {order:?}");
+        }
+        // `s` is the second local of a reference type and holds the borrow in
+        // the blocks after the call.
+        for block in [1, 3, 4, 5] {
+            assert!(forward[block].as_ref().unwrap()[1].contains(0), "bb{block}");
+        }
+        assert!(!forward[0].as_ref().unwrap()[1].contains(0));
+        // `s` is live where it is read later: from the end of bb2 to bb4.
+        assert!(backward[3].contains(1) && backward[4].contains(1));
+        assert!(!backward[5].contains(1));
     }
 }
