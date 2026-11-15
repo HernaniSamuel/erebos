@@ -1314,6 +1314,41 @@ impl<'b> Flow<'b> {
             .unwrap_or(data.terminator_span)
     }
 
+    /// Whether `local` is a temporary that only ever holds a copy of a
+    /// constant's data: every write to it is `local = copy c` with `c` a whole
+    /// local that holds constant data, and there is one. MIR building copies a
+    /// constant into a temporary when its address is taken (ADR 0029), so
+    /// that is the local a `&CONST` borrows, not the constant's own.
+    fn copies_a_constant(&self, local: Local) -> bool {
+        let mut written = false;
+        for data in &self.body.blocks {
+            for statement in &data.statements {
+                let (dest, from) = match statement {
+                    Statement::Assign(dest, Rvalue::Use(Operand::Copy(from))) => (dest, Some(from)),
+                    Statement::Assign(dest, _) => (dest, None),
+                    Statement::Call {
+                        dest: Some(dest), ..
+                    } => (dest, None),
+                    _ => continue,
+                };
+                if dest.local != local {
+                    continue;
+                }
+                let constant = dest.projection.is_empty()
+                    && from.is_some_and(|from| {
+                        from.projection.is_empty()
+                            && (self.body.locals.get(from.local.0 as usize))
+                                .is_some_and(|decl| decl.constant.is_some())
+                    });
+                if !constant {
+                    return false;
+                }
+                written = true;
+            }
+        }
+        written
+    }
+
     /// Why a returned reference may not hold `site`, as the message and the
     /// help of the error, or `None` when it may (ADR 0118): a borrow through a
     /// reference is the caller's, and read-only static data lasts for the run;
@@ -1326,7 +1361,9 @@ impl<'b> Flow<'b> {
                     return None;
                 }
                 let decl = self.body.locals.get(local.0 as usize);
-                if decl.is_some_and(|decl| decl.constant.is_some()) {
+                if decl.is_some_and(|decl| decl.constant.is_some())
+                    || (!self.named(local) && self.copies_a_constant(local))
+                {
                     return Some((
                         "cannot return a reference to a constant, which has no address of its own"
                             .to_owned(),
@@ -3653,6 +3690,68 @@ mod tests {
         assert_eq!(
             diag.help.as_deref(),
             Some("declare a `static` to return a reference to it")
+        );
+    }
+
+    #[test]
+    fn a_temporary_copied_from_a_constant_is_the_constant_whatever_borrows_it() {
+        // What MIR building makes of `&CONST` (ADR 0029): the constant's data
+        // is copied into a temporary, and the temporary is borrowed.
+        let constant = || LocalDecl {
+            ty: u32_ty(),
+            name: None,
+            constant: Some(DataId(0)),
+        };
+        let message = "cannot return a reference to a constant, which has no address of its own";
+        let help = "declare a `static` to return a reference to it";
+        // _6 is the constant, _7 the temporary.
+        let diag = refused(&returning_shared(
+            vec![constant(), decl(u32_ty(), None)],
+            vec![copy(7, 6), shared(0, local(7))],
+        ));
+        assert_eq!(diag.message, message);
+        assert_eq!(diag.help.as_deref(), Some(help));
+        assert_eq!(labels_of(&diag)[0].0, "this value is borrowed here");
+        // A part of it, `&CONST[1]`, borrowed through a reborrow in a `let`.
+        let diag = refused(&returning_shared(
+            vec![constant(), decl(u32_ty(), None)],
+            vec![copy(7, 6), shared(3, local(7)), copy(0, 3)],
+        ));
+        assert_eq!(diag.message, message);
+        // A temporary that is also written something else is a temporary.
+        let diag = refused(&returning_shared(
+            vec![constant(), decl(u32_ty(), None)],
+            vec![copy(7, 6), copy(7, 2), shared(0, local(7))],
+        ));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to a temporary value of this function"
+        );
+        // So is one written a part of the constant only, and a variable that
+        // holds a copy: it keeps its name.
+        let diag = refused(&returning_shared(
+            vec![constant()],
+            vec![copy(2, 6), shared(0, local(2))],
+        ));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to `x`, a local of this function"
+        );
+        let diag = refused(&returning_shared(
+            vec![constant(), decl(u32_ty(), None)],
+            vec![
+                Statement::Assign(
+                    local(7),
+                    Rvalue::Use(Operand::Copy(
+                        Place::local(Local(6)).project(PlaceElem::Field(0)),
+                    )),
+                ),
+                shared(0, local(7)),
+            ],
+        ));
+        assert_eq!(
+            diag.message,
+            "cannot return a reference to a temporary value of this function"
         );
     }
 
