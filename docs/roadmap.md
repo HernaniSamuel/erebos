@@ -1432,19 +1432,19 @@ Documentation owed:
   sites of ADR 0117 (reasons 2, 6, 7, 8, without `PanicInfo`), 25 remain
   against 59, 19 of them reason 8: stored references (constants and statics
   holding slices or pointers, `Reader` and `widest`'s table) and the 3 sites
-  of `erebos_skip`, which is called from C. Two gaps the tests showed were fixed before the step that
-  found them: a returned `&CONST` of an aggregate was told as a temporary, and
-  the label "the borrow is used later here" of a callee that writes what it
-  returns pointed at the whole body. `PANICS` is unchanged. Left open, for the
-  planner: references stored in a field, an element, a payload, a `const` or a
-  `static` (`-> Option(&T)` included), written lifetimes and `&static T`, a
-  result tied to several parameters, `split_at_mut`, a reference moved forward
-  in a loop, two-phase borrows, downgrading a `&T` result of a `&mut`
-  parameter, and LLVM attributes on returned references are not scheduled (ADR
-  0118, "What stays out" and "Open questions"); marking the dereference of a
-  raw pointer waits for the user, with the counts under "After M5"; `&CONST` of
-  a scalar constant is told as a temporary and not as a constant, and an error
-  that joins two calls repeats its "used later" label (both in
+  of `erebos_skip`, which is called from C. Two gaps the tests showed were fixed
+  before the step that found them: a returned `&CONST` of an aggregate was told
+  as a temporary, and the label "the borrow is used later here" of a callee that
+  writes what it returns pointed at the whole body. `PANICS` is unchanged. Left
+  open, for the planner: references stored in a field, an element, a payload, a
+  `const` or a `static` (`-> Option(&T)` included), written lifetimes and
+  `&static T`, a result tied to several parameters, `split_at_mut`, a reference
+  moved forward in a loop, two-phase borrows, downgrading a `&T` result of a
+  `&mut` parameter, and LLVM attributes on returned references are not scheduled
+  (ADR 0118, "What stays out" and "Open questions"); marking the dereference of
+  a raw pointer waits for the user, with the counts under "After M5"; `&CONST`
+  of a scalar constant is told as a temporary and not as a constant, and an
+  error that joins two calls repeats its "used later" label (both in
   `docs/open-findings.md`); ADR 0095's status line does not name P5 (the user's,
   from M5.7).
 - **Next: M6** (types as values and `comptime` parameters: generics in the Zig

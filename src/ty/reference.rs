@@ -10,8 +10,7 @@
 use std::collections::HashSet;
 
 use crate::diag::Diagnostic;
-use crate::hir::Fn;
-use crate::hir::{Block, ExprId, ExprKind, NeverPosition, ReferencePosition, Ty};
+use crate::hir::{Block, ExprId, ExprKind, Fn, NeverPosition, ReferencePosition, Ty};
 use crate::query::Queries;
 use crate::span::Span;
 
