@@ -54,11 +54,11 @@ panic fn on_panic() -> ! {
   or a value that does not fit the bit field it is written to
   (ADR 0014, 0036, 0040, 0046, 0059). It must return `!`, and may be called
   explicitly. It takes **no parameter, or one of type
-  `*const core::PanicInfo`**, through which it learns why and where the
-  program panicked (ADR 0053, see "Panic information"):
+  `&core::PanicInfo`**, through which it learns why and where the
+  program panicked (ADR 0053, 0116, see "Panic information"):
 
   ```
-  panic fn on_panic(info: *const core::PanicInfo) -> ! { ... }
+  panic fn on_panic(info: &core::PanicInfo) -> ! { ... }
   ```
 
 - `interrupt fn name() at core::arch::Vector::SysTick { ... }` is the handler
@@ -736,6 +736,9 @@ let p: *const [u8; 2] = &raw const b"ok"; // no copy
   it, as for any array. It cannot be assigned (`ty::assign-immutable`) nor
   have a `*mut` address taken (`ty::address-of-immutable`); writing to it
   through a cast pointer is not defined, as for a `static`.
+  `&b"..."` is a reference to it, a `&[u8; N]` that converts to a `&[u8]`:
+  the form of an `assert` message and of an argument that is a byte string
+  (see "Slices behind references" and "Messages in `assert`").
 - Each occurrence in the source is one object, wherever and however often
   it is evaluated, the same at compile time and at run time. Identical byte
   strings may share memory, with each other and with other read-only data,
@@ -2671,9 +2674,10 @@ is not one of these: no function returns a reference, so `f`'s result is
 borrowed.
 Each place is reported: `let a: [&u32; 2] = [&x, &y];` has an error at the
 written type and another at the literal. A constant or a static of a reference
-type has no value, and its uses report nothing more. The panic function keeps
-its `*const core::PanicInfo` (ADR 0053), and the entry function and the
-handlers take no parameters, so none holds a reference from its caller.
+type has no value, and its uses report nothing more. The panic function's
+one parameter is a `&core::PanicInfo` (ADR 0053, 0116), a parameter like any
+other, and the entry function and the handlers take no parameters, so none of
+them holds a reference from its caller.
 
 ### Kinds, conversions, casts and comparisons (ADR 0105)
 
@@ -2855,9 +2859,11 @@ fn erebos_fill(out: &mut [u8], b: u8) { }
 ```
 
 **What does not change.** Raw slices, `slice` and `len` of a raw slice are as
-"Slices" says. The message of `assert` is still a `*const [u8]`: `assert(c,
-&b"...")` is `ty::mismatched-types`, since `&[u8; N]` does not convert to a raw
-slice. The panic function keeps its `*const core::PanicInfo`.
+"Slices" says. `PanicInfo`'s `file` and `message` stay `*const [u8]`, since a
+reference is never a field; a handler that wants a `&[u8]` from one writes
+`&*info.message` (see "Panic information"). The message of `assert` and the
+panic function's parameter are references (ADR 0116, see "Messages in
+`assert`").
 
 At compile time a reference to a slice is used as a reference is: a `static`
 or a byte string converts, a sub-slice of one is a slice inside it, and a
@@ -3206,8 +3212,9 @@ what the borrow is for. These are accepted, as in one function: `f(&BUF)` with
 reaches the static through its reference only, and a borrow that ends before
 the call.
 
-- The panic function is **not followed** from a check: it never returns and is
-  given no reference, so once it runs no borrow is used again. A driver
+- The panic function is **not followed** from a check: it never returns, and the
+  only reference it is given is to the check's own `PanicInfo` (ADR 0111,
+  0116), so once it runs no borrow is used again. A driver
   `write(u: &mut Uart16550, s: &[u8])` indexing `s` has a check, and a panic
   function that prints through `UART0` does not make `write(&mut UART0, s)` an
   error. A call of the panic function written by name, and a call of another
@@ -3295,13 +3302,18 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   result goes to a temporary slot that is copied to the destination after the
   call, so that `x = f(&x)` never gives the callee one address as both its
   result and its argument.
-- **The validator** (ADR 0095) has, for references, T1 (`Deref` applies to a
-  reference, giving its referent; `Offset` does not), T5 (the type of a borrow
-  is the reference to its place's type with the same mutability and the
-  volatility of the place, the place is not a register, a `&mut T` does not fit
-  a `&T`, a volatile reference fits only the same volatile reference type, a
-  cast goes from a reference to a thin raw pointer and never to a reference;
-  for a slice, a `Ref` or an
+- **The validator** (ADR 0095) has T8, which says the message of a failed
+  `assert` is an operand of type `&[u8]`, not volatile (ADR 0116; MIR building
+  converts what the message converts from, so a `&mut [u8]` has become a
+  `&[u8]`), and P5, which says the panic function takes no parameter or one
+  thin reference, not a reference to a slice (ADR 0116; the type checker
+  decides which one: `ty::panic-param`). It has, for references, T1 (`Deref`
+  applies to a reference, giving its referent; `Offset` does not), T5 (the
+  type of a borrow is the reference to its place's type with the same
+  mutability and the volatility of the place, the place is not a register, a
+  `&mut T` does not fit a `&T`, a volatile reference fits only the same
+  volatile reference type, a cast goes from a reference to a thin raw pointer
+  and never to a reference; for a slice, a `Ref` or an
   `AddressOf` of a place of type `[T]` gives a reference to a slice or a raw
   slice, a reference to a slice fits only its own type, and a `Cast` goes from
   `&[T]` or `&mut [T]` to the raw slice of the same mutability and elements)
@@ -4085,27 +4097,39 @@ or is an error (`eval::pointer-compare`) where that answer is not known:
 - Pointers made from integers compare by address. Comparing one with a
   pointer into an object is an error.
 
-### Messages in `assert` (ADR 0031, 0053)
+### Messages in `assert` (ADR 0031, 0053, 0116)
 
 ```
 comptime {
-    assert(size_of(Header) == 7, &raw const b"Header must match the wire format");
+    assert(size_of(Header) == 7, &b"Header must match the wire format");
 }
+assert(n < 4, &buf[0..len]);
 ```
 
-- The message is a `*const [u8]`, or a pointer that converts to one (see
-  "Slices"). A reference does not: `assert(c, &b"...")` is
-  `ty::mismatched-types`.
+- The message is a `&[u8]`, or a reference that converts to one: a `&[u8;
+  N]` (`&b"..."`), a `&mut [u8]` or a `&mut [u8; N]` (see "Slices behind
+  references"). Anything else is `ty::mismatched-types`: a `&[u32]`, a
+  `&volatile [u8]` (an `assert` message is not read volatile) and a raw
+  `*const [u8]`. For a raw slice or a pointer to an array of `u8` that is not
+  volatile, the error has a help naming the form to write: `&b"..."` for
+  `&raw const b"..."`, `&p` for `&raw const p` or `&raw mut p` of another
+  place, and `&*msg` for any other expression, which makes a reference from
+  it.
+- The message is a use of the reference for the borrow check: its borrow is
+  in use until the panic function is called, on the failing path only. A
+  message that borrows a place a `&mut` in use also reaches is
+  `analysis::borrow-conflict`, and one that borrows a `static mut` is a place
+  of the rule of shared statics.
 - The message runs **only when the condition is false**, like the right
   operand of `||`: an exception to the left-to-right order of arguments.
 - At compile time, `eval::assertion-failed` shows the message: printable
   ASCII as it is, other bytes as `\xNN`. A message that cannot be read
   reports that error instead.
-- At run time, when the panic function takes a `*const core::PanicInfo`,
-  the message reaches it as the `message` field (ADR 0053, see "Panic
-  information"). When it takes no parameter, the message is still
-  evaluated, and dropped, before it is called: what runs before the panic
-  function does not depend on its signature.
+- At run time, when the panic function takes a `&core::PanicInfo`,
+  the message reaches it as the `message` field, cast to a `*const [u8]`
+  (ADR 0053, 0116, see "Panic information"). When it takes no parameter, the
+  message is still evaluated, and dropped, before it is called: what runs
+  before the panic function does not depend on its signature.
 
 ## Expressions
 
@@ -5710,7 +5734,7 @@ handlers reaches the panic function on both targets, where it used to lock up
 
 - With a panic function that takes no parameter, one function serves every
   word, `__erebos_unhandled`, and no information is built.
-- With `*const core::PanicInfo`, one function per vector,
+- With `&core::PanicInfo`, one function per vector,
   `__erebos_unhandled_<variant>`, and `__erebos_unhandled_other` for the words
   of riscv32 that have no variant (a cause of `mcause` that `Vector` does not
   name, and word 32). On thumbv7m a variant of the chip's list without a
@@ -7566,25 +7590,25 @@ the compiler binary, and compiled and checked with every program.
   call of a function of `core::arch`, whose first label is the `asm` inside
   the target's file.
 
-## Panic information (ADR 0053)
+## Panic information (ADR 0053, 0116)
 
 ```
 use core::{PanicInfo, PanicReason};
 
-panic fn on_panic(info: *const PanicInfo) -> ! {
-    let reason: *const [u8] = match (*info).reason {
-        PanicReason::DivisionByZero => &raw const b"division by zero",
-        PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
-        PanicReason::AssertionFailed => &raw const b"assertion failed",
-        PanicReason::NoVariant => &raw const b"enum value is no variant",
-        PanicReason::FieldOutOfRange => &raw const b"value does not fit its field",
-        PanicReason::UnhandledVector => &raw const b"vector not handled",
+panic fn on_panic(info: &PanicInfo) -> ! {
+    let reason: &[u8] = match info.reason {
+        PanicReason::DivisionByZero => &b"division by zero",
+        PanicReason::IndexOutOfBounds => &b"index out of bounds",
+        PanicReason::AssertionFailed => &b"assertion failed",
+        PanicReason::NoVariant => &b"enum value is no variant",
+        PanicReason::FieldOutOfRange => &b"value does not fit its field",
+        PanicReason::UnhandledVector => &b"vector not handled",
     };
     print(reason);
-    print(&raw const b" at ");
-    print((*info).file);
-    print(&raw const b":");
-    print_u32((*info).line);
+    print(&b" at ");
+    print(&*info.file);
+    print(&b":");
+    print_u32(info.line);
     loop {}
 }
 ```
@@ -7592,11 +7616,14 @@ panic fn on_panic(info: *const PanicInfo) -> ! {
 **The panic function's parameter.**
 
 - The panic function takes no parameter, or one of exactly the type
-  `*const core::PanicInfo`, however the path to it is written; the
-  parameter may be `mut`, as any parameter. Any other parameter list is
-  `ty::panic-param`: two parameters, a `*mut` or `*const volatile` pointer,
-  `PanicInfo` by value, or a pointer to another struct, even one named
-  `PanicInfo`.
+  `&core::PanicInfo`, however the path to it is written. Any other parameter
+  list is `ty::panic-param`: two parameters, a `&mut` or `&volatile`
+  reference, a `*const core::PanicInfo` (no longer accepted), `PanicInfo` by
+  value, or a reference to another struct, even one named `PanicInfo`. The
+  parameter is a reference like any other, so it may not be `mut`
+  (`ty::reference-position`), and its fields are reached as through any
+  reference, `info.line`. It is passed as a pointer, as references are, so
+  the ABI is the one of a `*const`.
 - **Without the parameter, no panic information is built or emitted**: a
   program pays nothing for what its handler ignores. The message of an
   `assert` is still evaluated when the assertion fails, and dropped.
@@ -7663,6 +7690,11 @@ clang's.
   unspecified. For `UnhandledVector` it is the name of the vector as bytes
   (`b"HardFault"`, `b"MachineTimer"`), or `b"unknown"` for a cause of
   riscv32 that `Vector` has no variant for.
+- The two fields `file` and `message` are `*const [u8]`, as a reference is
+  never a field (ADR 0094, 0116); a handler passes one where a `&[u8]` is
+  wanted as `&*info.file` or `&*info.message`. Where a field is an empty
+  slice, the reference made from it reads zero bytes, so its address is never
+  used.
 
 **Where the information lives.**
 
@@ -7677,8 +7709,15 @@ clang's.
   failing function, on the failing path only, once the message is
   computed, and passes its address. The panic function never returns, so
   the pointer stays valid while it runs.
-- The handler must not write through `info`: it points at read-only
-  memory or into another function's frame.
+- The handler must not write through `info`, which is a `&` reference
+  (`ty::write-through-const`): it points at read-only memory or into another
+  function's frame. Both are valid while the handler runs, since the panic
+  function never returns, so a reference to them is sound.
+- The call a check makes is not followed by the analyses (ADR 0111, 0116): the
+  reference it passes is to the check's own `PanicInfo`, never to a static or
+  a peripheral, so the handler holds no borrow of anything the caller lent. A
+  call written by name, as `on_panic(&INFO)` with `INFO` a static, is followed
+  as any call.
 - Each check costs about 28 bytes of read-only data when the handler
   takes the parameter, and nothing when it does not.
 
@@ -7875,7 +7914,7 @@ Every error has a stable code, shown with the message.
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
-| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a volatile reference where one that is not is expected and the other way (neither converts to the other, with a help), a method called on a volatile place with `&self` or `&mut self`, which no receiver takes (with a help), a bound of a range that is not a `usize`, a reference given to `slice`, or a `.V` where the expected type, or the position's type, is not an enum |
+| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a volatile reference where one that is not is expected and the other way (neither converts to the other, with a help), a method called on a volatile place with `&self` or `&mut self`, which no receiver takes (with a help), a bound of a range that is not a `usize`, a reference given to `slice`, an `assert` message that is not a `&[u8]` or does not convert to one (with a help naming `&b"..."`, `&p` or `&*msg` when it is a raw slice or a pointer to an array of `u8`), or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
@@ -7938,7 +7977,7 @@ Every error has a stable code, shown with the message.
 | `ty::wrong-arg-count` | call with the wrong number of arguments |
 | `ty::param-type` | parameter of type `()` or `!` |
 | `ty::special-fn-params` | entry function with parameters |
-| `ty::panic-param` | a panic function whose parameters are not none or one `*const core::PanicInfo` |
+| `ty::panic-param` | a panic function whose parameters are not none or one `&core::PanicInfo` |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
 | `ty::interrupt-params` | an `interrupt fn` with parameters |
 | `ty::interrupt-return` | an `interrupt fn` returning a type other than `()` or `!`, or returning `()` at a vector that must diverge |

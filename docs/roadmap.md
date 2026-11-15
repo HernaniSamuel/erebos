@@ -110,7 +110,8 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.4c** ✅ References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and clusters (a register keeps no address) | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
 | **M5.5** ✅ Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** ✅ Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
-| **M5.7** Fewer raw pointers | `core` and the tests moved to references where they can; what stays raw, measured | the e2e programs with references, the same output |
+| **M5.7** ✅ Fewer raw pointers | `assert` takes a `&[u8]` message and the panic function a `&core::PanicInfo` (ADR 0116); `core` and the tests moved to references where they can; what stays raw, measured (ADR 0117) | the e2e programs with references, the same output |
+| **M5.8** Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
 
 Decisions already agreed for the later steps (ADR 0094 holds them):
 
@@ -118,7 +119,8 @@ Decisions already agreed for the later steps (ADR 0094 holds them):
 - Copy is opt-in, with `#[copy]` on a struct or an enum with payloads; scalars,
   raw pointers, slices and arrays of copy types are copy.
 - References are second-class: parameters and `let` without `mut`, never in
-  fields, returns, statics or `Option`; no lifetime is written; the analyses
+  fields, returns (ADR 0118 lets a function return one, as M5.8), statics or
+  `Option`; no lifetime is written; the analyses
   are the compiler's own, with no dependency.
 - The analyses of one body run before compile-time evaluation runs it.
 - A `const` or `comptime` value of a non-copy type is an error; a static of
@@ -409,7 +411,7 @@ ADRs:
     so a pointer from a `const` is a raw pointer, and the way out).
   - Not in M4: priorities and nesting (ADR 0078, "What later steps may
     add"); function pointers.
-- **M5** (M5.1 to M5.7). The model is ADR 0094: affine by default and
+- **M5** (M5.1 to M5.8). The model is ADR 0094: affine by default and
   linear opt-in, `#[copy]` opt-in, second-class references, the analyses
   of one body before evaluation, no `const` of a non-copy type and no move
   out of a static. ADR 0095 is the validator of M5.1. Left to each step:
@@ -524,15 +526,19 @@ ADRs:
     one context to another. Either can be added without breaking programs
     (ADR 0115). Until then a driver that starts a linear transfer in the
     thread and finishes it in a handler (M5.3's `Transfer`, a DMA driver)
-    keeps its state in a static that is not linear; M5.7 meets this when it
-    measures DMA buffers.
+    keeps its state in a static that is not linear; M5.7 measured the DMA
+    buffers of the tests and found none that needs it (ADR 0117, reasons 6
+    and 9).
   - M5.7: settled by ADR 0116 (`assert` takes a `&[u8]` message, the panic
     function a `&core::PanicInfo`) and ADR 0117 (the rule for `rt/`, the
     boards and the e2e programs, the nine reasons a raw pointer stays,
     `board::print`, the measurement). The counts are under "After M5" below.
   - Typestate written `Pin(comptime state: PinState)` waits for M6; M5.2's
     program uses one struct per state.
-  - Not in M5: references returned or stored in structs (ADR 0094); function
+  - M5.8: settled by ADR 0118 (a returned reference, tied to the one reference
+    parameter or borrowing read-only static data; `ty::reference-return` and
+    `analysis::returned-borrow`). Its plan is written when it starts.
+  - Not in M5: references stored in structs (ADR 0094); function
     pointers; priorities and several cores, to which ADR 0094 says how it
     extends.
 - **After M5**, from the measurement of M5.7 (ADR 0117). What stays a raw
@@ -1319,5 +1325,38 @@ Documentation owed:
   above (ADR 0115); priorities and several cores are not in M5 (ADR 0094,
   0115); a device set up by the thread before interrupts are enabled still
   needs `critical`, as for statics.
-- **Next: M5.7** (fewer raw pointers), the last step of M5 (moves, ownership,
-  references and methods), whose steps and model are above (ADR 0094).
+- **M5.7 done.** An `assert` message is a `&[u8]` and the panic function takes
+  a `&core::PanicInfo` (ADR 0116): `assert(c, &b"...")` replaces `&raw const
+  b"..."`, a raw slice or a pointer to an array of `u8` as the message is
+  `ty::mismatched-types` with a help naming the form to write, and a
+  `*const core::PanicInfo`, a `&mut` or a `&volatile` is `ty::panic-param`.
+  The parameter is a reference like any other (not `mut`, `info.line` for
+  `(*info).line`); `PanicInfo`'s `file` and `message` stay `*const [u8]`,
+  written `&*info.message` where a `&[u8]` is wanted. The call a check makes is
+  still not followed by the analyses, now because the reference it passes is to
+  the check's own `PanicInfo` (ADR 0111); a call by name is followed. The
+  validator's T8 wants the message `&[u8]`, and its P5 a thin reference for
+  the panic function's parameter; the ABI and the LLVM IR did not change. `core`
+  lends the remainder of its 64-bit division by `&mut`, the boards offer
+  `print(s: &[u8])`, and 80 files of `tests/e2e/` that print, pass
+  slices and buffers, or lend values moved to references under ADR 0117's
+  rule, with the same output and exit code on both targets at both levels,
+  except the panic locations that moved with their lines. What stays a raw
+  pointer, in `rt/`, `tests/boards/` and `tests/e2e/`: 886 lines in 89 files
+  and 385 sites (1587 lines in 112 files and 538 sites before), counted as the
+  plan records. By reason, as sites: the test's subject 97, a fixed signature
+  26 (`memcpy` and its family), an `asm` operand 1, a fixed address outside a
+  peripheral 96, linked data 6, a reference returned or stored 55, reinterpreted
+  memory 104; no program was rejected by an analysis (reason 2) and none needs
+  a static in a named region (reason 6). Reason 8 is the one a feature
+  removes: ADR 0118 (Accepted) returns references, as M5.8, with the migration
+  and a recount. Left open, for the planner: marking the dereference of a raw
+  pointer (ADR 0030), whether what remains is rare and local enough, moved to
+  "After M5" with the counts; ADR 0117's estimate of fewer than ten lines
+  under reasons 3 to 5 was 29 (the 15 lines of `builtins.ers` that reason 3
+  covers); `docs/reference.md` and the plan record the rest. ADR 0095's table
+  still says T8's message is a `*const [u8]` and P5's parameter "one thin
+  pointer": the ADR is immutable and ADR 0116 names T8 only, so the table is
+  read with ADR 0116 and the reference says what the validator checks.
+- **Next: M5.8** (returned references), the last step of M5 (moves, ownership,
+  references and methods), whose steps and model are above (ADR 0094, 0118).
