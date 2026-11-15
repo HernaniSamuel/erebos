@@ -147,3 +147,4 @@ Do not write one for local implementation details that the code already explains
 | 0115 | [Peripherals owned by contexts](0115-peripherals-owned-by-contexts.md) | Accepted |
 | 0116 | [References in `assert` and the panic function](0116-references-in-assert-and-the-panic-function.md) | Accepted |
 | 0117 | [What stays a raw pointer](0117-what-stays-a-raw-pointer.md) | Accepted |
+| 0118 | [Returning references](0118-returning-references.md) | Proposed |
