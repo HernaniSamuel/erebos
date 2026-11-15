@@ -1198,6 +1198,17 @@ fn injected_f() {
 }"
     ),
     s!(
+        "ty::unsafe-required",
+        Mir,
+        Items,
+        "unsafe fn injected_u() {}
+
+fn injected_f() {
+    injected_u();
+}"
+    ),
+    s!("ty::unused-unsafe", Mir, Statements, "unsafe {}"),
+    s!(
         "eval::asm",
         Mir,
         Items,

@@ -8477,6 +8477,8 @@ Every error has a stable code, shown with the message.
 | `ty::asm-sym` | `sym` naming something other than a function or a static: a constant, a struct, a module, an enum, a variant, a peripheral |
 | `ty::asm-options` | options of `asm` that contradict each other or the operands (`nomem` with `readonly`; `pure` without an output or without `nomem` or `readonly`; `noreturn` with an output), an option or `clobber_abi` given twice, an ABI other than `"C"` |
 | `ty::naked-body` | the body of a `#[naked]` function that is not exactly one `asm` expression with `noreturn` and only `sym` and `const` operands |
+| `ty::unsafe-required` | a call to an `unsafe fn` outside an `unsafe` block, at run time or at compile time; the body of an `unsafe fn` is not a block (ADR 0119) |
+| `ty::unused-unsafe` | an `unsafe` block with no unsafe operation directly inside it, not inside an `unsafe` block nested in it (ADR 0119) |
 | `eval::panic` | compile-time code reached the panic function: a zero divisor, an index or a range out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, a value that does not fit the bit field it is written to, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |

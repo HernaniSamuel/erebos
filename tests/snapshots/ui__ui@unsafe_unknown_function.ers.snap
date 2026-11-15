@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_unknown_function.ers
+---
+--- errors ---
+resolve::unknown-function
+
+  × cannot find function `missing`
+   ╭─[unsafe_unknown_function.ers:6:14]
+ 5 │ fn caller() {
+ 6 │     unsafe { missing() };
+   ·              ───┬───
+   ·                 ╰── not found
+ 7 │ }
+   ╰────

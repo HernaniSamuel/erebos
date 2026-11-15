@@ -1,0 +1,133 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_unused.ers
+---
+--- errors ---
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:11:5]
+ 10 │ fn empty() {
+ 11 │     unsafe {}
+    ·     ───┬──
+    ·        ╰── nothing in it needs `unsafe`
+ 12 │ }
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:15:5]
+ 14 │ fn only_safe_operations(x: u32) -> u32 {
+ 15 │     unsafe { x + 1 }
+    ·     ───┬──
+    ·        ╰── nothing in it needs `unsafe`
+ 16 │ }
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:21:9]
+ 18 │ fn nested_without_its_own() -> u32 {
+ 19 │     unsafe {
+    ·     ───┬──
+    ·        ╰── inside this `unsafe` block
+ 20 │         let a: u32 = plain(1);
+ 21 │         unsafe {
+    ·         ───┬──
+    ·            ╰── nothing in it needs `unsafe`
+ 22 │             a + 1
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:28:5]
+ 27 │ fn two_empty_nested() {
+ 28 │     unsafe {
+    ·     ───┬──
+    ·        ╰── nothing in it needs `unsafe`
+ 29 │         unsafe {}
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:29:9]
+ 27 │ fn two_empty_nested() {
+ 28 │     unsafe {
+    ·     ───┬──
+    ·        ╰── inside this `unsafe` block
+ 29 │         unsafe {}
+    ·         ───┬──
+    ·            ╰── nothing in it needs `unsafe`
+ 30 │     }
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:35:5]
+ 34 │ fn outer_without_its_own() -> u32 {
+ 35 │     unsafe {
+    ·     ───┬──
+    ·        ╰── nothing in it needs `unsafe`
+ 36 │         unsafe { plain(1) }
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:42:9]
+ 41 │     loop {
+ 42 │         unsafe {
+    ·         ───┬──
+    ·            ╰── nothing in it needs `unsafe`
+ 43 │             break;
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:49:9]
+ 48 │         i += 1;
+ 49 │         unsafe {
+    ·         ───┬──
+    ·            ╰── nothing in it needs `unsafe`
+ 50 │             continue;
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:53:5]
+ 52 │     }
+ 53 │     unsafe {
+    ·     ───┬──
+    ·        ╰── nothing in it needs `unsafe`
+ 54 │         return x;
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+    ╭─[unsafe_unused.ers:71:5]
+ 70 │ fn still_unused_in_a_critical_section() {
+ 71 │     unsafe {
+    ·     ───┬──
+    ·        ╰── nothing in it needs `unsafe`
+ 72 │         critical {}
+    ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)

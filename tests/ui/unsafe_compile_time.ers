@@ -1,0 +1,48 @@
+// emit: typeck
+// The rule holds in every body that runs at compile time (ADR 0119): a `const`
+// initializer, an item-level `comptime` block, an enum's discriminant, an
+// array's length, and the operand of `comptime` and the `const` operand of an
+// `asm`, which are expressions of the body they are written in: covered by the
+// `unsafe` blocks around them, and checked once.
+unsafe fn four() -> u32 {
+    4
+}
+
+unsafe fn one() -> u8 {
+    1
+}
+
+unsafe fn length() -> usize {
+    3
+}
+
+const FOUR: u32 = unsafe { four() };
+
+comptime {
+    assert(unsafe { four() } == 4);
+}
+
+enum Level: u8 {
+    Low = 0,
+    Mid = unsafe { one() },
+    High = 2,
+}
+
+struct Table {
+    cells: [u8; unsafe { length() }],
+}
+
+fn operands() -> u32 {
+    // The block around `comptime` covers its operand.
+    let a: u32 = unsafe { comptime four() };
+    let b: u32 = comptime unsafe { four() };
+    unsafe {
+        asm("li {}, {}", in(reg) 0 as u32, const four());
+    }
+    asm("li {}, {}", in(reg) 0 as u32, const unsafe { four() });
+    a + b
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

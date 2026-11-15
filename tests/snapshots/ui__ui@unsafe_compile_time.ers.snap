@@ -1,0 +1,61 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_compile_time.ers
+---
+--- typeck ---
+struct Table { cells: [u8; 3] at 0 } size 3, align 1
+enum Level: u8 { Low = 0, Mid = 1, High = 2 }
+fn four() -> u32
+    expr 2 int 4 410..411: u32
+fn one() -> u8
+    expr 3 int 1 443..444: u8
+fn length() -> usize
+    expr 4 int 3 482..483: usize
+fn operands() -> u32
+    let a: u32
+    let b: u32
+    expr 5 unsafe 801..827: u32
+    expr 6 comptime 810..825: u32
+    expr 7 call 819..825: u32
+    expr 8 comptime 846..872: u32
+    expr 9 unsafe 855..872: u32
+    expr 10 call 864..870: u32
+    expr 11 unsafe 878..950: ()
+    expr 12 asm 895..943: ()
+    expr 13 as u32 920..928: u32
+    expr 14 int 0 920..921: u32
+    expr 15 comptime 936..942: u32
+    expr 16 call 936..942: u32
+    expr 17 asm 955..1014: ()
+    expr 18 as u32 980..988: u32
+    expr 19 int 0 980..981: u32
+    expr 20 comptime 996..1013: u32
+    expr 21 unsafe 996..1013: u32
+    expr 22 call 1005..1011: u32
+    expr 23 binary + 1020..1025: u32
+    expr 24 local a 1020..1021: u32
+    expr 25 local b 1024..1025: u32
+entry fn main() -> !
+    expr 26 loop 1052..1059: !
+panic fn on_panic() -> !
+    expr 27 loop 1090..1097: !
+comptime fn FOUR() -> u32
+    expr 28 unsafe 505..522: u32
+    expr 29 call 514..520: u32
+comptime fn comptime() -> ()
+    expr 30 assert 540..570: ()
+    expr 31 binary == 547..569: bool
+    expr 32 unsafe 547..564: u32
+    expr 33 call 556..562: u32
+    expr 34 int 4 568..569: u32
+comptime fn Level::Low() -> u8
+    expr 35 int 0 602..603: u8
+comptime fn Level::Mid() -> u8
+    expr 36 unsafe 615..631: u8
+    expr 37 call 624..629: u8
+comptime fn Level::High() -> u8
+    expr 38 int 2 644..645: u8
+comptime fn length() -> usize
+    expr 0 unsafe 681..700: usize
+    expr 1 call 690..698: usize

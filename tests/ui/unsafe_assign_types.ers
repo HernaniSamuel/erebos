@@ -1,11 +1,14 @@
 // emit: typeck
 // `(unsafe { *p }) = 1` is an assignment to a block, rejected as an
 // assignment to `{ *p }` is (ADR 0119). `unsafe { *p = 1; }` is the form that
-// writes.
+// writes. Each `unsafe` block holds a call to `touch`, an unsafe operation, as
+// every block must.
+unsafe fn touch() {}
+
 fn assign(p: *mut u32) {
-    (unsafe { *p }) = 1;
+    (unsafe { touch(); *p }) = 1;
     ({ *p }) = 1;
-    unsafe { *p = 1; }
+    unsafe { touch(); *p = 1; }
 }
 
 entry fn main() -> ! { loop {} }

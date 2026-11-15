@@ -1,0 +1,164 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_call_errors.ers
+---
+--- errors ---
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:38:18]
+ 37 │ fn calls(c: &mut Counter) -> u32 {
+ 38 │     let a: u32 = plain(1);
+    ·                  ────┬───
+    ·                      ╰── this calls `unsafe fn plain`
+ 39 │     let b: u32 = exported(2);
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn exported` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:39:18]
+ 38 │     let a: u32 = plain(1);
+ 39 │     let b: u32 = exported(2);
+    ·                  ─────┬─────
+    ·                       ╰── this calls `unsafe fn exported`
+ 40 │     let m: Counter = Counter::make(3);
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn Counter::make` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:40:22]
+ 39 │     let b: u32 = exported(2);
+ 40 │     let m: Counter = Counter::make(3);
+    ·                      ────────┬───────
+    ·                              ╰── this calls `unsafe fn Counter::make`
+ 41 │     c.bump();
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn Counter::bump` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:41:7]
+ 40 │     let m: Counter = Counter::make(3);
+ 41 │     c.bump();
+    ·       ──┬─
+    ·         ╰── this calls `unsafe fn Counter::bump`
+ 42 │     inner::deep();
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn inner::deep` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:42:5]
+ 41 │     c.bump();
+ 42 │     inner::deep();
+    ·     ──────┬──────
+    ·           ╰── this calls `unsafe fn inner::deep`
+ 43 │     a + b + c.peek() + m.peek()
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn Counter::peek` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:43:15]
+ 42 │     inner::deep();
+ 43 │     a + b + c.peek() + m.peek()
+    ·               ──┬─
+    ·                 ╰── this calls `unsafe fn Counter::peek`
+ 44 │ }
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn Counter::peek` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:43:26]
+ 42 │     inner::deep();
+ 43 │     a + b + c.peek() + m.peek()
+    ·                          ──┬─
+    ·                            ╰── this calls `unsafe fn Counter::peek`
+ 44 │ }
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:48:5]
+ 47 │     // Two calls, two errors.
+ 48 │     plain(plain(1))
+    ·     ───────┬───────
+    ·            ╰── this calls `unsafe fn plain`
+ 49 │ }
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:48:11]
+ 47 │     // Two calls, two errors.
+ 48 │     plain(plain(1))
+    ·           ────┬───
+    ·               ╰── this calls `unsafe fn plain`
+ 49 │ }
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:53:40]
+ 52 │     // The block covers what is inside it, not what is next to it.
+ 53 │     let v: u32 = unsafe { plain(1) } + plain(2);
+    ·                                        ────┬───
+    ·                                            ╰── this calls `unsafe fn plain`
+ 54 │     v
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn Counter::bump` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:58:7]
+ 57 │ unsafe fn body_is_not_a_block(c: &mut Counter) -> u32 {
+ 58 │     c.bump();
+    ·       ──┬─
+    ·         ╰── this calls `unsafe fn Counter::bump`
+ 59 │     plain(c.n)
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119); the body of an `unsafe fn` is
+        not an `unsafe` block, so it needs its own
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:59:5]
+ 58 │     c.bump();
+ 59 │     plain(c.n)
+    ·     ─────┬────
+    ·          ╰── this calls `unsafe fn plain`
+ 60 │ }
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119); the body of an `unsafe fn` is
+        not an `unsafe` block, so it needs its own
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_call_errors.ers:71:9]
+ 70 │     if b {
+ 71 │         plain(1)
+    ·         ────┬───
+    ·             ╰── this calls `unsafe fn plain`
+ 72 │     } else {
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)

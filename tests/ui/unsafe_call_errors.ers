@@ -1,0 +1,79 @@
+// emit: typeck
+// A call to an `unsafe fn` outside an `unsafe` block is `ty::unsafe-required`
+// (ADR 0119), one error per call: a free function, a function of a type, a
+// method, one in a module and an `#[export]` one. The body of an `unsafe fn`
+// is not a block, and its error says so.
+unsafe fn plain(x: u32) -> u32 {
+    x + 1
+}
+
+#[export]
+unsafe fn exported(x: u32) -> u32 {
+    x + 2
+}
+
+struct Counter {
+    n: u32,
+}
+
+impl Counter {
+    unsafe fn make(n: u32) -> Counter {
+        Counter { n: n }
+    }
+
+    unsafe fn peek(&self) -> u32 {
+        self.n
+    }
+
+    unsafe fn bump(&mut self) {
+        self.n += 1;
+    }
+}
+
+mod inner {
+    pub unsafe fn deep() {}
+}
+
+fn calls(c: &mut Counter) -> u32 {
+    let a: u32 = plain(1);
+    let b: u32 = exported(2);
+    let m: Counter = Counter::make(3);
+    c.bump();
+    inner::deep();
+    a + b + c.peek() + m.peek()
+}
+
+fn two_in_one() -> u32 {
+    // Two calls, two errors.
+    plain(plain(1))
+}
+
+fn beside_a_block() -> u32 {
+    // The block covers what is inside it, not what is next to it.
+    let v: u32 = unsafe { plain(1) } + plain(2);
+    v
+}
+
+unsafe fn body_is_not_a_block(c: &mut Counter) -> u32 {
+    c.bump();
+    plain(c.n)
+}
+
+unsafe fn body_with_its_own_block(c: &mut Counter) -> u32 {
+    // Accepted: the block is the body's own.
+    unsafe { c.bump() };
+    unsafe { plain(c.n) }
+}
+
+// A nested block covers its own operations, not the outer block's.
+fn in_a_branch(b: bool) -> u32 {
+    if b {
+        plain(1)
+    } else {
+        unsafe { plain(2) }
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

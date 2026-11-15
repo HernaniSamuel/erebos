@@ -4,6 +4,14 @@ expression: output
 input_file: tests/ui/unsafe_mir.ers
 ---
 --- mir ---
+fn touch() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
 fn without_block(_1: *mut u32, _2: u32) -> u32 {
     let _0: u32;
     let _1: *mut u32; // p
@@ -16,12 +24,14 @@ fn without_block(_1: *mut u32, _2: u32) -> u32 {
     let _8: u32;
 
     bb0: {
+        call touch();
         (*_1) = copy _2;
         _3 = const 0_u32;
         goto -> bb1;
     }
 
     bb1: {
+        call touch();
         _4 = Eq(copy _3, copy _2);
         if copy _4 -> [true: bb2, false: bb3];
     }
@@ -35,6 +45,7 @@ fn without_block(_1: *mut u32, _2: u32) -> u32 {
     }
 
     bb4: {
+        call touch();
         _6 = Eq(copy _2, const 7_u32);
         if copy _6 -> [true: bb9, false: bb10];
     }
@@ -69,6 +80,7 @@ fn without_block(_1: *mut u32, _2: u32) -> u32 {
     }
 
     bb11: {
+        call touch();
         _8 = copy (*_1);
         _0 = copy _8;
         return;
@@ -87,12 +99,14 @@ fn with_block(_1: *mut u32, _2: u32) -> u32 {
     let _8: u32;
 
     bb0: {
+        call touch();
         (*_1) = copy _2;
         _3 = const 0_u32;
         goto -> bb1;
     }
 
     bb1: {
+        call touch();
         _4 = Eq(copy _3, copy _2);
         if copy _4 -> [true: bb2, false: bb3];
     }
@@ -106,6 +120,7 @@ fn with_block(_1: *mut u32, _2: u32) -> u32 {
     }
 
     bb4: {
+        call touch();
         _6 = Eq(copy _2, const 7_u32);
         if copy _6 -> [true: bb9, false: bb10];
     }
@@ -140,6 +155,7 @@ fn with_block(_1: *mut u32, _2: u32) -> u32 {
     }
 
     bb11: {
+        call touch();
         _8 = copy (*_1);
         _0 = copy _8;
         return;

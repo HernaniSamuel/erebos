@@ -1,0 +1,134 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_after_errors.ers
+---
+--- errors ---
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:18:16]
+ 17 │ fn unknown_method(c: &Counter) -> u32 {
+ 18 │     unsafe { c.missing() }
+    ·              ┬ ───┬───
+    ·              │    ╰── no such method
+    ·              ╰── `Counter`, reached through this `&Counter`
+ 19 │ }
+    ╰────
+  help: its methods are `add`
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:22:7]
+ 21 │ fn unknown_method_outside(c: &Counter) -> u32 {
+ 22 │     c.missing()
+    ·     ┬ ───┬───
+    ·     │    ╰── no such method
+    ·     ╰── `Counter`, reached through this `&Counter`
+ 23 │ }
+    ╰────
+  help: its methods are `add`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[unsafe_after_errors.ers:28:33]
+ 27 │     // reported where it is not.
+ 28 │     let a: u32 = unsafe { plain(true) };
+    ·                                 ──┬─
+    ·                                   ╰── expected `u32`, found `bool`
+ 29 │     let b: u32 = plain(true);
+    ╰────
+ty::unsafe-required
+
+  × calling `unsafe fn plain` needs an `unsafe` block
+    ╭─[unsafe_after_errors.ers:29:18]
+ 28 │     let a: u32 = unsafe { plain(true) };
+ 29 │     let b: u32 = plain(true);
+    ·                  ─────┬─────
+    ·                       ╰── this calls `unsafe fn plain`
+ 30 │     a + b
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[unsafe_after_errors.ers:29:24]
+ 28 │     let a: u32 = unsafe { plain(true) };
+ 29 │     let b: u32 = plain(true);
+    ·                        ──┬─
+    ·                          ╰── expected `u32`, found `bool`
+ 30 │     a + b
+    ╰────
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:43:35]
+ 42 │ fn operand_in_error(c: &Counter) -> u32 {
+ 43 │     let a: u32 = unsafe { plain(c.missing()) };
+    ·                                 ┬ ───┬───
+    ·                                 │    ╰── no such method
+    ·                                 ╰── `Counter`, reached through this `&Counter`
+ 44 │     let b: u32 = plain(c.missing());
+    ╰────
+  help: its methods are `add`
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:44:26]
+ 43 │     let a: u32 = unsafe { plain(c.missing()) };
+ 44 │     let b: u32 = plain(c.missing());
+    ·                        ┬ ───┬───
+    ·                        │    ╰── no such method
+    ·                        ╰── `Counter`, reached through this `&Counter`
+ 45 │     let d: u32 = unsafe { c.add(c.missing()) };
+    ╰────
+  help: its methods are `add`
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:45:35]
+ 44 │     let b: u32 = plain(c.missing());
+ 45 │     let d: u32 = unsafe { c.add(c.missing()) };
+    ·                                 ┬ ───┬───
+    ·                                 │    ╰── no such method
+    ·                                 ╰── `Counter`, reached through this `&Counter`
+ 46 │     let e: u32 = c.add(c.missing());
+    ╰────
+  help: its methods are `add`
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:46:26]
+ 45 │     let d: u32 = unsafe { c.add(c.missing()) };
+ 46 │     let e: u32 = c.add(c.missing());
+    ·                        ┬ ───┬───
+    ·                        │    ╰── no such method
+    ·                        ╰── `Counter`, reached through this `&Counter`
+ 47 │     let f: u32 = unsafe { c.missing().add(1) };
+    ╰────
+  help: its methods are `add`
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:47:29]
+ 46 │     let e: u32 = c.add(c.missing());
+ 47 │     let f: u32 = unsafe { c.missing().add(1) };
+    ·                           ┬ ───┬───
+    ·                           │    ╰── no such method
+    ·                           ╰── `Counter`, reached through this `&Counter`
+ 48 │     let g: u32 = c.missing().add(1);
+    ╰────
+  help: its methods are `add`
+ty::unknown-method
+
+  × `Counter` has no method `missing`
+    ╭─[unsafe_after_errors.ers:48:20]
+ 47 │     let f: u32 = unsafe { c.missing().add(1) };
+ 48 │     let g: u32 = c.missing().add(1);
+    ·                  ┬ ───┬───
+    ·                  │    ╰── no such method
+    ·                  ╰── `Counter`, reached through this `&Counter`
+ 49 │     a + b + d + e + f + g
+    ╰────
+  help: its methods are `add`

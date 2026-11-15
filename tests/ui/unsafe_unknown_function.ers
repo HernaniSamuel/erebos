@@ -1,0 +1,11 @@
+// emit: typeck
+// A call to a function that is not found is one error, `resolve::unknown-function`,
+// and no `ty::unused-unsafe` for the block around it: resolution errors stop
+// the pipeline before type checking (ADR 0119).
+fn caller() {
+    unsafe { missing() };
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

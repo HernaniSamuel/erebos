@@ -1,0 +1,48 @@
+// emit: typeck
+// A call to an `unsafe fn` outside an `unsafe` block is `ty::unsafe-required`
+// in every body that runs at compile time too (ADR 0119): each of these is a
+// body of its own, with no block around it. A `comptime` operand and the
+// `const` operand of an `asm` are expressions of the function they are in, so
+// they are one error each, and none where a block is around them.
+unsafe fn four() -> u32 {
+    4
+}
+
+unsafe fn one() -> u8 {
+    1
+}
+
+unsafe fn length() -> usize {
+    3
+}
+
+const FOUR: u32 = four();
+
+comptime {
+    assert(four() == 4);
+}
+
+enum Level: u8 {
+    Low = 0,
+    Mid = one(),
+    High = 2,
+}
+
+struct Table {
+    cells: [u8; length()],
+}
+
+fn operands() -> u32 {
+    let a: u32 = comptime four();
+    let b: u32 = unsafe { comptime four() };
+    asm("li {}, {}", in(reg) 0 as u32, const four());
+    // Covered by the block around the `asm`: no error.
+    unsafe {
+        asm("li {}, {}", in(reg) 0 as u32, const four());
+    }
+    a + b
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

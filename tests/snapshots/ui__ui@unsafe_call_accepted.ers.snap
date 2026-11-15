@@ -1,0 +1,148 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_call_accepted.ers
+---
+--- typeck ---
+struct Counter { n: u32 at 0 } size 4, align 4
+fn plain(x: u32) -> u32
+    expr 0 binary + 339..344: u32
+    expr 1 local x 339..340: u32
+    expr 2 int 1 343..344: u32
+fn exported(x: u32) -> u32
+    expr 3 binary + 398..403: u32
+    expr 4 local x 398..399: u32
+    expr 5 int 2 402..403: u32
+fn Counter::make(n: u32) -> Counter
+    expr 6 struct Counter 502..518: Counter
+    expr 7 local n 515..516: u32
+fn Counter::peek(self: &Counter) -> u32
+    expr 8 field n 569..575: u32
+    expr 9 local self 569..573: &Counter, dereferenced
+fn Counter::bump(self: &mut Counter) -> ()
+    expr 10 assign += 623..634: ()
+    expr 11 field n 623..629: u32
+    expr 12 local self 623..627: &mut Counter, dereferenced
+    expr 13 int 1 633..634: u32
+fn inner::deep() -> ()
+fn calls(c: &mut Counter) -> u32
+    let a: u32
+    let b: u32
+    let m: Counter
+    let d: u32
+    let e: u32
+    expr 14 unsafe 740..759: u32
+    expr 15 call 749..757: u32
+    expr 16 int 1 755..756: u32
+    expr 17 unsafe 778..800: u32
+    expr 18 call 787..798: u32
+    expr 19 int 2 796..797: u32
+    expr 20 unsafe 823..850: Counter
+    expr 21 call 832..848: Counter
+    expr 22 int 3 846..847: u32
+    expr 23 unsafe 856..911: ()
+    expr 24 method Counter::bump (&mut self) 873..881: ()
+    expr 25 local c 873..874: &mut Counter, dereferenced
+    expr 26 call 891..904: ()
+    expr 27 unsafe 929..959: u32
+    expr 28 binary + 938..957: u32
+    expr 29 method Counter::peek (&self) 938..946: u32
+    expr 30 local c 938..939: &mut Counter, dereferenced
+    expr 31 method Counter::peek (&self) 949..957: u32
+    expr 32 local m 949..950: Counter
+    expr 33 unsafe 1034..1060: u32
+    expr 34 call 1043..1058: u32
+    expr 35 call 1049..1057: u32
+    expr 36 local a 1055..1056: u32
+    expr 37 binary + 1066..1079: u32
+    expr 38 binary + 1066..1075: u32
+    expr 39 binary + 1066..1071: u32
+    expr 40 local a 1066..1067: u32
+    expr 41 local b 1070..1071: u32
+    expr 42 local d 1074..1075: u32
+    expr 43 local e 1078..1079: u32
+fn from_unsafe_fn(c: &mut Counter) -> u32
+    expr 44 unsafe 1204..1223: ()
+    expr 45 method Counter::bump (&mut self) 1213..1221: ()
+    expr 46 local c 1213..1214: &mut Counter, dereferenced
+    expr 47 unsafe 1229..1250: u32
+    expr 48 call 1238..1248: u32
+    expr 49 field n 1244..1247: u32
+    expr 50 local c 1244..1245: &mut Counter, dereferenced
+fn nested() -> u32
+    let outer: u32
+    let inner: u32
+    expr 51 unsafe 1348..1465: u32
+    expr 52 call 1382..1390: u32
+    expr 53 int 1 1388..1389: u32
+    expr 54 unsafe 1417..1436: u32
+    expr 55 call 1426..1434: u32
+    expr 56 int 2 1432..1433: u32
+    expr 57 binary + 1446..1459: u32
+    expr 58 local outer 1446..1451: u32
+    expr 59 local inner 1454..1459: u32
+fn leaves(limit: u32) -> u32
+    let mut sum: u32
+    let mut i: u32
+    expr 60 int 0 1602..1603: u32
+    expr 61 int 0 1626..1627: u32
+    expr 62 loop 1633..1948: ()
+    expr 63 assign += 1648..1654: ()
+    expr 64 local i 1648..1649: u32
+    expr 65 int 1 1653..1654: u32
+    expr 66 if 1664..1758: ()
+    expr 67 binary > 1667..1676: bool
+    expr 68 local i 1667..1668: u32
+    expr 69 local limit 1671..1676: u32
+    expr 70 unsafe 1691..1748: !
+    expr 71 return 1716..1733: !
+    expr 72 call 1723..1733: u32
+    expr 73 local sum 1729..1732: u32
+    expr 74 unsafe 1767..1924: ()
+    expr 75 if 1788..1846: ()
+    expr 76 binary == 1791..1804: bool
+    expr 77 call 1791..1799: u32
+    expr 78 local i 1797..1798: u32
+    expr 79 int 3 1803..1804: u32
+    expr 80 continue 1823..1831: !
+    expr 81 if 1859..1914: ()
+    expr 82 binary == 1862..1875: bool
+    expr 83 call 1862..1870: u32
+    expr 84 local i 1868..1869: u32
+    expr 85 int 8 1874..1875: u32
+    expr 86 break 1894..1899: !
+    expr 87 assign += 1933..1941: ()
+    expr 88 local sum 1933..1936: u32
+    expr 89 local i 1940..1941: u32
+    expr 90 local sum 1953..1956: u32
+fn around(c: &mut Counter) -> u32
+    let ok: bool
+    let v: u32
+    expr 91 critical 2052..2117: ()
+    expr 92 unsafe 2071..2111: ()
+    expr 93 method Counter::bump (&mut self) 2092..2100: ()
+    expr 94 local c 2092..2093: &mut Counter, dereferenced
+    expr 95 unsafe 2122..2187: ()
+    expr 96 critical 2139..2181: ()
+    expr 97 method Counter::bump (&mut self) 2162..2170: ()
+    expr 98 local c 2162..2163: &mut Counter, dereferenced
+    expr 99 if 2207..2258: bool
+    expr 100 binary == 2210..2234: bool
+    expr 101 unsafe 2210..2229: u32
+    expr 102 call 2219..2227: u32
+    expr 103 int 1 2225..2226: u32
+    expr 104 int 2 2233..2234: u32
+    expr 105 bool true 2237..2241: bool
+    expr 106 block 2249..2258: bool
+    expr 107 bool false 2251..2256: bool
+    expr 108 match 2277..2350: u32
+    expr 109 local ok 2283..2285: bool
+    expr 110 unsafe 2304..2323: u32
+    expr 111 call 2313..2321: u32
+    expr 112 int 1 2319..2320: u32
+    expr 113 int 0 2342..2343: u32
+    expr 114 local v 2356..2357: u32
+entry fn main() -> !
+    expr 115 loop 2384..2391: !
+panic fn on_panic() -> !
+    expr 116 loop 2422..2429: !

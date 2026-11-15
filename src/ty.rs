@@ -38,6 +38,7 @@ mod method;
 mod pattern;
 mod place;
 mod reference;
+mod unsafety;
 mod usefulness;
 
 /// What type checking found out about expressions, for every function
@@ -713,6 +714,7 @@ impl Checker<'_, '_> {
             self.checked_block(f, body, self.ret, because);
             self.report_made_arrays(body);
             self.report_made_references(body);
+            unsafety::check(self.q, f, body);
             if f.kind == FnKind::Naked {
                 self.naked_body(f, body);
             }

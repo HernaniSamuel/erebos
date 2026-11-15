@@ -1,0 +1,78 @@
+// emit: typeck
+// Every `unsafe` block is used (ADR 0119): `ty::unused-unsafe` at the
+// `unsafe` keyword of each block with no unsafe operation directly inside it,
+// not inside a block nested in it; a nested block also points at the one
+// around it. `return`, `break` and `continue` are no unsafe operation.
+unsafe fn plain(x: u32) -> u32 {
+    x + 1
+}
+
+fn empty() {
+    unsafe {}
+}
+
+fn only_safe_operations(x: u32) -> u32 {
+    unsafe { x + 1 }
+}
+
+fn nested_without_its_own() -> u32 {
+    unsafe {
+        let a: u32 = plain(1);
+        unsafe {
+            a + 1
+        }
+    }
+}
+
+fn two_empty_nested() {
+    unsafe {
+        unsafe {}
+    }
+}
+
+// The operation is in the inner block: the outer holds none directly.
+fn outer_without_its_own() -> u32 {
+    unsafe {
+        unsafe { plain(1) }
+    }
+}
+
+fn leaves(x: u32) -> u32 {
+    loop {
+        unsafe {
+            break;
+        }
+    }
+    let mut i: u32 = 0;
+    while i < x {
+        i += 1;
+        unsafe {
+            continue;
+        }
+    }
+    unsafe {
+        return x;
+    }
+}
+
+// The operation is in a branch of an `if` inside the block: directly inside
+// it, as a block is not an `unsafe` block.
+fn through_other_blocks(b: bool) -> u32 {
+    unsafe {
+        if b {
+            plain(1)
+        } else {
+            0
+        }
+    }
+}
+
+fn still_unused_in_a_critical_section() {
+    unsafe {
+        critical {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }
