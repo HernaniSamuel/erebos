@@ -267,6 +267,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `src/driver.rs`, the comment before `Found`: an edit left a short wrapped
   line ("... and no peripheral (ADR 0115)" / "and have no check. The walk");
   reflow the paragraph. (M5.6, final review)
+- `src/ty.rs`, the `assert` message help (`value_tails`): `loop { break p; }`
+  and `comptime { <raw slice> }` as a message get `ty::mismatched-types`
+  without the `&*msg` help, because the mismatch is on the `break` value or
+  the `comptime` operand; the reference's "a block, an `if` or a `match`" is
+  accurate, and step 1's decision does not name the two. `rt/arch/armv7m.ers`
+  (around line 291): the comment line added for the `__aeabi_` divisions is 91
+  characters where the paragraph wraps near 78. (M5.7, final review)
 
 ## Tests
 
@@ -437,6 +444,9 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   16 of the first; 81 characters at line 2 of the first and lines 14, 15 and
   140 of the second), and the paragraph at lines 17-18 of the second breaks
   after "which". (M5.6, step 4)
+- `tests/e2e/assert_message.ers`, line 3: the header still says the message is
+  dropped "until M2.6", which is old; `docs/roadmap.md` (the M2.6 row) shows
+  `info: *const PanicInfo` as history. (M5.7, final review)
 
 ## Docs
 
@@ -577,3 +587,12 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   peripheral), nor is a default handler..." overflows the wrap; the text
   before the `main.ers` example of "Peripherals in the rule" names the
   `external` handler, which the shortened block does not show. (M5.6, step 5)
+- `docs/reference.md` (around line 5490, "Tests on both targets"): a line of 102
+  characters in the paragraph that now names `board::print`; `CONTRIBUTING.md`
+  (lines 88-89): the same edit left a short wrapped line. The
+  `.claude/plans/M5.7.md` Decisions of step 4 give the counts of programs and
+  definitions in one hard-to-follow sentence ("41 programs ... 43 definitions
+  ... 55 definition lines removed, 13 rewritten as kept, 1 file deleted");
+  split it into plain counts. ADR 0095's status line does not name P5, though
+  the validator now rejects a raw pointer as the panic function's parameter;
+  the change is the user's (see the report of M5.7). (M5.7, final review)
