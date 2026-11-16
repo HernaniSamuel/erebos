@@ -149,3 +149,4 @@ Do not write one for local implementation details that the code already explains
 | 0117 | [What stays a raw pointer](0117-what-stays-a-raw-pointer.md) | Accepted, amended by 0118 |
 | 0118 | [Returning references](0118-returning-references.md) | Accepted, amended by 0119 |
 | 0119 | [`unsafe`](0119-unsafe.md) | Accepted |
+| 0120 | [No recursion in code that runs on the target](0120-no-recursion.md) | Accepted |

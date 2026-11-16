@@ -118,9 +118,12 @@ QEMU. The ownership model they share is ADR 0094.
 
 Before M6, because the call graph is closed now (no function pointers, no heap)
 and the features that open it (function pointers, M6's generics) are designed
-better knowing the rule. Neither step is planned yet: `/plan-step` settles the
-questions below with the user and writes the ADRs. M5.10 is small and nearly
-decided; M5.11 opens new ground (a check that needs the backend), so its design
+better knowing the rule. M5.10 is settled by ADR 0120 (Accepted) and planned
+in `.claude/plans/M5.10.md`. Where the ADR changed the bullets below, it
+wins: checks that call the panic function are no edge, and every body
+compiled for the target is a root unless compile time reaches it, not only
+`entry`, handlers, `panic fn` and `#[export]` functions. M5.11 is not planned
+yet: it opens new ground (a check that needs the backend), so its design
 conversation is the one worth running on Opus.
 
 Agreed in conversation (2026-11-16), to confirm or change in `/plan-step`:
@@ -174,6 +177,13 @@ Left for the planner of M5.11:
 - The standards behind the rule (the JPL "Power of Ten" and MISRA C forbid
   recursion; ISO 26262 asks for static analysability) were cited from memory in
   conversation and are to be checked before an ADR cites them.
+- What M5.10's rule leaves unbounded (ADR 0120, Consequences): a check that
+  fails inside the panic function, or in what it calls, re-enters the panic
+  function (checks are no edge of ADR 0120's graph); a guard in `core` that
+  stops a second panic is the candidate, amending ADR 0014 and 0053. And the
+  cycles the compiler does not see: through C (an `extern fn` that calls back
+  into Erebos), through assembly (`sym`), and a recursive function that
+  compile time reaches and that only C or `sym` calls at run time.
 
 Decisions already agreed for the later steps (ADR 0094 holds them):
 
