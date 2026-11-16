@@ -564,6 +564,7 @@ fn link_failure_other() {
     fs::create_dir_all(&work).unwrap();
     let source = work.join("undefined_extern.ers");
     let program = "\
+#[stack(0)]
 extern fn missing(x: u32) -> u32;
 
 entry fn main() -> ! {
@@ -808,6 +809,7 @@ fn unaligned(x: u32) -> u32 {{ x + 2 }}
 
 #[align(64)]
 #[naked]
+#[stack(0)]
 fn naked_aligned() {{
     asm(\"{ret}\", options(noreturn))
 }}
@@ -868,11 +870,13 @@ fn function_alignment_moves_the_symbol() {
             "{VIRT_MAP}
 #[align(4)]
 #[naked]
+#[stack(0)]
 fn pad() {{
     asm(\"ret\", options(noreturn))
 }}
 
 {attribute}#[naked]
+#[stack(0)]
 fn next() {{
     asm(\"ret\", options(noreturn))
 }}
@@ -1613,7 +1617,9 @@ fn the_eabi_division_is_defined_on_thumbv7m_only() {
         &source,
         format!(
             "{VIRT_MAP}
+#[stack(288)]
 extern fn c_udivmod(a: u64, b: u64, rem: *mut u64) -> u64;
+#[stack(288)]
 extern fn c_sdivmod(a: i64, b: i64, rem: *mut i64) -> i64;
 
 static mut OUT: u64 = 0;

@@ -165,6 +165,11 @@ const ZERO_P9: P9 = P9 { a: 0, w: [0; 2] };
 
 const ZERO_ARR12: [u32; 3] = [0; 3];
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(16)]
 extern fn c_empty(a: u32, e: Empty, b: u32) -> u32;
 fn e_empty(a: u32, e: Empty, b: u32) -> u32 {
     a * 10 + b
@@ -172,6 +177,7 @@ fn e_empty(a: u32, e: Empty, b: u32) -> u32 {
 fn t_empty() -> bool {
     unsafe { c_empty(3, Empty {}, 4) == 34 }
 }
+#[stack(272)]
 extern fn c_calls_empty() -> u32;
 
 // A function returning a zero-sized struct returns nothing, and no hidden
@@ -179,6 +185,7 @@ extern fn c_calls_empty() -> u32;
 #[export]
 static mut empty_seen_by_erebos: u32 = 0;
 extern static mut empty_seen_by_c: u32;
+#[stack(16)]
 extern fn c_empty_ret(a: u32, b: u32) -> Empty;
 fn e_empty_ret(a: u32, b: u32) -> Empty {
     empty_seen_by_erebos = a * 10 + b;
@@ -189,9 +196,11 @@ fn t_empty_ret() -> bool {
     let e: Empty = unsafe { c_empty_ret(7, 8) };
     unsafe { empty_seen_by_c == 78 }
 }
+#[stack(272)]
 extern fn c_calls_empty_ret() -> u32;
 
 // 1 byte: `[1 x i32]`, returned as `i8`, 0 words before it; on thumbv7m it is in r0
+#[stack(64)]
 extern fn c_b1_0(x: B1, z: u32) -> B1;
 fn e_b1_0(mut x: B1, z: u32) -> B1 {
     let mut r: B1 = ZERO_B1;
@@ -209,9 +218,11 @@ fn t_b1_0() -> bool {
     check(&raw const r as *const u8, size_of(B1), 2)
         && check(&raw const x as *const u8, size_of(B1), 1)
 }
+#[stack(320)]
 extern fn c_calls_b1_0() -> u32;
 
 // 2 bytes: returned as `i16`, 0 words before it; on thumbv7m it is in r0
+#[stack(64)]
 extern fn c_b2_0(x: B2, z: u32) -> B2;
 fn e_b2_0(mut x: B2, z: u32) -> B2 {
     let mut r: B2 = ZERO_B2;
@@ -229,9 +240,11 @@ fn t_b2_0() -> bool {
     check(&raw const r as *const u8, size_of(B2), 2)
         && check(&raw const x as *const u8, size_of(B2), 1)
 }
+#[stack(320)]
 extern fn c_calls_b2_0() -> u32;
 
 // 3 bytes: returned as `i32`, 0 words before it; on thumbv7m it is in r0
+#[stack(80)]
 extern fn c_b3_0(x: B3, z: u32) -> B3;
 fn e_b3_0(mut x: B3, z: u32) -> B3 {
     let mut r: B3 = ZERO_B3;
@@ -249,9 +262,11 @@ fn t_b3_0() -> bool {
     check(&raw const r as *const u8, size_of(B3), 2)
         && check(&raw const x as *const u8, size_of(B3), 1)
 }
+#[stack(320)]
 extern fn c_calls_b3_0() -> u32;
 
 // 4 bytes, alignment 1: returned as `i32`, 0 words before it; on thumbv7m it is in r0
+#[stack(64)]
 extern fn c_b4_0(x: B4, z: u32) -> B4;
 fn e_b4_0(mut x: B4, z: u32) -> B4 {
     let mut r: B4 = ZERO_B4;
@@ -269,9 +284,11 @@ fn t_b4_0() -> bool {
     check(&raw const r as *const u8, size_of(B4), 2)
         && check(&raw const x as *const u8, size_of(B4), 1)
 }
+#[stack(320)]
 extern fn c_calls_b4_0() -> u32;
 
 // 5 bytes, alignment 1: `[2 x i32]`, returned through `sret`, 0 words before it; on thumbv7m it is in r1..r2; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_b5_0(x: B5, z: u32) -> B5;
 fn e_b5_0(mut x: B5, z: u32) -> B5 {
     let mut r: B5 = ZERO_B5;
@@ -289,9 +306,11 @@ fn t_b5_0() -> bool {
     check(&raw const r as *const u8, size_of(B5), 2)
         && check(&raw const x as *const u8, size_of(B5), 1)
 }
+#[stack(336)]
 extern fn c_calls_b5_0() -> u32;
 
 // one word, 0 words before it; on thumbv7m it is in r0
+#[stack(64)]
 extern fn c_w4_0(x: W4, z: u32) -> W4;
 fn e_w4_0(mut x: W4, z: u32) -> W4 {
     let mut r: W4 = ZERO_W4;
@@ -309,9 +328,11 @@ fn t_w4_0() -> bool {
     check(&raw const r as *const u8, size_of(W4), 2)
         && check(&raw const x as *const u8, size_of(W4), 1)
 }
+#[stack(320)]
 extern fn c_calls_w4_0() -> u32;
 
 // two words: `[2 x i32]`, 0 words before it; on thumbv7m it is in r1..r2; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x8_0(x: X8, z: u32) -> X8;
 fn e_x8_0(mut x: X8, z: u32) -> X8 {
     let mut r: X8 = ZERO_X8;
@@ -329,9 +350,11 @@ fn t_x8_0() -> bool {
     check(&raw const r as *const u8, size_of(X8), 2)
         && check(&raw const x as *const u8, size_of(X8), 1)
 }
+#[stack(320)]
 extern fn c_calls_x8_0() -> u32;
 
 // `{ uint64_t }`: `[1 x i64]`, 0 words before it; on thumbv7m it is in r2..r3 (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_l8_0(x: L8, z: u32) -> L8;
 fn e_l8_0(mut x: L8, z: u32) -> L8 {
     let mut r: L8 = ZERO_L8;
@@ -349,9 +372,11 @@ fn t_l8_0() -> bool {
     check(&raw const r as *const u8, size_of(L8), 2)
         && check(&raw const x as *const u8, size_of(L8), 1)
 }
+#[stack(320)]
 extern fn c_calls_l8_0() -> u32;
 
 // two `u64`: `[2 x i64]`, 0 words before it; on thumbv7m it is split: r2..r3, then 2 words on the stack (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_l16_0(x: L16, z: u32) -> L16;
 fn e_l16_0(mut x: L16, z: u32) -> L16 {
     let mut r: L16 = ZERO_L16;
@@ -369,9 +394,11 @@ fn t_l16_0() -> bool {
     check(&raw const r as *const u8, size_of(L16), 2)
         && check(&raw const x as *const u8, size_of(L16), 1)
 }
+#[stack(368)]
 extern fn c_calls_l16_0() -> u32;
 
 // three `u64`: `[3 x i64]`, 0 words before it; on thumbv7m it is split: r2..r3, then 4 words on the stack (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_l24_0(x: L24, z: u32) -> L24;
 fn e_l24_0(mut x: L24, z: u32) -> L24 {
     let mut r: L24 = ZERO_L24;
@@ -389,9 +416,11 @@ fn t_l24_0() -> bool {
     check(&raw const r as *const u8, size_of(L24), 2)
         && check(&raw const x as *const u8, size_of(L24), 1)
 }
+#[stack(384)]
 extern fn c_calls_l24_0() -> u32;
 
 // 64 bytes, alignment 8: `[8 x i64]`, 0 words before it; on thumbv7m it is split: r2..r3, then 14 words on the stack (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(160)]
 extern fn c_l64_0(x: L64, z: u32) -> L64;
 fn e_l64_0(mut x: L64, z: u32) -> L64 {
     let mut r: L64 = ZERO_L64;
@@ -409,9 +438,11 @@ fn t_l64_0() -> bool {
     check(&raw const r as *const u8, size_of(L64), 2)
         && check(&raw const x as *const u8, size_of(L64), 1)
 }
+#[stack(544)]
 extern fn c_calls_l64_0() -> u32;
 
 // 64 bytes, alignment 4: `[16 x i32]`, 0 words before it; on thumbv7m it is split: r1..r3, then 13 words on the stack; the `sret` pointer is `r0`
+#[stack(152)]
 extern fn c_x64_0(x: X64, z: u32) -> X64;
 fn e_x64_0(mut x: X64, z: u32) -> X64 {
     let mut r: X64 = ZERO_X64;
@@ -429,9 +460,11 @@ fn t_x64_0() -> bool {
     check(&raw const r as *const u8, size_of(X64), 2)
         && check(&raw const x as *const u8, size_of(X64), 1)
 }
+#[stack(536)]
 extern fn c_calls_x64_0() -> u32;
 
 // 68 bytes: `byval align 4`, 0 words before it; on thumbv7m it is split: r1..r3, then 14 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x68_0(x: X68, z: u32) -> X68;
 fn e_x68_0(mut x: X68, z: u32) -> X68 {
     let mut r: X68 = ZERO_X68;
@@ -449,9 +482,11 @@ fn t_x68_0() -> bool {
     check(&raw const r as *const u8, size_of(X68), 2)
         && check(&raw const x as *const u8, size_of(X68), 1)
 }
+#[stack(528)]
 extern fn c_calls_x68_0() -> u32;
 
 // 72 bytes, alignment 8: `byval align 8`, 0 words before it; on thumbv7m it is split: r2..r3, then 16 words on the stack (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x72_0(x: X72, z: u32) -> X72;
 fn e_x72_0(mut x: X72, z: u32) -> X72 {
     let mut r: X72 = ZERO_X72;
@@ -469,9 +504,11 @@ fn t_x72_0() -> bool {
     check(&raw const r as *const u8, size_of(X72), 2)
         && check(&raw const x as *const u8, size_of(X72), 1)
 }
+#[stack(544)]
 extern fn c_calls_x72_0() -> u32;
 
 // `#[align(16)]` struct of words: `[4 x i32]`, 0 words before it; on thumbv7m it is split: r1..r3, then 1 word on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_a16_0(x: A16, z: u32) -> A16;
 fn e_a16_0(mut x: A16, z: u32) -> A16 {
     let mut r: A16 = ZERO_A16;
@@ -489,9 +526,11 @@ fn t_a16_0() -> bool {
     check(&raw const r as *const u8, size_of(A16), 2)
         && check(&raw const x as *const u8, size_of(A16), 1)
 }
+#[stack(368)]
 extern fn c_calls_a16_0() -> u32;
 
 // 80 bytes, `#[align(16)]`: `byval align 4`, copied to an aligned slot, 0 words before it; on thumbv7m it is split: r1..r3, then 17 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_a16big_0(x: A16Big, z: u32) -> A16Big;
 fn e_a16big_0(mut x: A16Big, z: u32) -> A16Big {
     let mut r: A16Big = ZERO_A16BIG;
@@ -509,9 +548,11 @@ fn t_a16big_0() -> bool {
     check(&raw const r as *const u8, size_of(A16Big), 2)
         && check(&raw const x as *const u8, size_of(A16Big), 1)
 }
+#[stack(576)]
 extern fn c_calls_a16big_0() -> u32;
 
 // holds an `#[align(16)]` struct: `[2 x i64]`, 0 words before it; on thumbv7m it is split: r2..r3, then 2 words on the stack (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_nest16_0(x: Nest16, z: u32) -> Nest16;
 fn e_nest16_0(mut x: Nest16, z: u32) -> Nest16 {
     let mut r: Nest16 = ZERO_NEST16;
@@ -529,9 +570,11 @@ fn t_nest16_0() -> bool {
     check(&raw const r as *const u8, size_of(Nest16), 2)
         && check(&raw const x as *const u8, size_of(Nest16), 1)
 }
+#[stack(368)]
 extern fn c_calls_nest16_0() -> u32;
 
 // holds two: `[4 x i64]`, 0 words before it; on thumbv7m it is split: r2..r3, then 6 words on the stack (the even register rule skips r1); the `sret` pointer is `r0`
+#[stack(104)]
 extern fn c_nest32_0(x: Nest32, z: u32) -> Nest32;
 fn e_nest32_0(mut x: Nest32, z: u32) -> Nest32 {
     let mut r: Nest32 = ZERO_NEST32;
@@ -549,9 +592,11 @@ fn t_nest32_0() -> bool {
     check(&raw const r as *const u8, size_of(Nest32), 2)
         && check(&raw const x as *const u8, size_of(Nest32), 1)
 }
+#[stack(424)]
 extern fn c_calls_nest32_0() -> u32;
 
 // 9 bytes, `#[packed]`: `[3 x i32]`, 0 words before it; on thumbv7m it is in r1..r3; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_p9_0(x: P9, z: u32) -> P9;
 fn e_p9_0(mut x: P9, z: u32) -> P9 {
     let mut r: P9 = ZERO_P9;
@@ -569,9 +614,11 @@ fn t_p9_0() -> bool {
     check(&raw const r as *const u8, size_of(P9), 2)
         && check(&raw const x as *const u8, size_of(P9), 1)
 }
+#[stack(336)]
 extern fn c_calls_p9_0() -> u32;
 
 // an array of three words, wrapped in a struct in C, 0 words before it; on thumbv7m it is in r1..r3; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_arr12_0(x: [u32; 3], z: u32) -> [u32; 3];
 fn e_arr12_0(mut x: [u32; 3], z: u32) -> [u32; 3] {
     let mut r: [u32; 3] = ZERO_ARR12;
@@ -589,9 +636,11 @@ fn t_arr12_0() -> bool {
     check(&raw const r as *const u8, size_of([u32; 3]), 2)
         && check(&raw const x as *const u8, size_of([u32; 3]), 1)
 }
+#[stack(352)]
 extern fn c_calls_arr12_0() -> u32;
 
 // `{ uint64_t }`: `[1 x i64]`, 1 word before it; on thumbv7m it is in r2..r3; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_l8_1(a0: u32, x: L8, z: u32) -> L8;
 fn e_l8_1(a0: u32, mut x: L8, z: u32) -> L8 {
     let mut r: L8 = ZERO_L8;
@@ -609,9 +658,11 @@ fn t_l8_1() -> bool {
     check(&raw const r as *const u8, size_of(L8), 2)
         && check(&raw const x as *const u8, size_of(L8), 1)
 }
+#[stack(320)]
 extern fn c_calls_l8_1() -> u32;
 
 // two `u64`: `[2 x i64]`, 1 word before it; on thumbv7m it is split: r2..r3, then 2 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_l16_1(a0: u32, x: L16, z: u32) -> L16;
 fn e_l16_1(a0: u32, mut x: L16, z: u32) -> L16 {
     let mut r: L16 = ZERO_L16;
@@ -629,9 +680,11 @@ fn t_l16_1() -> bool {
     check(&raw const r as *const u8, size_of(L16), 2)
         && check(&raw const x as *const u8, size_of(L16), 1)
 }
+#[stack(368)]
 extern fn c_calls_l16_1() -> u32;
 
 // three `u64`: `[3 x i64]`, 1 word before it; on thumbv7m it is split: r2..r3, then 4 words on the stack; the `sret` pointer is `r0`
+#[stack(88)]
 extern fn c_l24_1(a0: u32, x: L24, z: u32) -> L24;
 fn e_l24_1(a0: u32, mut x: L24, z: u32) -> L24 {
     let mut r: L24 = ZERO_L24;
@@ -649,9 +702,11 @@ fn t_l24_1() -> bool {
     check(&raw const r as *const u8, size_of(L24), 2)
         && check(&raw const x as *const u8, size_of(L24), 1)
 }
+#[stack(384)]
 extern fn c_calls_l24_1() -> u32;
 
 // 64 bytes, alignment 8: `[8 x i64]`, 1 word before it; on thumbv7m it is split: r2..r3, then 14 words on the stack; the `sret` pointer is `r0`
+#[stack(168)]
 extern fn c_l64_1(a0: u32, x: L64, z: u32) -> L64;
 fn e_l64_1(a0: u32, mut x: L64, z: u32) -> L64 {
     let mut r: L64 = ZERO_L64;
@@ -669,9 +724,11 @@ fn t_l64_1() -> bool {
     check(&raw const r as *const u8, size_of(L64), 2)
         && check(&raw const x as *const u8, size_of(L64), 1)
 }
+#[stack(544)]
 extern fn c_calls_l64_1() -> u32;
 
 // two words: `[2 x i32]`, 1 word before it; on thumbv7m it is in r2..r3; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x8_1(a0: u32, x: X8, z: u32) -> X8;
 fn e_x8_1(a0: u32, mut x: X8, z: u32) -> X8 {
     let mut r: X8 = ZERO_X8;
@@ -689,9 +746,11 @@ fn t_x8_1() -> bool {
     check(&raw const r as *const u8, size_of(X8), 2)
         && check(&raw const x as *const u8, size_of(X8), 1)
 }
+#[stack(320)]
 extern fn c_calls_x8_1() -> u32;
 
 // 68 bytes: `byval align 4`, 1 word before it; on thumbv7m it is split: r2..r3, then 15 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x68_1(a0: u32, x: X68, z: u32) -> X68;
 fn e_x68_1(a0: u32, mut x: X68, z: u32) -> X68 {
     let mut r: X68 = ZERO_X68;
@@ -709,9 +768,11 @@ fn t_x68_1() -> bool {
     check(&raw const r as *const u8, size_of(X68), 2)
         && check(&raw const x as *const u8, size_of(X68), 1)
 }
+#[stack(528)]
 extern fn c_calls_x68_1() -> u32;
 
 // 72 bytes, alignment 8: `byval align 8`, 1 word before it; on thumbv7m it is split: r2..r3, then 16 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x72_1(a0: u32, x: X72, z: u32) -> X72;
 fn e_x72_1(a0: u32, mut x: X72, z: u32) -> X72 {
     let mut r: X72 = ZERO_X72;
@@ -729,9 +790,11 @@ fn t_x72_1() -> bool {
     check(&raw const r as *const u8, size_of(X72), 2)
         && check(&raw const x as *const u8, size_of(X72), 1)
 }
+#[stack(544)]
 extern fn c_calls_x72_1() -> u32;
 
 // `#[align(16)]` struct of words: `[4 x i32]`, 1 word before it; on thumbv7m it is split: r2..r3, then 2 words on the stack; the `sret` pointer is `r0`
+#[stack(88)]
 extern fn c_a16_1(a0: u32, x: A16, z: u32) -> A16;
 fn e_a16_1(a0: u32, mut x: A16, z: u32) -> A16 {
     let mut r: A16 = ZERO_A16;
@@ -749,9 +812,11 @@ fn t_a16_1() -> bool {
     check(&raw const r as *const u8, size_of(A16), 2)
         && check(&raw const x as *const u8, size_of(A16), 1)
 }
+#[stack(368)]
 extern fn c_calls_a16_1() -> u32;
 
 // 80 bytes, `#[align(16)]`: `byval align 4`, copied to an aligned slot, 1 word before it; on thumbv7m it is split: r2..r3, then 18 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_a16big_1(a0: u32, x: A16Big, z: u32) -> A16Big;
 fn e_a16big_1(a0: u32, mut x: A16Big, z: u32) -> A16Big {
     let mut r: A16Big = ZERO_A16BIG;
@@ -769,9 +834,11 @@ fn t_a16big_1() -> bool {
     check(&raw const r as *const u8, size_of(A16Big), 2)
         && check(&raw const x as *const u8, size_of(A16Big), 1)
 }
+#[stack(576)]
 extern fn c_calls_a16big_1() -> u32;
 
 // holds an `#[align(16)]` struct: `[2 x i64]`, 1 word before it; on thumbv7m it is split: r2..r3, then 2 words on the stack; the `sret` pointer is `r0`
+#[stack(88)]
 extern fn c_nest16_1(a0: u32, x: Nest16, z: u32) -> Nest16;
 fn e_nest16_1(a0: u32, mut x: Nest16, z: u32) -> Nest16 {
     let mut r: Nest16 = ZERO_NEST16;
@@ -789,9 +856,11 @@ fn t_nest16_1() -> bool {
     check(&raw const r as *const u8, size_of(Nest16), 2)
         && check(&raw const x as *const u8, size_of(Nest16), 1)
 }
+#[stack(368)]
 extern fn c_calls_nest16_1() -> u32;
 
 // holds two: `[4 x i64]`, 1 word before it; on thumbv7m it is split: r2..r3, then 6 words on the stack; the `sret` pointer is `r0`
+#[stack(120)]
 extern fn c_nest32_1(a0: u32, x: Nest32, z: u32) -> Nest32;
 fn e_nest32_1(a0: u32, mut x: Nest32, z: u32) -> Nest32 {
     let mut r: Nest32 = ZERO_NEST32;
@@ -809,9 +878,11 @@ fn t_nest32_1() -> bool {
     check(&raw const r as *const u8, size_of(Nest32), 2)
         && check(&raw const x as *const u8, size_of(Nest32), 1)
 }
+#[stack(424)]
 extern fn c_calls_nest32_1() -> u32;
 
 // two words: `[2 x i32]`, 2 words before it; on thumbv7m it is split: r3, then 1 word on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x8_2(a0: u32, a1: u32, x: X8, z: u32) -> X8;
 fn e_x8_2(a0: u32, a1: u32, mut x: X8, z: u32) -> X8 {
     let mut r: X8 = ZERO_X8;
@@ -829,9 +900,11 @@ fn t_x8_2() -> bool {
     check(&raw const r as *const u8, size_of(X8), 2)
         && check(&raw const x as *const u8, size_of(X8), 1)
 }
+#[stack(328)]
 extern fn c_calls_x8_2() -> u32;
 
 // 5 bytes, alignment 1: `[2 x i32]`, returned through `sret`, 2 words before it; on thumbv7m it is split: r3, then 1 word on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_b5_2(a0: u32, a1: u32, x: B5, z: u32) -> B5;
 fn e_b5_2(a0: u32, a1: u32, mut x: B5, z: u32) -> B5 {
     let mut r: B5 = ZERO_B5;
@@ -849,9 +922,11 @@ fn t_b5_2() -> bool {
     check(&raw const r as *const u8, size_of(B5), 2)
         && check(&raw const x as *const u8, size_of(B5), 1)
 }
+#[stack(336)]
 extern fn c_calls_b5_2() -> u32;
 
 // `#[align(16)]` struct of words: `[4 x i32]`, 2 words before it; on thumbv7m it is split: r3, then 3 words on the stack; the `sret` pointer is `r0`
+#[stack(88)]
 extern fn c_a16_2(a0: u32, a1: u32, x: A16, z: u32) -> A16;
 fn e_a16_2(a0: u32, a1: u32, mut x: A16, z: u32) -> A16 {
     let mut r: A16 = ZERO_A16;
@@ -869,9 +944,11 @@ fn t_a16_2() -> bool {
     check(&raw const r as *const u8, size_of(A16), 2)
         && check(&raw const x as *const u8, size_of(A16), 1)
 }
+#[stack(368)]
 extern fn c_calls_a16_2() -> u32;
 
 // 64 bytes, alignment 4: `[16 x i32]`, 2 words before it; on thumbv7m it is split: r3, then 15 words on the stack; the `sret` pointer is `r0`
+#[stack(168)]
 extern fn c_x64_2(a0: u32, a1: u32, x: X64, z: u32) -> X64;
 fn e_x64_2(a0: u32, a1: u32, mut x: X64, z: u32) -> X64 {
     let mut r: X64 = ZERO_X64;
@@ -889,9 +966,11 @@ fn t_x64_2() -> bool {
     check(&raw const r as *const u8, size_of(X64), 2)
         && check(&raw const x as *const u8, size_of(X64), 1)
 }
+#[stack(544)]
 extern fn c_calls_x64_2() -> u32;
 
 // three words: `[3 x i32]`, 2 words before it; on thumbv7m it is split: r3, then 2 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x12_2(a0: u32, a1: u32, x: X12, z: u32) -> X12;
 fn e_x12_2(a0: u32, a1: u32, mut x: X12, z: u32) -> X12 {
     let mut r: X12 = ZERO_X12;
@@ -909,9 +988,11 @@ fn t_x12_2() -> bool {
     check(&raw const r as *const u8, size_of(X12), 2)
         && check(&raw const x as *const u8, size_of(X12), 1)
 }
+#[stack(352)]
 extern fn c_calls_x12_2() -> u32;
 
 // 9 bytes, `#[packed]`: `[3 x i32]`, 2 words before it; on thumbv7m it is split: r3, then 2 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_p9_2(a0: u32, a1: u32, x: P9, z: u32) -> P9;
 fn e_p9_2(a0: u32, a1: u32, mut x: P9, z: u32) -> P9 {
     let mut r: P9 = ZERO_P9;
@@ -929,9 +1010,11 @@ fn t_p9_2() -> bool {
     check(&raw const r as *const u8, size_of(P9), 2)
         && check(&raw const x as *const u8, size_of(P9), 1)
 }
+#[stack(344)]
 extern fn c_calls_p9_2() -> u32;
 
 // `{ uint64_t }`: `[1 x i64]`, 2 words before it; on thumbv7m it is wholly on the stack (the even register rule skips r3); the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_l8_2(a0: u32, a1: u32, x: L8, z: u32) -> L8;
 fn e_l8_2(a0: u32, a1: u32, mut x: L8, z: u32) -> L8 {
     let mut r: L8 = ZERO_L8;
@@ -949,9 +1032,11 @@ fn t_l8_2() -> bool {
     check(&raw const r as *const u8, size_of(L8), 2)
         && check(&raw const x as *const u8, size_of(L8), 1)
 }
+#[stack(328)]
 extern fn c_calls_l8_2() -> u32;
 
 // 68 bytes: `byval align 4`, 2 words before it; on thumbv7m it is split: r3, then 16 words on the stack; the `sret` pointer is `r0`
+#[stack(80)]
 extern fn c_x68_2(a0: u32, a1: u32, x: X68, z: u32) -> X68;
 fn e_x68_2(a0: u32, a1: u32, mut x: X68, z: u32) -> X68 {
     let mut r: X68 = ZERO_X68;
@@ -969,9 +1054,11 @@ fn t_x68_2() -> bool {
     check(&raw const r as *const u8, size_of(X68), 2)
         && check(&raw const x as *const u8, size_of(X68), 1)
 }
+#[stack(528)]
 extern fn c_calls_x68_2() -> u32;
 
 // 5 bytes, alignment 1: `[2 x i32]`, returned through `sret`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_b5_3(a0: u32, a1: u32, a2: u32, x: B5, z: u32) -> B5;
 fn e_b5_3(a0: u32, a1: u32, a2: u32, mut x: B5, z: u32) -> B5 {
     let mut r: B5 = ZERO_B5;
@@ -989,9 +1076,11 @@ fn t_b5_3() -> bool {
     check(&raw const r as *const u8, size_of(B5), 2)
         && check(&raw const x as *const u8, size_of(B5), 1)
 }
+#[stack(336)]
 extern fn c_calls_b5_3() -> u32;
 
 // two words: `[2 x i32]`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_x8_3(a0: u32, a1: u32, a2: u32, x: X8, z: u32) -> X8;
 fn e_x8_3(a0: u32, a1: u32, a2: u32, mut x: X8, z: u32) -> X8 {
     let mut r: X8 = ZERO_X8;
@@ -1009,9 +1098,11 @@ fn t_x8_3() -> bool {
     check(&raw const r as *const u8, size_of(X8), 2)
         && check(&raw const x as *const u8, size_of(X8), 1)
 }
+#[stack(328)]
 extern fn c_calls_x8_3() -> u32;
 
 // `#[align(16)]` struct of words: `[4 x i32]`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_a16_3(a0: u32, a1: u32, a2: u32, x: A16, z: u32) -> A16;
 fn e_a16_3(a0: u32, a1: u32, a2: u32, mut x: A16, z: u32) -> A16 {
     let mut r: A16 = ZERO_A16;
@@ -1029,9 +1120,11 @@ fn t_a16_3() -> bool {
     check(&raw const r as *const u8, size_of(A16), 2)
         && check(&raw const x as *const u8, size_of(A16), 1)
 }
+#[stack(368)]
 extern fn c_calls_a16_3() -> u32;
 
 // `{ uint64_t }`: `[1 x i64]`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_l8_3(a0: u32, a1: u32, a2: u32, x: L8, z: u32) -> L8;
 fn e_l8_3(a0: u32, a1: u32, a2: u32, mut x: L8, z: u32) -> L8 {
     let mut r: L8 = ZERO_L8;
@@ -1049,9 +1142,11 @@ fn t_l8_3() -> bool {
     check(&raw const r as *const u8, size_of(L8), 2)
         && check(&raw const x as *const u8, size_of(L8), 1)
 }
+#[stack(328)]
 extern fn c_calls_l8_3() -> u32;
 
 // two `u64`: `[2 x i64]`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_l16_3(a0: u32, a1: u32, a2: u32, x: L16, z: u32) -> L16;
 fn e_l16_3(a0: u32, a1: u32, a2: u32, mut x: L16, z: u32) -> L16 {
     let mut r: L16 = ZERO_L16;
@@ -1069,9 +1164,11 @@ fn t_l16_3() -> bool {
     check(&raw const r as *const u8, size_of(L16), 2)
         && check(&raw const x as *const u8, size_of(L16), 1)
 }
+#[stack(368)]
 extern fn c_calls_l16_3() -> u32;
 
 // holds an `#[align(16)]` struct: `[2 x i64]`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_nest16_3(a0: u32, a1: u32, a2: u32, x: Nest16, z: u32) -> Nest16;
 fn e_nest16_3(a0: u32, a1: u32, a2: u32, mut x: Nest16, z: u32) -> Nest16 {
     let mut r: Nest16 = ZERO_NEST16;
@@ -1089,9 +1186,11 @@ fn t_nest16_3() -> bool {
     check(&raw const r as *const u8, size_of(Nest16), 2)
         && check(&raw const x as *const u8, size_of(Nest16), 1)
 }
+#[stack(368)]
 extern fn c_calls_nest16_3() -> u32;
 
 // 68 bytes: `byval align 4`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_x68_3(a0: u32, a1: u32, a2: u32, x: X68, z: u32) -> X68;
 fn e_x68_3(a0: u32, a1: u32, a2: u32, mut x: X68, z: u32) -> X68 {
     let mut r: X68 = ZERO_X68;
@@ -1109,9 +1208,11 @@ fn t_x68_3() -> bool {
     check(&raw const r as *const u8, size_of(X68), 2)
         && check(&raw const x as *const u8, size_of(X68), 1)
 }
+#[stack(528)]
 extern fn c_calls_x68_3() -> u32;
 
 // 72 bytes, alignment 8: `byval align 8`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_x72_3(a0: u32, a1: u32, a2: u32, x: X72, z: u32) -> X72;
 fn e_x72_3(a0: u32, a1: u32, a2: u32, mut x: X72, z: u32) -> X72 {
     let mut r: X72 = ZERO_X72;
@@ -1129,9 +1230,11 @@ fn t_x72_3() -> bool {
     check(&raw const r as *const u8, size_of(X72), 2)
         && check(&raw const x as *const u8, size_of(X72), 1)
 }
+#[stack(544)]
 extern fn c_calls_x72_3() -> u32;
 
 // 64 bytes, alignment 4: `[16 x i32]`, 3 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(176)]
 extern fn c_x64_3(a0: u32, a1: u32, a2: u32, x: X64, z: u32) -> X64;
 fn e_x64_3(a0: u32, a1: u32, a2: u32, mut x: X64, z: u32) -> X64 {
     let mut r: X64 = ZERO_X64;
@@ -1149,9 +1252,11 @@ fn t_x64_3() -> bool {
     check(&raw const r as *const u8, size_of(X64), 2)
         && check(&raw const x as *const u8, size_of(X64), 1)
 }
+#[stack(544)]
 extern fn c_calls_x64_3() -> u32;
 
 // 3 bytes: returned as `i32`, 4 words before it; on thumbv7m it is wholly on the stack
+#[stack(96)]
 extern fn c_b3_4(a0: u32, a1: u32, a2: u32, a3: u32, x: B3, z: u32) -> B3;
 fn e_b3_4(a0: u32, a1: u32, a2: u32, a3: u32, mut x: B3, z: u32) -> B3 {
     let mut r: B3 = ZERO_B3;
@@ -1169,9 +1274,11 @@ fn t_b3_4() -> bool {
     check(&raw const r as *const u8, size_of(B3), 2)
         && check(&raw const x as *const u8, size_of(B3), 1)
 }
+#[stack(320)]
 extern fn c_calls_b3_4() -> u32;
 
 // two words: `[2 x i32]`, 4 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_x8_4(a0: u32, a1: u32, a2: u32, a3: u32, x: X8, z: u32) -> X8;
 fn e_x8_4(a0: u32, a1: u32, a2: u32, a3: u32, mut x: X8, z: u32) -> X8 {
     let mut r: X8 = ZERO_X8;
@@ -1189,9 +1296,11 @@ fn t_x8_4() -> bool {
     check(&raw const r as *const u8, size_of(X8), 2)
         && check(&raw const x as *const u8, size_of(X8), 1)
 }
+#[stack(336)]
 extern fn c_calls_x8_4() -> u32;
 
 // 68 bytes: `byval align 4`, 4 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_x68_4(a0: u32, a1: u32, a2: u32, a3: u32, x: X68, z: u32) -> X68;
 fn e_x68_4(a0: u32, a1: u32, a2: u32, a3: u32, mut x: X68, z: u32) -> X68 {
     let mut r: X68 = ZERO_X68;
@@ -1209,9 +1318,11 @@ fn t_x68_4() -> bool {
     check(&raw const r as *const u8, size_of(X68), 2)
         && check(&raw const x as *const u8, size_of(X68), 1)
 }
+#[stack(528)]
 extern fn c_calls_x68_4() -> u32;
 
 // two `u64`: `[2 x i64]`, 4 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_l16_4(a0: u32, a1: u32, a2: u32, a3: u32, x: L16, z: u32) -> L16;
 fn e_l16_4(a0: u32, a1: u32, a2: u32, a3: u32, mut x: L16, z: u32) -> L16 {
     let mut r: L16 = ZERO_L16;
@@ -1229,9 +1340,11 @@ fn t_l16_4() -> bool {
     check(&raw const r as *const u8, size_of(L16), 2)
         && check(&raw const x as *const u8, size_of(L16), 1)
 }
+#[stack(368)]
 extern fn c_calls_l16_4() -> u32;
 
 // 80 bytes, `#[align(16)]`: `byval align 4`, copied to an aligned slot, 4 words before it; on thumbv7m it is wholly on the stack; the `sret` pointer is `r0`
+#[stack(96)]
 extern fn c_a16big_4(a0: u32, a1: u32, a2: u32, a3: u32, x: A16Big, z: u32) -> A16Big;
 fn e_a16big_4(a0: u32, a1: u32, a2: u32, a3: u32, mut x: A16Big, z: u32) -> A16Big {
     let mut r: A16Big = ZERO_A16BIG;
@@ -1249,6 +1362,7 @@ fn t_a16big_4() -> bool {
     check(&raw const r as *const u8, size_of(A16Big), 2)
         && check(&raw const x as *const u8, size_of(A16Big), 1)
 }
+#[stack(584)]
 extern fn c_calls_a16big_4() -> u32;
 
 entry fn main() -> ! {

@@ -49,7 +49,7 @@ fn divide(a: u32, b: u32) -> u32 {
 }
 
 entry fn main() -> ! {
-    unsafe { asm("unimp"); }
+    unsafe { asm("unimp", options(nostack)); }
     exit(2)
 }
 

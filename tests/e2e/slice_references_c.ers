@@ -20,9 +20,17 @@
 mod board;
 use board::{exit, print, print_u32, putc};
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(32)]
 extern fn c_sum(s: &[u8]) -> u32;
+#[stack(32)]
 extern fn c_fill(s: &mut [u8], b: u8);
+#[stack(32)]
 extern fn c_sum_words(s: &[u32]) -> u32;
+#[stack(288)]
 extern fn c_calls_erebos() -> u32;
 
 // Called from C.

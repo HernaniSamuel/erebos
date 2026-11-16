@@ -165,8 +165,13 @@ fn __critical_exit(was: u32) {
 // It is private and the compiler does not name it: `_start` names it with `sym`.
 // `#[align(4)]` (ADR 0087) is there because `mtvec` holds multiples of 4 and,
 // with the C extension, LLVM may align a function to 2.
+//
+// `#[stack(64)]` (ADR 0122) is the frame the first instruction makes: 16 words
+// saved below the stack pointer the trap was taken with. The handler it calls
+// is counted by the bound as a callee, with its own frame.
 #[naked]
 #[align(4)]
+#[stack(64)]
 fn __erebos_trap() -> ! {
     asm(
         "addi sp, sp, -64",
@@ -252,8 +257,12 @@ fn __erebos_trap() -> ! {
 // The linker script's symbols are written by name: declaring them as `extern
 // static`s to name them with `sym` would check nothing more. The labels are
 // local, as ADR 0079 asks of every template.
+//
+// `#[stack(0)]` (ADR 0122): it pushes nothing; the stack pointer it sets is
+// the top of the stack, and the entry function it jumps to is a callee.
 #[export]
 #[naked]
+#[stack(0)]
 fn _start() -> ! {
     asm(
         "csrci mstatus, 8",

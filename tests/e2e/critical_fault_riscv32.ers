@@ -15,7 +15,7 @@ entry fn main() -> ! {
     // In the entry function, outside every `critical` block (ADR 0119).
     unsafe { core::arch::enable_interrupts(); }
     critical {
-        unsafe { asm("unimp"); }
+        unsafe { asm("unimp", options(nostack)); }
     }
     exit(2)
 }

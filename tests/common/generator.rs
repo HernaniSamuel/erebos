@@ -428,7 +428,9 @@ pub fn generate(seed: u64) -> Program {
     let mut source = format!("// Generated program, seed {seed} (ADR 0068).\n");
     for ty in Ty::INTS {
         let n = ty.name();
-        let _ = writeln!(source, "extern fn opaque_{n}(x: {n}) -> {n};");
+        // 16: the largest frame of `OPAQUE_C` (`clang -fstack-usage`, -O0 and -O2,
+        // both targets); the functions call nothing (ADR 0122).
+        let _ = writeln!(source, "#[stack(16)]\nextern fn opaque_{n}(x: {n}) -> {n};");
     }
     let mut functions = Vec::new();
     for i in 0..2 + g.rng.below(3) {

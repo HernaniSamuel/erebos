@@ -234,7 +234,7 @@ interrupt fn service() at core::arch::Vector::SVCall {
 
 entry fn main() -> ! {
     unsafe { core::arch::enable_interrupts(); }
-    unsafe { asm(\"svc #0\"); }
+    unsafe { asm(\"svc #0\", options(nostack)); }
     board::exit(0)
 }
 
@@ -254,7 +254,7 @@ interrupt fn call() -> ! at core::arch::Vector::EnvironmentCall {
 }
 
 entry fn main() -> ! {
-    unsafe { asm(\"ecall\"); }
+    unsafe { asm(\"ecall\", options(nostack)); }
     board::exit(2)
 }
 
@@ -522,7 +522,7 @@ fn a_label_defined_by_inlining_is_codegen_asm_without_a_label() {
 static mut COUNT: u32 = 0;
 
 fn once() {
-    unsafe { asm(\"shared_label: nop\"); }
+    unsafe { asm(\"shared_label: nop\", options(nostack)); }
     COUNT = COUNT + 1;
 }
 

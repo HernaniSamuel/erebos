@@ -37,7 +37,7 @@ interrupt fn tick() at Vector::SysTick {
     let j: u32 = unsafe { SRC[9] };
     // Everything a call may change is overwritten, so each value is, below, in
     // a register the C ABI preserves, or in the frame.
-    unsafe { asm("", clobber_abi("C")); }
+    unsafe { asm("", clobber_abi("C"), options(nostack)); }
     unsafe { OUT[0] = a; }
     unsafe { OUT[1] = b; }
     unsafe { OUT[2] = c; }
@@ -51,6 +51,8 @@ interrupt fn tick() at Vector::SysTick {
     TICKS += 1;
 }
 
+// `#[stack(32)]` (ADR 0122): the template below pushes eight registers.
+#[stack(32)]
 entry fn main() -> ! {
     unsafe { *SYST_RVR = 10_000; }
     unsafe { *SYST_CVR = 0; }

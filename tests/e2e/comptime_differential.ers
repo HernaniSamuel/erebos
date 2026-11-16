@@ -9,18 +9,34 @@
 mod board;
 use board::{exit, print_u64, putc};
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls.
+#[stack(16)]
 extern fn opaque_u8(x: u8) -> u8;
+#[stack(16)]
 extern fn opaque_u16(x: u16) -> u16;
+#[stack(16)]
 extern fn opaque_u32(x: u32) -> u32;
+#[stack(16)]
 extern fn opaque_u64(x: u64) -> u64;
+#[stack(16)]
 extern fn opaque_i8(x: i8) -> i8;
+#[stack(16)]
 extern fn opaque_i16(x: i16) -> i16;
+#[stack(16)]
 extern fn opaque_i32(x: i32) -> i32;
+#[stack(16)]
 extern fn opaque_i64(x: i64) -> i64;
+#[stack(16)]
 extern fn opaque_usize(x: usize) -> usize;
+#[stack(16)]
 extern fn opaque_mode(m: Mode) -> Mode;
+#[stack(16)]
 extern fn opaque_level(l: Level) -> Level;
+#[stack(16)]
 extern fn opaque_port(p: Port) -> Port;
+#[stack(16)]
 extern fn opaque_code(c: Code) -> Code;
 
 fn mix(hash: u64, value: u64) -> u64 {
@@ -374,6 +390,7 @@ enum Packet: u16 {
     Zero((), u8) = 7,
 }
 
+#[stack(32)]
 extern fn opaque_packet(p: Packet) -> Packet;
 
 const EMPTY: Packet = Packet::Empty;
@@ -454,6 +471,7 @@ enum Widths: u8 {
     E(Level, Code, Port) = 2,
 }
 
+#[stack(32)]
 extern fn opaque_widths(w: Widths) -> Widths;
 
 fn widths_match(w: Widths) -> u64 {
@@ -486,6 +504,7 @@ enum Duo: u16 {
     Empty = 3,
 }
 
+#[stack(32)]
 extern fn opaque_duo(d: Duo) -> Duo;
 
 fn duo_match(d: Duo) -> u64 {
@@ -881,6 +900,7 @@ struct Frame: u32 {
 
 struct Framed { tag: u8, line: Line, frame: Frame }
 
+#[stack(16)]
 extern fn opaque_line(l: Line) -> Line;
 
 fn parity_value(p: Parity) -> u64 {

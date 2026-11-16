@@ -31,17 +31,33 @@ struct Packed { a: u8, b: u32 }
 struct Huge { w: [u32; 16] }
 struct Empty {}
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(16)]
 extern fn c_one(x: One) -> One;
+#[stack(32)]
 extern fn c_three(x: Three) -> Three;
+#[stack(16)]
 extern fn c_word(x: Word) -> Word;
+#[stack(32)]
 extern fn c_pair(x: Pair) -> Pair;
+#[stack(32)]
 extern fn c_wide(x: Wide) -> Wide;
+#[stack(32)]
 extern fn c_big(x: Big) -> Big;
+#[stack(48)]
 extern fn c_packed(x: Packed) -> Packed;
+#[stack(48)]
 extern fn c_bytes(x: [u8; 5]) -> [u8; 5];
+#[stack(120)]
 extern fn c_huge_sum(h: Huge) -> u32;
+#[stack(64)]
 extern fn c_late(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, x: Pair) -> Pair;
+#[stack(16)]
 extern fn c_around_empty(a: u32, e: Empty, b: u32) -> u32;
+#[stack(336)]
 extern fn c_calls_erebos() -> u32;
 
 // Called from C.

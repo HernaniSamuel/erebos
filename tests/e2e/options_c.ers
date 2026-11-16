@@ -39,13 +39,25 @@ use board::{exit, print, print_u64, putc};
 
 enum Fault: u8 { Timeout = 3, Busy = 7 }
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(16)]
 extern fn c_u8(x: Option(u8)) -> Option(u8);
+#[stack(32)]
 extern fn c_u32(x: Option(u32)) -> Option(u32);
+#[stack(32)]
 extern fn c_u64(x: Option(u64)) -> Option(u64);
+#[stack(32)]
 extern fn c_result(x: Result(u32, Fault)) -> Result(u32, Fault);
+#[stack(288)]
 extern fn c_sees_u8(tag: u8, value: u8, out_tag: *mut u8, out_value: *mut u64);
+#[stack(304)]
 extern fn c_sees_u32(tag: u8, value: u32, out_tag: *mut u8, out_value: *mut u64);
+#[stack(352)]
 extern fn c_sees_u64(tag: u8, value: u64, out_tag: *mut u8, out_value: *mut u64);
+#[stack(304)]
 extern fn c_sees_result(tag: u8, value: u32, out_tag: *mut u8, out_value: *mut u64);
 
 // Called from C: `.Some(0)` becomes `.None`, `.Some(v)` becomes

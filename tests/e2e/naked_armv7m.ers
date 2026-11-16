@@ -12,10 +12,17 @@
 mod board;
 use board::{exit, print_u32, putc};
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(272)]
 extern fn c_sum_plus_one(a: u32, b: u32) -> u32;
 
+// Every template pushes nothing, so each naked function is `#[stack(0)]` (ADR 0122).
 #[export]
 #[naked]
+#[stack(0)]
 fn erebos_sum(a: u32, b: u32) -> u32 {
     asm(
         "adds r0, r0, r1",
@@ -25,6 +32,7 @@ fn erebos_sum(a: u32, b: u32) -> u32 {
 }
 
 #[naked]
+#[stack(0)]
 fn scale(a: u32) -> u32 {
     asm(
         "lsls r0, r0, #{shift}",
@@ -39,6 +47,7 @@ fn add_one(x: u32) -> u32 {
 }
 
 #[naked]
+#[stack(0)]
 fn plus_two(x: u32) -> u32 {
     asm(
         "adds r0, r0, #1",
@@ -49,6 +58,7 @@ fn plus_two(x: u32) -> u32 {
 }
 
 #[naked]
+#[stack(0)]
 fn sum3(a: u32, b: u32, c: u32) -> u32 {
     asm(
         "adds r0, r0, r1",

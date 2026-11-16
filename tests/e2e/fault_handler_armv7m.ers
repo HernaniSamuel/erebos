@@ -20,7 +20,7 @@ interrupt fn fault() -> ! at Vector::HardFault {
 }
 
 entry fn main() -> ! {
-    unsafe { asm("udf #0"); }
+    unsafe { asm("udf #0", options(nostack)); }
     exit(2)
 }
 

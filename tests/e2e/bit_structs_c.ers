@@ -31,14 +31,27 @@ struct Control: u32 {
     pub high: u8 at 24..=31,
 }
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(16)]
 extern fn c_flip_dlab(l: Lcr) -> Lcr;
+#[stack(16)]
 extern fn c_lcr_as_int(l: Lcr) -> u32;
+#[stack(16)]
 extern fn c_status(count: u32) -> Status;
+#[stack(16)]
 extern fn c_status_as_int(s: Status) -> u32;
+#[stack(16)]
 extern fn c_rotate(c: Control) -> Control;
+#[stack(272)]
 extern fn c_lcr_from_erebos() -> u32;
+#[stack(272)]
 extern fn c_status_from_erebos() -> u32;
+#[stack(272)]
 extern fn c_count_in_erebos() -> u32;
+#[stack(272)]
 extern fn c_control_from_erebos() -> u32;
 
 // Called from C.

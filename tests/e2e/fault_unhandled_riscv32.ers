@@ -12,7 +12,7 @@ use board::{exit, print, print_u32};
 
 entry fn main() -> ! {
     // `unimp` is the instruction of all zeros, which is illegal.
-    unsafe { asm("unimp"); }
+    unsafe { asm("unimp", options(nostack)); }
     exit(2)
 }
 

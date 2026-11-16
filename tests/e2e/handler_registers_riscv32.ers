@@ -62,6 +62,7 @@ interrupt fn tick() at Vector::MachineTimer {
             "li t5, -1",
             "li t6, -1",
             clobber_abi("C"),
+            options(nostack),
         );
     }
     unsafe { OUT[0] = a; }
@@ -80,6 +81,8 @@ interrupt fn tick() at Vector::MachineTimer {
     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
 }
 
+// `#[stack(64)]` (ADR 0122): the template below makes a 64-byte frame of its own.
+#[stack(64)]
 entry fn main() -> ! {
     unsafe { *MTIMECMP_HIGH = 0; }
     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }

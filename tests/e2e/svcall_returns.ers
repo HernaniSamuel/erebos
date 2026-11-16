@@ -24,8 +24,8 @@ interrupt fn service() at Vector::SVCall {
 entry fn main() -> ! {
     // In the entry function, outside every `critical` block (ADR 0119).
     unsafe { core::arch::enable_interrupts(); }
-    unsafe { asm("svc #0"); }
-    unsafe { asm("svc #0"); }
+    unsafe { asm("svc #0", options(nostack)); }
+    unsafe { asm("svc #0", options(nostack)); }
     putc(b's'); putc(b'v'); putc(b'c'); putc(b' ');
     unsafe { putc(b'0' + *CALLS as u8); }
     putc(b' '); putc(b'a'); putc(b'f'); putc(b't'); putc(b'e'); putc(b'r'); putc(b'\n');

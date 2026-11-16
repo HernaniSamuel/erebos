@@ -24,7 +24,7 @@ mod app {
         if crate::RUNS == 1 {
             crate::putc(b'1');
             crate::putc(b' ');
-            unsafe { asm("j {}", sym entry, options(noreturn)) }
+            unsafe { asm("j {}", sym entry, options(noreturn, nostack)) }
         }
         crate::putc(b'2');
         crate::putc(b'\n');

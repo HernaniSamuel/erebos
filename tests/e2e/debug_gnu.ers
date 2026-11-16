@@ -9,6 +9,10 @@
 mod board;
 use board::{exit, print_u32, putc};
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls.
+#[stack(64)]
 extern fn c_debug(x: u32) -> u32;
 
 entry fn main() -> ! {

@@ -28,10 +28,19 @@ enum Long: u64 { A = 0, B(()) = 1 }
 // Size 12: memory.
 enum Big: u16 { A = 0, B(u32, u32) = 1, C(u8) = 2 }
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls. Where C calls an Erebos function, 256 more, until
+// `--emit=stack` gives that function's depth.
+#[stack(16)]
 extern fn c_one(x: One) -> One;
+#[stack(32)]
 extern fn c_pair(x: Pair) -> Pair;
+#[stack(32)]
 extern fn c_long(x: Long) -> Long;
+#[stack(32)]
 extern fn c_big(x: Big) -> Big;
+#[stack(352)]
 extern fn c_calls_erebos() -> u32;
 
 fn byte(p: *const u8, at: usize) -> u64 {

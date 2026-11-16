@@ -22,7 +22,7 @@ interrupt fn fault() -> ! at Vector::IllegalInstruction {
 }
 
 entry fn main() -> ! {
-    unsafe { asm("unimp"); }
+    unsafe { asm("unimp", options(nostack)); }
     exit(2)
 }
 

@@ -9,7 +9,12 @@
 // expect-output: small data ok
 // expect-exit: 0
 
+// `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
+// from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
+// the C functions it calls.
+#[stack(16)]
 extern fn c_check() -> u32;
+#[stack(16)]
 extern fn c_small_zero() -> u32;
 
 fn putc(byte: u8) {

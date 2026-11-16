@@ -135,7 +135,7 @@ entry fn main() -> ! {
     let mut tripled: u32 = 0;
     unsafe {
         asm("bl {f}", f = sym triple, inout("r0") 14 as u32 => tripled,
-            clobber_abi("C"));
+            clobber_abi("C"), options(nostack));
     }
     print_u32(tripled);
     space();
@@ -143,7 +143,7 @@ entry fn main() -> ! {
     space();
 
     // The program ends in the assembly: `finish` prints and stops QEMU.
-    unsafe { asm("b.w {next}", next = sym finish, options(noreturn)) }
+    unsafe { asm("b.w {next}", next = sym finish, options(noreturn, nostack)) }
 }
 
 panic fn on_panic() -> ! {

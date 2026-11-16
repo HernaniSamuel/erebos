@@ -9,7 +9,7 @@ mod board;
 use board::{exit, putc};
 
 entry fn main() -> ! {
-    unsafe { asm("unimp"); }
+    unsafe { asm("unimp", options(nostack)); }
     exit(2)
 }
 

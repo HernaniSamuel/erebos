@@ -27,7 +27,7 @@ interrupt fn call() -> ! at Vector::EnvironmentCall {
 }
 
 entry fn main() -> ! {
-    unsafe { asm("li a7, 93", "ecall", out("a7") _); }
+    unsafe { asm("li a7, 93", "ecall", out("a7") _, options(nostack)); }
     exit(2)
 }
 

@@ -33,7 +33,7 @@ entry fn main() -> ! {
                 "movw r0, :lower16:_start",
                 "movt r0, :upper16:_start",
                 "bx r0",
-                options(noreturn),
+                options(noreturn, nostack),
             );
         }
     }

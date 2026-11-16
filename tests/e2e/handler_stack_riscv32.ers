@@ -44,7 +44,7 @@ entry fn main() -> ! {
     // In the entry function, outside every `critical` block (ADR 0119).
     unsafe { core::arch::enable_interrupts(); }
     // `sp` is aligned to 16 while it waits, as the compiler leaves it.
-    unsafe { asm("wfi", clobber_abi("C")); }
+    unsafe { asm("wfi", clobber_abi("C"), options(nostack)); }
     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     let sp: u32 = critical { SP_MOD_16 };
     if sp != 0 {

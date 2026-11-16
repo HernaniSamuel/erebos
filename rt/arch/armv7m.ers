@@ -280,8 +280,12 @@ fn __critical_exit(was: u32) {
 // The linker script's symbols are written by name: declaring them as `extern
 // static`s to name them with `sym` would check nothing more. The labels are
 // local, as ADR 0079 asks of every template.
+//
+// `#[stack(0)]` (ADR 0122): it pushes nothing; the stack pointer it sets is
+// the top of the stack, and the entry function it jumps to is a callee.
 #[export]
 #[naked]
+#[stack(0)]
 fn _start() -> ! {
     asm(
         "cpsid i",
@@ -336,8 +340,12 @@ fn _start() -> ! {
 // through the functions of ADR 0076. A zero divisor is not checked (C leaves
 // it undefined, and `__aeabi_ldiv0` is not called).
 
+// `#[stack(24)]` on each (ADR 0122): the 8 bytes `push` saves plus the 16-byte
+// frame below them. The function of `core::builtins` that each calls is a
+// callee of the bound, with its own frame.
 #[export]
 #[naked]
+#[stack(24)]
 fn __aeabi_uldivmod() {
     asm(
         "push {{r4, lr}}",
@@ -355,6 +363,7 @@ fn __aeabi_uldivmod() {
 
 #[export]
 #[naked]
+#[stack(24)]
 fn __aeabi_ldivmod() {
     asm(
         "push {{r4, lr}}",
