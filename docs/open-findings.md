@@ -310,6 +310,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `block_after_the_asm`: the `unsafe` block is labelled "not allowed here",
   while the other two cases say "an `unsafe` block, not needed on a naked
   function"; consistent with step 3's decision, so a note. (M5.9)
+- The two boards hold the same `print_u32` and `print_u64`, copied by hand;
+  nothing keeps the copies equal. (M5.10, step 1)
+- `src/diag.rs`: the unit test of `note` writes its source with a literal
+  line break where the neighbouring tests use `"fn main() {}\n"`. The working
+  copy of `src/analysis/mod.rs` and of two `tests/ui/recursion_*.ers` files
+  has CRLF line endings; Git normalizes them on commit
+  (`.gitattributes`), so only the editor is at fault. (M5.10, step 3)
 
 ## Tests
 
@@ -524,6 +531,9 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   a soundness hole, two rings would only print odd output. (M5.9, step 8)
 - `docs/reference.md` says that `&raw const p[i]` emits no `inbounds`; no
   review looked at the LLVM IR for it. (M5.9, step 10)
+- The snapshot of `call_borrows_accepted.ers` lost its `assertion_line:`
+  header (insta metadata) when it was updated by hand in step 2; the next
+  `cargo insta` run will put it back. (M5.10, step 2)
 
 ## Docs
 
@@ -704,3 +714,19 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `.claude/agents/code-reviewer.md` has no item for ADR 0119's two review
   rules (now in `CONTRIBUTING.md`); that change is the user's too. (M5.9,
   final review)
+- `docs/reference.md`, "No recursion", "What is checked": it says a recursive
+  function that only C or assembly calls is an error, but not the exception
+  of ADR 0120 ("What runs on the target"): if compile time also reaches it,
+  it is accepted, one of the openings left to M5.11. (M5.10, step 5)
+- `docs/roadmap.md`, the M5.10 status bullet: "62 e2e programs use them" is
+  not what the count measures; step 1 migrated 62 programs, 21 of which had
+  a digit loop that did not recurse. The recount of step 4 (43 programs with
+  a recursive digit printer) and the migrated 41 recursive ones do not
+  reconcile in the plan or the roadmap, and step 1's Decisions count
+  `structs`, `modules/uart` and `panic_location/fmt` unevenly. (M5.10, steps
+  1, 4 and 5)
+- ADR 0120, Context, keeps the text-search estimate ("about 70 definitions in
+  more than 55 programs"); a pointer to the roadmap's recount would stop the
+  two numbers clashing. ADR 0077's list of what the boards offer lacks
+  `print_u32` and `print_u64`. Both are the user's to change (accepted ADRs).
+  (M5.10, final review)
