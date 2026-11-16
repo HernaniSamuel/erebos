@@ -10,7 +10,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** ✅ | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
-| **M5** (M5.1 to M5.9 ✅; M5.10 and M5.11 before M6) | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118); `unsafe` for what the checks do not cover (ADR 0119). |
+| **M5** (M5.1 to M5.10 ✅; M5.11 before M6) | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118); `unsafe` for what the checks do not cover (ADR 0119); no recursion in code that runs on the target (ADR 0120). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
 
 ## M2 steps
@@ -113,28 +113,31 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.7** ✅ Fewer raw pointers | `assert` takes a `&[u8]` message and the panic function a `&core::PanicInfo` (ADR 0116); `core` and the tests moved to references where they can; what stays raw, measured (ADR 0117) | the e2e programs with references, the same output |
 | **M5.8** ✅ Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
 | **M5.9** ✅ `unsafe` | `unsafe { }` and `unsafe fn`; accesses through raw pointers, `asm`, `extern fn` calls, `extern static` accesses and calls to an `unsafe fn` need `unsafe`; `enable_interrupts` an `unsafe fn` (ADR 0119); every program migrated, with a count | the e2e programs with `unsafe`, the same output, and a safe interface built on `unsafe`, on both targets |
-| **M5.10** No recursion | a cycle in the run-time call graph is an error, with the cycle in the diagnostic; the analysis in `src/analysis/` over MIR; the e2e programs that recurse migrated (about 55 repeat a recursive `print_u32` or `print_u64`: one shared copy in each `tests/boards/` module); ADR to write | the e2e programs, the same output, and a rejected program for direct and mutual recursion, on both targets |
+| **M5.10** ✅ No recursion | a cycle in the run-time call graph is an error, with the cycle in the diagnostic; the analysis in `src/analysis/` over MIR; the e2e programs that recurse migrated (the compiler counts 52 `analysis::recursion` errors, one per function that calls itself, on the tree before the migration: 45 in `tests/e2e/` and 7 in `tests/ui/`; 43 programs repeated a recursive `print_u32` or `print_u64`: one shared copy in each `tests/boards/` module); ADR 0120 | the e2e programs, the same output, and a rejected program for direct and mutual recursion, on both targets |
 | **M5.11** Stack bound | the worst-case stack depth of the program, computed after code generation and before the link, checked against the stack declared in `memory` (ADR 0057); frame sizes from the backend; `#[stack(N)]` for what the compiler cannot measure (`asm`, `#[naked]`, `extern fn`); the handlers' share; ADR to write, amending the layer rule | a program whose stack fits, and one whose stack does not fit, rejected with the path of calls that needs the most, on both targets at both levels |
 
 Before M6, because the call graph is closed now (no function pointers, no heap)
 and the features that open it (function pointers, M6's generics) are designed
-better knowing the rule. M5.10 is settled by ADR 0120 (Accepted) and planned
-in `.claude/plans/M5.10.md`. Where the ADR changed the bullets below, it
-wins: checks that call the panic function are no edge, and every body
+better knowing the rule. M5.10 is done: ADR 0120 (Accepted) settled it, and
+`.claude/plans/M5.10.md` records the steps. Where the ADR changed the bullets
+below, it wins: checks that call the panic function are no edge, and every body
 compiled for the target is a root unless compile time reaches it, not only
-`entry`, handlers, `panic fn` and `#[export]` functions. M5.11 is not planned
-yet: it opens new ground (a check that needs the backend), so its design
-conversation is the one worth running on Opus.
+`entry`, handlers, `panic fn` and `#[export]` functions; and a `comptime`
+expression inside a function or an array length exempts nothing (the evaluator
+drops its body), where the bullets say compile-time recursion stays allowed.
+M5.11 is not planned yet: it opens new ground (a check that needs the backend),
+so its design conversation is the one worth running on Opus.
 
-Agreed in conversation (2026-11-16), to confirm or change in `/plan-step`:
+Agreed in conversation (2026-11-16), settled by ADR 0120 (the bullets below
+are the conversation as it was; the ADR wins where they differ):
 
 - Recursion is forbidden by default, not limited by an annotation. An
   annotation (`#[recursion(depth = N)]`) is the program's word, which the
   compiler cannot check for a depth that depends on data, so it would weaken
   the stack bound; and forbidding now can be relaxed later without breaking a
-  program, where the reverse cannot. The user leans to forbid; the step
-  decides. The reason is a provable worst-case stack, not speed (LLVM already
-  turns tail recursion into a loop in `-O2`, not in `-O0`).
+  program, where the reverse cannot. The user chose to forbid (ADR 0120). The
+  reason is a provable worst-case stack, not speed (LLVM already turns tail
+  recursion into a loop in `-O2`, not in `-O0`).
 - The rule is about code that runs on the target. Recursion at compile time
   (ADR 0027, with its depth limit) stays allowed: a function that recurses and
   is only used by `comptime` is accepted, and the same function called from a
@@ -144,8 +147,8 @@ Agreed in conversation (2026-11-16), to confirm or change in `/plan-step`:
 - A text search (not the compiler) found direct recursion in the e2e programs
   almost only as the digit-printing idiom; `rt/` and `tests/boards/` have none;
   the real recursions seen are `fib` (`functions.ers`), `walk`
-  (`returned_references.ers`) and a few ui tests. The count is to be redone by
-  the compiler once the check exists.
+  (`returned_references.ers`) and a few ui tests. The compiler redid the count
+  (52 errors, under "After M5"); all were migrated.
 - Function pointers (deferred ideas) are not part of these steps, but the rule
   must be written so that they fit: a call through one reaches every function
   of a compatible signature whose address is taken (ADR 0078), so the graph
@@ -1641,8 +1644,28 @@ Documentation owed:
   handlers (which would make it safe again) are not scheduled (ADR 0119, "What
   stays out"); generic bodies and function pointers owe what ADR 0119's
   Consequences list, under "M6" and in the deferred ideas.
-- **Next: M5.10 and M5.11** (no recursion, then the stack bound; planned with
-  `/plan-step`, see the M5 steps), and then **M6** (types as values and
+- **M5.10 done: no recursion.** A function that runs on the target may not
+  reach itself through calls, directly or through others: a cycle in the
+  call graph is `analysis::recursion` (ADR 0120). The graph is the one of
+  ADR 0093 (a call statement in a reachable block is an edge) without the
+  checks that call the panic function. Every body compiled for the target is a
+  root, `core`'s too, except those only compile time reaches: constants,
+  statics, array lengths written without the `comptime` keyword and the
+  top-level `comptime { }` item. A `comptime` expression inside a function or
+  an array length exempts nothing (the evaluator drops its body; user
+  decision of 2026-11-16, which M6 may reopen). One error for each strongly
+  connected component, with a label on each call of the shortest cycle from
+  its first function and a note with the cycle. The pass is
+  `src/analysis/recursion.rs`, over MIR, with the components and the cycle
+  in `src/analysis/call_graph.rs`; `Diagnostic` gained a note. The programs
+  were migrated first: `print_u32` and `print_u64` are in each board module,
+  62 e2e programs use them, and `fib`, `walk` and the ui tests that recursed
+  are loops. The count is under "After M5". Left open, for M5.11 (ADR 0120,
+  Consequences): the re-entry of the panic function, cycles through C and
+  assembly, and a recursive function that compile time reaches and only C or
+  `sym` calls. The rule is in `docs/reference.md`, "No recursion".
+- **Next: M5.11** (the stack bound; to be planned with `/plan-step`, see the
+  M5 steps), and then **M6** (types as values and
   `comptime` parameters: generics in the Zig
   model, monomorphized, ADR 0027), after M5 (moves, ownership, references,
   returned references, methods and `unsafe`), whose steps and model are above.

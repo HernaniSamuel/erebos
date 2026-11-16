@@ -234,7 +234,10 @@ fn add(a: u32, mut b: u32) -> u32 {
 }
 ```
 
-- Functions may be called before their declaration, and may recurse.
+- Functions may be called before their declaration. A function may not reach
+  itself through calls in code that runs on the target, directly or through
+  other functions: that is `analysis::recursion` (see "No recursion").
+  Compile-time code may recurse.
 - Arguments are checked against parameter types with no conversion other
   than the pointer conversions of "Typing".
 - Parameters cannot have type `()` or `!`.
@@ -3213,9 +3216,10 @@ element, a `const` and a `static` of a reference type are
 `ty::reference-position`. There is no written lifetime and no `&static T`; no
 result tied to several parameters (an error, above); no `split_at_mut` (see
 "Slices behind references"); no reference moved forward in a loop, since a
-`let` of a reference is bound once, so a loop over a buffer keeps an index or
-recurses; no two-phase borrow (see "The call `x.f(args)`"); and a `&T` result
-of a `&mut` parameter stays a mutable loan (see "The borrow check").
+`let` of a reference is bound once, so a loop over a buffer keeps an index
+(a function may not recurse to walk it, see "No recursion"); no two-phase
+borrow (see "The call `x.f(args)`"); and a `&T` result of a `&mut` parameter
+stays a mutable loan (see "The borrow check").
 
 ### The borrow check (ADR 0106, 0111)
 
@@ -6751,7 +6755,9 @@ block stays inside: it is no exit (see "`critical` blocks"). In a handler contex
    `analysis::unprotected-static`. A place is unprotected when some path reaches it
    with no block around it, so it is enough to put the access, or one call on the
    path to it, in a `critical` block. A recursion entered inside a block is
-   protected.
+   protected; it arises only in a program that the rule against recursion
+   rejects, or in a cycle that rule does not see (through C or assembly; see
+   "No recursion"), and the walk ends on it.
 2. A static that a context of an unmaskable handler reaches, and any other
    context also reaches: each place naming it, in a function that unmaskable
    handler reaches, is an error, `analysis::unmaskable-static`. Being inside
@@ -6967,6 +6973,119 @@ reached through a plain pointer, with `core::arch::compiler_fence` where the ord
 matters. Neither makes a read-modify-write or an access of several words atomic: the
 example's `*RUNS += 1` is safe only because the handler is its one writer. A
 pointer taken inside `critical` and used outside is free in the same way.
+
+### No recursion (ADR 0120)
+
+A function that runs on the target may not reach itself through calls: directly
+(`f` calls `f`) or through others (`f` calls `g`, which calls `f`), of any
+length. It is an error, `analysis::recursion`, so that the program's stack has a
+bound. There is no annotation that allows it.
+
+**What is checked.** The call graph of the code that runs on the target. An edge
+is a call statement in a block that control can reach from the start of the
+body that holds it, from that body to its callee; a method call (`x.f()`) is a
+call, and a call inside `critical` is an edge like one outside it. Every body
+the compiler builds for the target is a root, `core`'s included, whether or not
+anything calls it: a recursive function that nothing calls, or that only C or
+assembly calls (by its symbol or through `sym`), is an error too.
+
+**Compile time is excepted.** A function that only compile time calls may
+recurse; the evaluator limits the depth of nested calls and reports the error
+when a call goes too deep (see "Compile-time execution"). The bodies that
+compile time reaches are those called from the initializer of a `const`, of a
+`static`, from an array length written without the `comptime` keyword
+(`[u8; width(3)]`) and from a top-level `comptime { }` item, and from the
+functions those call. The same function is rejected once code that runs on the
+target calls it too.
+
+**The limit.** A `comptime` expression is never exempt, inside a function body
+(`fn g() -> u32 { comptime power(2, 3) }`) or inside an array length
+(`[u8; comptime width(3)]`). The evaluator runs it and drops its body, so the
+program holds nothing the rule can read: a recursive function that only such an
+expression calls has no caller and is a root, and the error is reported for it.
+This was decided with the user on 2026-11-16 (ADR 0120); M6 may reopen it.
+
+**What is not an edge.** A check that fails calls the panic function (a
+division by zero, an index out of bounds, an `assert`); that call is no edge
+here, though it is one for the shared statics (see "What is a call", above).
+Otherwise a panic function that prints its message through a function that
+reads a slice would be a cycle, since the read has a bounds check. A check that
+fails inside the panic function does re-enter it; that is not bounded by this
+rule. `sym` in `asm`, an `extern fn` and the calls that code generation or LLVM
+inserts (`memcpy`, `__aeabi_uldivmod`) are no edges either, so a cycle through C
+or assembly is not seen.
+
+**The error.** One error for each strongly connected component of the graph that
+holds a cycle (a function that calls itself is one of a single function). It
+shows one cycle: it starts at the component's first function in the program's
+order of bodies, and it is the shortest way back to it, each function's calls
+taken in their order in its body. The message names the functions of the
+cycle, in order, as paths (`ping::start`): "`fib` calls itself", "`even` and `odd`
+call each other", and for three or more "`a`, `b` and `c` call each other in a
+cycle". There is one label on each call of the cycle, at the whole call
+expression, in its own file when the cycle crosses files ("`even` calls `odd`
+here", "`fib` calls itself here"); a function that makes the next call more than
+once is labelled on its first call only. A note gives the cycle in order, ending
+where it started, and a help says to write the recursion as a loop. The errors
+come in the order of their components' first functions, the same on every run.
+Built as `main.ers` with `--emit=mir`, a program with two functions that call
+each other, `even` and `odd`, is reported as:
+
+```
+analysis::recursion
+
+  × `even` and `odd` call each other
+   ╭─[main.ers:5:5]
+ 4 │     }
+ 5 │     odd(n - 1)
+   ·     ─────┬────
+   ·          ╰── `even` calls `odd` here
+ 6 │ }
+   ╰────
+    ╭─[main.ers:12:5]
+ 11 │     }
+ 12 │     even(n - 1)
+    ·     ─────┬─────
+    ·          ╰── `odd` calls `even` here
+ 13 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `even` → `odd` → `even`
+```
+
+**Writing a recursion as a loop.** Keep in variables what the calls kept in
+their frames. The digit-printing idiom, which most recursions of the first
+programs were, becomes a loop over a buffer: the digits are written from the
+least significant to the end of a fixed-size array, then sent from the most
+significant. The board modules of the tests offer it as `print_u32` and
+`print_u64` (ADR 0120):
+
+```
+fn print_u32(n: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut count: usize = 0;
+    let mut rest: u32 = n;
+    loop {
+        digits[9 - count] = b'0' + (rest % 10) as u8;
+        count += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    let mut i: usize = 0;
+    while i < count {
+        putc(digits[10 - count + i]);
+        i += 1;
+    }
+}
+```
+
+A walk that needs a stack of its own, such as one over a tree, keeps the
+stack in a fixed-size array and an index into it.
 
 ## Peripherals (ADR 0058)
 
