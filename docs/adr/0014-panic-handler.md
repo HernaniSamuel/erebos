@@ -1,6 +1,6 @@
 # 0014. Panic handler
 
-- Status: Accepted; amended by 0053 (the panic function may take a `*const core::PanicInfo`), 0116 (the parameter is a `&core::PanicInfo`)
+- Status: Accepted; amended by 0053 (the panic function may take a `*const core::PanicInfo`), 0116 (the parameter is a `&core::PanicInfo`), 0121 (the panic function begins with a guard that stops a second panic)
 - Date: 2026-10-12
 
 ## Context

@@ -1,6 +1,6 @@
 # 0026. External functions
 
-- Status: Accepted; amended by 0051 (which functions C calls by their name), 0119 (a call to an `extern fn` and an access to an `extern static` need `unsafe`)
+- Status: Accepted; amended by 0051 (which functions C calls by their name), 0119 (a call to an `extern fn` and an access to an `extern static` need `unsafe`), 0122 (an `extern fn` that run-time code calls declares its stack with `#[stack(N)]`)
 - Date: 2026-10-14
 
 ## Context

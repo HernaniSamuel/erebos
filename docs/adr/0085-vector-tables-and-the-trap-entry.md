@@ -1,6 +1,6 @@
 # 0085. Vector tables, the trap entry and default handlers
 
-- Status: Accepted; amended by 0090 (the table's length with a list; default handlers for lines, and for words with no variant, on thumbv7m)
+- Status: Accepted; amended by 0090 (the table's length with a list; default handlers for lines, and for words with no variant, on thumbv7m), 0121 (a fault inside the panic function stops at its guard)
 - Date: 2026-11-05
 - Amends: 0030 (`_start` also sets the trap vector on riscv32), 0053 (a
   new `PanicReason`, with a `PanicInfo` that locates nothing), 0074 (the

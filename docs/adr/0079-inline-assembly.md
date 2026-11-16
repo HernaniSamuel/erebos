@@ -1,6 +1,6 @@
 # 0079. Inline assembly
 
-- Status: Accepted; amended by 0083 (`sym entry`), 0084 (`#[naked]` does not apply to a handler), 0119 (an `asm` outside a naked function needs `unsafe`; a call to a naked function needs `unsafe`, and an `unsafe` block is no naked body)
+- Status: Accepted; amended by 0083 (`sym entry`), 0084 (`#[naked]` does not apply to a handler), 0119 (an `asm` outside a naked function needs `unsafe`; a call to a naked function needs `unsafe`, and an `unsafe` block is no naked body), 0122 (an `asm` without `nostack` needs its function's `#[stack(N)]`)
 - Date: 2026-11-03
 - Amends: 0016 (string literals exist, as the templates of `asm` only),
   0077 (the thumbv7m board stops QEMU with inline assembly, without a C

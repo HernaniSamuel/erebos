@@ -2,7 +2,7 @@
 
 - Status: Accepted; amended by 0028 (on-demand scheduling), 0033 (the pipeline diagram),
   0063 (the shared vocabulary; `miette` only in `diag`; the layer rules
-  checked by `tests/architecture.rs`)
+  checked by `tests/architecture.rs`), 0123 (one analysis also reads the frame sizes code generation measured)
 - Date: 2026-10-12
 
 ## Context

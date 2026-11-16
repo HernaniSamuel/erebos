@@ -1,6 +1,6 @@
 # 0028. On-demand type checking and evaluation
 
-- Status: Accepted; amended by 0033 (MIR building also asks for values)
+- Status: Accepted; amended by 0033 (MIR building also asks for values), 0123 (one analysis also reads the frame sizes code generation measured)
 - Date: 2026-10-14
 - Amends: 0003
 

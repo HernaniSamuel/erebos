@@ -1,6 +1,6 @@
 # 0082. The LLVM diagnostic handler reaches `llvm_sys`, in one file
 
-- Status: Accepted
+- Status: Accepted; amended by 0123 (the handler keeps the warnings that give frame sizes)
 - Date: 2026-11-04
 - Amends: 0063 (rule 2: `llvm_sys` is named in no module but
   `src/codegen/diagnostics.rs`, which holds only the diagnostic handler;
