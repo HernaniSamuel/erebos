@@ -27,7 +27,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print};
+use board::{exit, print, print_u32};
 
 const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
 
@@ -136,21 +136,6 @@ comptime {
 }
 
 static mut LAST: Cmd = Cmd::Nop;
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    print(&digits[10 - n..]);
-}
 
 // `value` in `digits` hexadecimal digits, after `0x`.
 fn print_hex(value: u32, digits: u32) {

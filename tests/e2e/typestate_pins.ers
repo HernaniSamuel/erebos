@@ -21,7 +21,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u32, putc};
 
 // The simulated port: one bit per pin in each word.
 static mut ENABLED: u32 = 0;
@@ -36,13 +36,6 @@ struct Output { pin: u32 }
 
 // What `read` gives back: the pin, still an input, and the level it saw.
 struct Reading { pin: Input, high: bool }
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
 
 // Starts a line: `pin N: `.
 fn line(pin: u32) {

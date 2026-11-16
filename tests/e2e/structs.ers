@@ -28,11 +28,25 @@ fn putc(byte: u8) {
     unsafe { board::putc((*register()).data); }
 }
 
+// The decimal digits go through the register, so this stays here; they are
+// written at the end of a buffer and sent from where they start.
 fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
+    let mut digits: [u8; 10] = [0; 10];
+    let mut count: usize = 0;
+    let mut rest: u32 = n;
+    loop {
+        digits[9 - count] = b'0' + (rest % 10) as u8;
+        count += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
     }
-    putc(b'0' + (n % 10) as u8);
+    let mut i: usize = 0;
+    while i < count {
+        putc(digits[10 - count + i]);
+        i += 1;
+    }
 }
 
 struct Pair {

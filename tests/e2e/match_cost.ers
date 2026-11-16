@@ -69,7 +69,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print};
+use board::{exit, print, print_u32};
 
 #[copy]
 enum P: u8 {
@@ -304,21 +304,6 @@ comptime {
     assert(pairs_agree(), &b"pairs(16) takes the arms expected");
     assert(ors_agree(), &b"ors(12) takes the arms expected");
     assert(nested_agree(), &b"the nested or-pattern takes the arms and binds the values expected");
-}
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    print(&digits[10 - n..]);
 }
 
 // `<name> <index>: arm <arm>`, without the end of the line.

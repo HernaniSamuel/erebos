@@ -8,7 +8,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u64, putc};
 use core::arch::Vector;
 
 const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
@@ -35,25 +35,6 @@ interrupt fn tick() at Vector::MachineTimer {
     // The next tick, so that one that came before the `wfi` does not leave it
     // waiting for ever.
     unsafe { *MTIMECMP_LOW = *MTIME + 1000; }
-}
-
-fn print_u64(value: u64) {
-    let mut digits: [u8; 20] = [0; 20];
-    let mut n: usize = 0;
-    let mut rest: u64 = value;
-    loop {
-        digits[19 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    let mut i: usize = 0;
-    while i < n {
-        putc(digits[20 - n + i]);
-        i += 1;
-    }
 }
 
 entry fn main() -> ! {

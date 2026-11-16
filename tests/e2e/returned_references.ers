@@ -32,7 +32,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u32, putc};
 
 static WORD: [u8; 8] = b"ring-buf";
 
@@ -78,21 +78,6 @@ fn walk(s: &[u8], index: u32) -> u32 {
     print(&s[1..1 + n]);
     print(&b"\n");
     walk(rest(s, 1 + n), index + 1)
-}
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    print(&digits[10 - n..]);
 }
 
 fn reason(r: core::PanicReason) -> &[u8] {

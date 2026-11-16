@@ -7,7 +7,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u64, putc};
 
 enum Msg: u8 { Nop = 0, Write(u8, u16) = 2, Three(u16, u8, u32) = 5 }
 
@@ -40,13 +40,6 @@ fn half(m: *const Msg, at: usize) -> u64 {
 
 fn word(m: *const Msg, at: usize) -> u64 {
     half(m, at) | half(m, at + 2) << 16
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn field(n: u64) {

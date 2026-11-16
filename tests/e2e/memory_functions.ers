@@ -10,14 +10,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
+use board::{exit, print_u32, putc};
 
 fn print(buf: &[u8]) {
     let mut i: usize = 0;

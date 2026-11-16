@@ -14,7 +14,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u32, putc};
 
 mod dma {
     // `channel` is private: only this module builds a transfer and takes one
@@ -76,13 +76,6 @@ mod dma {
     pub fn polls() -> u32 {
         POLLS
     }
-}
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 // Writes "erebos dma!" at `out`, through three transfers, and returns how

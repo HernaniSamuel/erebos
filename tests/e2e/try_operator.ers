@@ -14,7 +14,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u64, putc};
 
 enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
 
@@ -71,13 +71,6 @@ fn half(v: u32) -> Option(u32) {
 
 fn quarter(v: u32) -> Option(u32) {
     half(half(v)?)
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn field(n: u64) {

@@ -7,7 +7,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u64, putc};
 
 extern fn opaque_u8(x: u8) -> u8;
 extern fn opaque_u16(x: u16) -> u16;
@@ -1019,13 +1019,6 @@ fn option_slots(n: u32) -> u64 {
     let mut slots: [Option(Token); 3] = [.None; 3];
     slots[1] = .Some(Token { n: n });
     option_tags(&slots)
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn check(id: u32, at_compile_time: u64, at_run_time: u64) -> u32 {

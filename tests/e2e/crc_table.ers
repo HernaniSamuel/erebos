@@ -6,7 +6,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 // The reflected CRC-32 polynomial of Ethernet, zlib and PNG.
 const POLYNOMIAL: u32 = 0xEDB8_8320;
@@ -49,13 +49,6 @@ comptime {
     assert(size_of(Header) == 12);
     assert(size_of(WireHeader) == 9);
     assert(offset_of(WireHeader, crc) == 5);
-}
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 entry fn main() -> ! {

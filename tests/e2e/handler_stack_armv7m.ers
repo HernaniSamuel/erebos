@@ -8,7 +8,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u64, putc};
 use core::arch::Vector;
 
 const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
@@ -31,25 +31,6 @@ interrupt fn tick() at Vector::SysTick {
     unsafe { asm("mov {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags)); }
     SP_MOD_8 = sp % 8;
     WIDE = widen(0x8000_0001 - 0x7fff_ffff);
-}
-
-fn print_u64(value: u64) {
-    let mut digits: [u8; 20] = [0; 20];
-    let mut n: usize = 0;
-    let mut rest: u64 = value;
-    loop {
-        digits[19 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    let mut i: usize = 0;
-    while i < n {
-        putc(digits[20 - n + i]);
-        i += 1;
-    }
 }
 
 entry fn main() -> ! {

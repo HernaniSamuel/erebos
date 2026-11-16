@@ -35,7 +35,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u64, putc};
 
 enum Fault: u8 { Timeout = 3, Busy = 7 }
 
@@ -82,13 +82,6 @@ fn erebos_result(x: Result(u32, Fault)) -> Result(u32, Fault) {
         .Ok(let v: u32) => .Ok(v * 3),
         .Err(let e: Fault) => .Ok(1000 + e as u32),
     }
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn field(n: u64) {

@@ -15,7 +15,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print};
+use board::{exit, print, print_u32};
 use core::arch::Vector;
 
 const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
@@ -72,22 +72,6 @@ interrupt fn tick() at Vector::MachineTimer {
         FILLED += 1;
     }
     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
-}
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    let from: usize = 10 - n;
-    print(&digits[from..10]);
 }
 
 // Waits for a full buffer, reads it and empties it, then prints the sum and the

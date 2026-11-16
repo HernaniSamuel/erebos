@@ -1,9 +1,9 @@
 // The board of the tests on thumbv7m: QEMU `mps2-an385`, a Cortex-M3 (ADR
 // 0074, 0077). The harness gives each program a copy of it as `board.ers`,
 // which the program declares with `mod board;`. It offers what ADR 0077
-// lists: `putc`, `exit` and `SCRATCH`, and `print` (ADR 0117), and holds the
-// machine's `memory` block. It stops QEMU with an `asm` expression (ADR 0079)
-// and has no C file.
+// lists: `putc`, `exit` and `SCRATCH`, and `print` (ADR 0117), and
+// `print_u32` and `print_u64` (ADR 0120), and holds the machine's `memory`
+// block. It stops QEMU with an `asm` expression (ADR 0079) and has no C file.
 
 // 4 MiB of RAM at 0 hold the image; the 4 MiB at 0x2000_0000 hold a 1 MiB
 // stack at their start, then `.data` and `.bss`.
@@ -48,6 +48,51 @@ pub fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
         putc(s[i]);
+        i += 1;
+    }
+}
+
+// Writes `n` in decimal to the UART, through `putc`. The digits are written
+// from the least significant to the end of a buffer of ten bytes (`u32::MAX`
+// has ten), then sent from the most significant. This is the loop that stands
+// for the recursion `if n >= 10 { print_u32(n / 10); } putc(b'0' + (n % 10) as
+// u8)`, which Erebos does not allow (ADR 0120).
+pub fn print_u32(n: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut count: usize = 0;
+    let mut rest: u32 = n;
+    loop {
+        digits[9 - count] = b'0' + (rest % 10) as u8;
+        count += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    let mut i: usize = 0;
+    while i < count {
+        putc(digits[10 - count + i]);
+        i += 1;
+    }
+}
+
+// Writes `n` in decimal to the UART, through `putc`: `print_u32` for 64 bits,
+// with a buffer of twenty bytes (`u64::MAX` has twenty).
+pub fn print_u64(n: u64) {
+    let mut digits: [u8; 20] = [0; 20];
+    let mut count: usize = 0;
+    let mut rest: u64 = n;
+    loop {
+        digits[19 - count] = b'0' + (rest % 10) as u8;
+        count += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    let mut i: usize = 0;
+    while i < count {
+        putc(digits[20 - count + i]);
         i += 1;
     }
 }

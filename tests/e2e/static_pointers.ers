@@ -6,7 +6,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 struct Node { next: *const Node, value: u32 }
 // Padding between `tag` and `node`.
@@ -18,13 +18,6 @@ static ENTRY: Entry = Entry { tag: 3, node: &raw const A };
 static TABLE: [u32; 4] = [10, 20, 30, 40];
 static THIRD: *const u32 = &raw const TABLE[2];
 static mut CURSOR: *const Node = &raw const B;
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
 
 entry fn main() -> ! {
     let mut node: *const Node = ENTRY.node;

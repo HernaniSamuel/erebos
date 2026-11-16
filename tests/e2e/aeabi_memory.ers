@@ -9,17 +9,10 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 extern fn c_check_aeabi() -> u32;
 extern fn c_aeabi_checks() -> u32;
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
 
 entry fn main() -> ! {
     let failed: u32 = unsafe { c_check_aeabi() };

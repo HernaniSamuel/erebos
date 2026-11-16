@@ -17,7 +17,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u64, putc};
 
 struct One { a: u8 }
 struct Three { a: u8, b: u8, c: u8 }
@@ -59,13 +59,6 @@ fn erebos_big(mut b: Big, k: u32) -> Big {
 
 fn erebos_three(t: Three) -> Three {
     Three { a: t.c, b: t.b, c: t.a }
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn label(text: [u8; 6]) {

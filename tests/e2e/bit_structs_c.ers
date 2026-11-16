@@ -13,7 +13,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u64, putc};
 
 struct Lcr: u8 {
     pub word_length: u8 at 0..=1 = 3,
@@ -58,13 +58,6 @@ fn erebos_control(c: Control) -> Control {
     let mut d: Control = c;
     d.high = d.low as u8;
     d
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 // ` 0x` and `digits` hex digits.

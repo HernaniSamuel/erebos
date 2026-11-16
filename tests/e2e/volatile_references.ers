@@ -15,7 +15,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 struct Desc {
     addr: u32,
@@ -69,13 +69,6 @@ fn bump(s: &mut volatile [u32]) {
         s[i] += 1;
         i += 1;
     }
-}
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn print_line(a: u32, b: u32, c: u32) {

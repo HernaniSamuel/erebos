@@ -9,7 +9,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u64, putc};
 
 extern fn c_add(a: u32, b: u32) -> u32;
 extern fn c_negate(x: i16) -> i16;
@@ -20,13 +20,6 @@ extern fn c_fill(buf: *mut u8, n: u32, value: u8);
 // Called from C.
 fn erebos_square(x: u32) -> u32 {
     x * x
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 entry fn main() -> ! {

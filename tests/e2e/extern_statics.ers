@@ -7,20 +7,13 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 extern static mut rx_count: u32;
 extern static crc_lookup: [u16; 4];
 extern fn c_rx_count() -> u32;
 
 static THIRD: *const u16 = &raw const crc_lookup[2];
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
 
 entry fn main() -> ! {
     let before: u32 = unsafe { rx_count };

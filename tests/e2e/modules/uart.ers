@@ -1,12 +1,8 @@
 // The board's UART (ADR 0077), and the number of lines written to it.
 pub static mut LINES: u32 = 0;
 
-pub fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    crate::board::putc(b'0' + (n % 10) as u8);
-}
+// The board's `print_u32`, which `main.ers` reaches by the path of this file.
+pub use crate::board::print_u32;
 
 pub fn newline() {
     crate::board::print(&b"\n");

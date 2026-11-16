@@ -11,7 +11,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 extern fn c_double_shared();
 extern fn c_read_shared() -> u32;
@@ -26,13 +26,6 @@ static mut HISTORY: [u8; 4] = [b'a', b'b', b'c', b'd'];
 #[align(64)]
 static mut DMA_BUF: [u8; 8] = [0; 8];
 static mut SHARED: u32 = 5;
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
 
 fn print_pair(a: u32, b: u32) {
     print_u32(a);

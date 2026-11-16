@@ -6,7 +6,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, print};
+use board::{exit, print, print_u32};
 
 fn divide(a: u32, b: u32) -> u32 {
     a + a / b
@@ -16,21 +16,6 @@ entry fn main() -> ! {
     print(&b"before\n");
     print_u32(divide(10, 0));
     exit(0)
-}
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    print(&digits[10 - n..]);
 }
 
 fn reason(reason: core::PanicReason) -> &[u8] {

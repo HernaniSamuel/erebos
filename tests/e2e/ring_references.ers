@@ -19,7 +19,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print_u32, putc};
 
 mod ring {
     pub struct Ring {
@@ -63,13 +63,6 @@ mod ring {
 }
 
 use ring::{Ring, count, is_full, pop, push};
-
-fn print_u32(n: u32) {
-    if n >= 10 {
-        print_u32(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
-}
 
 // Pushes the bytes of `text` until the ring is full; returns how many went in.
 fn fill(r: &mut Ring, text: &[u8; 10]) -> usize {

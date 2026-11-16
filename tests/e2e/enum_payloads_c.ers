@@ -17,7 +17,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print, putc};
+use board::{exit, print, print_u64, putc};
 
 // Size 4: one register.
 enum One: u8 { A = 0, B(u8, u16) = 1 }
@@ -87,13 +87,6 @@ fn erebos_big(x: Big) -> Big {
     } else {
         Big::A
     }
-}
-
-fn print_u64(n: u64) {
-    if n >= 10 {
-        print_u64(n / 10);
-    }
-    putc(b'0' + (n % 10) as u8);
 }
 
 fn field(n: u64) {

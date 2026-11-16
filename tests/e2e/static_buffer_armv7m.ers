@@ -15,7 +15,7 @@
 // expect-exit: 0
 
 mod board;
-use board::{exit, print};
+use board::{exit, print, print_u32};
 use core::arch::Vector;
 
 // SysTick (ARMv7-M): control and status (bit 0 enables the counter, bit 1 the
@@ -73,22 +73,6 @@ interrupt fn tick() at Vector::SysTick {
         push(&mut SAMPLES, FILLED, SEQ);
         FILLED += 1;
     }
-}
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    let from: usize = 10 - n;
-    print(&digits[from..10]);
 }
 
 // Waits for a full buffer, reads it and empties it, then prints the sum and the

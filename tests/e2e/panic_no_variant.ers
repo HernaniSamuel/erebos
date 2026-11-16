@@ -7,7 +7,7 @@
 // expect-exit: 1
 
 mod board;
-use board::{exit, print};
+use board::{exit, print, print_u32};
 
 enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
@@ -24,21 +24,6 @@ entry fn main() -> ! {
     print(&b"\n");
     unsafe { print(name(modes[1])); }
     exit(0)
-}
-
-fn print_u32(value: u32) {
-    let mut digits: [u8; 10] = [0; 10];
-    let mut n: usize = 0;
-    let mut rest: u32 = value;
-    loop {
-        digits[9 - n] = b'0' + (rest % 10) as u8;
-        n += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    print(&digits[10 - n..]);
 }
 
 fn reason(reason: core::PanicReason) -> &[u8] {
