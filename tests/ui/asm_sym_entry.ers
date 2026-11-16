@@ -5,7 +5,7 @@
 // function and a named operand name it. The thumbv7m counterpart is
 // `asm_sym_entry_thumbv7m.ers`.
 fn jump() -> ! {
-    asm("j {}", sym entry, options(noreturn));
+    unsafe { asm("j {}", sym entry, options(noreturn)); }
 }
 
 #[naked]
@@ -14,7 +14,7 @@ fn naked_jump() -> ! {
 }
 
 fn named() -> ! {
-    asm("la t0, {main}", "jr t0", main = sym entry, options(noreturn));
+    unsafe { asm("la t0, {main}", "jr t0", main = sym entry, options(noreturn)); }
 }
 
 mod app {

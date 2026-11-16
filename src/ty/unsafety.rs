@@ -7,7 +7,7 @@
 //! MIR does not keep. Nothing after type checking sees `unsafe`.
 
 use crate::diag::Diagnostic;
-use crate::hir::{AsmOperandKind, Block, Expr, ExprKind, Fn, Stmt, Ty};
+use crate::hir::{AsmOperandKind, Block, Expr, ExprKind, Fn, FnKind, Stmt, Ty};
 use crate::query::Queries;
 use crate::span::Span;
 
@@ -15,6 +15,9 @@ use crate::span::Span;
 enum Operation {
     /// A call to an `unsafe fn`, by its path (ADR 0119, operation 5).
     CallsUnsafeFn(String),
+    /// An `asm` expression outside the body of a `#[naked]` function
+    /// (ADR 0119, operation 2).
+    Asm,
 }
 
 impl Operation {
@@ -24,6 +27,7 @@ impl Operation {
             Operation::CallsUnsafeFn(path) => {
                 format!("calling `unsafe fn {path}` needs an `unsafe` block")
             }
+            Operation::Asm => "`asm` needs an `unsafe` block".to_owned(),
         }
     }
 
@@ -31,6 +35,7 @@ impl Operation {
     fn label(&self) -> String {
         match self {
             Operation::CallsUnsafeFn(path) => format!("this calls `unsafe fn {path}`"),
+            Operation::Asm => "this `asm`".to_owned(),
         }
     }
 
@@ -39,6 +44,9 @@ impl Operation {
         match self {
             Operation::CallsUnsafeFn(_) => {
                 "the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }` block, after checking that its contract holds (ADR 0119)"
+            }
+            Operation::Asm => {
+                "`asm` can write any register or any memory, and the compiler checks none of it: put it inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the body of a `#[naked]` function needs no block"
             }
         }
     }
@@ -74,7 +82,23 @@ pub(super) fn check(q: &mut Queries, f: &Fn, body: &Block) {
         open: Vec::new(),
         in_unsafe_fn: f.is_unsafe,
     };
-    pass.block(body);
+    if f.kind == FnKind::Naked {
+        // The `asm` that is the body of a naked function is the one `asm`
+        // that needs no block (ADR 0119): `#[naked]` is the mark, at its
+        // calls. Only the body's own statements and tail are exempt; the
+        // rest of a malformed body is `ty::naked-body`'s.
+        let mut roots = Vec::new();
+        block_exprs(body, &mut roots);
+        for root in roots {
+            if matches!(root.kind, ExprKind::Asm(_)) {
+                pass.children(root);
+            } else {
+                pass.expr(root);
+            }
+        }
+    } else {
+        pass.block(body);
+    }
 }
 
 impl Unsafety<'_, '_> {
@@ -110,6 +134,11 @@ impl Unsafety<'_, '_> {
             return;
         }
         self.operation(expr);
+        self.children(expr);
+    }
+
+    /// The expressions directly inside `expr`.
+    fn children(&mut self, expr: &Expr) {
         let mut children = Vec::new();
         children_of(expr, &mut children);
         for child in children {
@@ -154,6 +183,15 @@ impl Unsafety<'_, '_> {
                     Operation::CallsUnsafeFn(callee.path.clone()),
                     *name_span,
                     in_error(receiver) || args.iter().any(in_error),
+                )
+            }
+            ExprKind::Asm(_) => {
+                let mut operands = Vec::new();
+                children_of(expr, &mut operands);
+                (
+                    Operation::Asm,
+                    expr.span,
+                    operands.into_iter().any(in_error),
                 )
             }
             _ => return,
@@ -204,18 +242,21 @@ impl Unsafety<'_, '_> {
     }
 }
 
+/// The expressions of the statements of `block` and its tail, in source order.
+fn block_exprs<'a>(block: &'a Block, out: &mut Vec<&'a Expr>) {
+    for stmt in &block.stmts {
+        match stmt {
+            Stmt::Let { init, .. } => out.push(init),
+            Stmt::Expr { expr, .. } => out.push(expr),
+        }
+    }
+    out.extend(block.tail.as_deref());
+}
+
 /// The expressions directly inside `expr`, in source order; the statements
 /// of its blocks are among them.
 fn children_of<'a>(expr: &'a Expr, out: &mut Vec<&'a Expr>) {
-    fn block<'a>(block: &'a Block, out: &mut Vec<&'a Expr>) {
-        for stmt in &block.stmts {
-            match stmt {
-                Stmt::Let { init, .. } => out.push(init),
-                Stmt::Expr { expr, .. } => out.push(expr),
-            }
-        }
-        out.extend(block.tail.as_deref());
-    }
+    let block = block_exprs;
     match &expr.kind {
         ExprKind::Int(_)
         | ExprKind::Byte(_)

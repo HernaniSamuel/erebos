@@ -206,19 +206,20 @@ fn builtins() -> u32
     expr 157 & 4673..4675: &Names
     expr 158 local n 4674..4675: Names
 fn symbol() -> ()
-    expr 159 asm 4805..4858: ()
+    expr 159 unsafe 4805..4870: ()
+    expr 160 asm 4814..4867: ()
 entry fn main() -> !
-    expr 160 loop 4886..4893: !
+    expr 161 loop 4897..4904: !
 panic fn on_panic() -> !
-    expr 161 loop 4923..4930: !
+    expr 162 loop 4934..4941: !
 comptime fn R() -> ring::Ring
-    expr 162 call 4773..4784: ring::Ring
+    expr 163 call 4773..4784: ring::Ring
 comptime fn Mode::Off() -> u8
-    expr 163 int 0 2766..2767: u8
+    expr 164 int 0 2766..2767: u8
 comptime fn Mode::Run() -> u8
-    expr 164 int 1 2784..2785: u8
+    expr 165 int 1 2784..2785: u8
 comptime fn Mode::Idle() -> u8
-    expr 165 int 2 2798..2799: u8
+    expr 166 int 2 2798..2799: u8
 comptime fn default() -> bool
     expr 0 bool false 2997..3002: bool
 comptime fn default() -> u8

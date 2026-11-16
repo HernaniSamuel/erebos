@@ -25,7 +25,7 @@ static mut ENABLED: u32 = 0;
 interrupt fn transmitted() at Interrupt::Uart0Tx {
     RUNS += 1;
     let mut ipsr: u32 = 0;
-    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags)); }
     IPSR = ipsr;
     if core::arch::interrupts_enabled() {
         ENABLED = 1;

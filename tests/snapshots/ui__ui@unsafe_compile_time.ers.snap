@@ -27,35 +27,36 @@ fn operands() -> u32
     expr 14 int 0 920..921: u32
     expr 15 comptime 936..942: u32
     expr 16 call 936..942: u32
-    expr 17 asm 955..1014: ()
-    expr 18 as u32 980..988: u32
-    expr 19 int 0 980..981: u32
-    expr 20 comptime 996..1013: u32
-    expr 21 unsafe 996..1013: u32
-    expr 22 call 1005..1011: u32
-    expr 23 binary + 1020..1025: u32
-    expr 24 local a 1020..1021: u32
-    expr 25 local b 1024..1025: u32
+    expr 17 unsafe 1084..1167: ()
+    expr 18 asm 1101..1160: ()
+    expr 19 as u32 1126..1134: u32
+    expr 20 int 0 1126..1127: u32
+    expr 21 comptime 1142..1159: u32
+    expr 22 unsafe 1142..1159: u32
+    expr 23 call 1151..1157: u32
+    expr 24 binary + 1172..1177: u32
+    expr 25 local a 1172..1173: u32
+    expr 26 local b 1176..1177: u32
 entry fn main() -> !
-    expr 26 loop 1052..1059: !
+    expr 27 loop 1204..1211: !
 panic fn on_panic() -> !
-    expr 27 loop 1090..1097: !
+    expr 28 loop 1242..1249: !
 comptime fn FOUR() -> u32
-    expr 28 unsafe 505..522: u32
-    expr 29 call 514..520: u32
+    expr 29 unsafe 505..522: u32
+    expr 30 call 514..520: u32
 comptime fn comptime() -> ()
-    expr 30 assert 540..570: ()
-    expr 31 binary == 547..569: bool
-    expr 32 unsafe 547..564: u32
-    expr 33 call 556..562: u32
-    expr 34 int 4 568..569: u32
+    expr 31 assert 540..570: ()
+    expr 32 binary == 547..569: bool
+    expr 33 unsafe 547..564: u32
+    expr 34 call 556..562: u32
+    expr 35 int 4 568..569: u32
 comptime fn Level::Low() -> u8
-    expr 35 int 0 602..603: u8
+    expr 36 int 0 602..603: u8
 comptime fn Level::Mid() -> u8
-    expr 36 unsafe 615..631: u8
-    expr 37 call 624..629: u8
+    expr 37 unsafe 615..631: u8
+    expr 38 call 624..629: u8
 comptime fn Level::High() -> u8
-    expr 38 int 2 644..645: u8
+    expr 39 int 2 644..645: u8
 comptime fn length() -> usize
     expr 0 unsafe 681..700: usize
     expr 1 call 690..698: usize

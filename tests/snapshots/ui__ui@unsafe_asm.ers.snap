@@ -1,0 +1,86 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_asm.ers
+---
+--- typeck ---
+struct Counter { value: u32 at 0 } size 4, align 4
+fn Counter::fence(self: &Counter) -> ()
+    expr 0 unsafe 448..510: ()
+    expr 1 asm 469..499: ()
+fn read() -> u32
+    let mut v: u32
+    expr 2 int 0 560..561: u32
+    expr 3 unsafe 567..650: ()
+    expr 4 asm 584..643: ()
+    expr 5 local v 616..617: u32
+    expr 6 local v 655..656: u32
+fn operands(x: u32) -> u32
+    let mut a: u32
+    let mut b: u32
+    expr 7 int 0 710..711: u32
+    expr 8 int 0 734..735: u32
+    expr 9 unsafe 741..964: ()
+    expr 10 asm 758..820: ()
+    expr 11 local a 789..790: u32
+    expr 12 local x 800..801: u32
+    expr 13 as u32 811..819: u32
+    expr 14 int 1 811..812: u32
+    expr 15 asm 830..867: ()
+    expr 16 local b 865..866: u32
+    expr 17 asm 877..922: ()
+    expr 18 comptime 900..908: u32
+    expr 19 as u32 900..908: u32
+    expr 20 int 7 900..901: u32
+    expr 21 asm 932..957: ()
+    expr 22 binary + 969..974: u32
+    expr 23 local a 969..970: u32
+    expr 24 local b 973..974: u32
+fn tail_value() -> !
+    expr 25 unsafe 1005..1045: !
+    expr 26 asm 1014..1043: !
+fn statement_then_loop() -> !
+    expr 27 unsafe 1085..1119: ()
+    expr 28 asm 1102..1112: ()
+    expr 29 loop 1124..1131: !
+fn two_in_one_block() -> ()
+    expr 30 unsafe 1237..1291: ()
+    expr 31 asm 1254..1264: ()
+    expr 32 asm 1274..1284: ()
+fn nested() -> ()
+    expr 33 unsafe 1362..1447: ()
+    expr 34 asm 1379..1389: ()
+    expr 35 unsafe 1399..1441: ()
+    expr 36 asm 1420..1430: ()
+fn with_critical() -> u32
+    let mut v: u32
+    expr 37 int 0 1500..1501: u32
+    expr 38 unsafe 1507..1624: ()
+    expr 39 critical 1524..1618: ()
+    expr 40 asm 1547..1607: ()
+    expr 41 local v 1580..1581: u32
+    expr 42 critical 1629..1696: ()
+    expr 43 unsafe 1648..1690: ()
+    expr 44 asm 1669..1679: ()
+    expr 45 local v 1701..1702: u32
+fn contract(n: u32) -> ()
+    let mut m: u32
+    expr 46 local n 1849..1850: u32
+    expr 47 unsafe 1856..1917: ()
+    expr 48 asm 1873..1910: ()
+    expr 49 local m 1908..1909: u32
+naked fn naked_statement() -> !
+    expr 50 asm 2137..2166: !
+naked fn naked_tail() -> !
+    expr 51 asm 2207..2236: !
+naked fn naked_operands() -> !
+    expr 52 asm 2290..2365: !
+    expr 53 comptime 2321..2329: u32
+    expr 54 as u32 2321..2329: u32
+    expr 55 int 7 2321..2322: u32
+naked fn naked_unsafe_fn() -> !
+    expr 56 asm 2417..2446: !
+entry fn main() -> !
+    expr 57 loop 2477..2484: !
+panic fn on_panic() -> !
+    expr 58 loop 2515..2522: !

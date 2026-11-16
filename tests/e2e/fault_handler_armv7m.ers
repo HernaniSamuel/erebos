@@ -11,7 +11,7 @@ use core::arch::Vector;
 
 interrupt fn fault() -> ! at Vector::HardFault {
     let mut ipsr: u32 = 0;
-    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags)); }
     putc(b'h'); putc(b'a'); putc(b'r'); putc(b'd'); putc(b' ');
     putc(b'f'); putc(b'a'); putc(b'u'); putc(b'l'); putc(b't'); putc(b' ');
     putc(b'0' + ipsr as u8);
@@ -20,7 +20,7 @@ interrupt fn fault() -> ! at Vector::HardFault {
 }
 
 entry fn main() -> ! {
-    asm("udf #0");
+    unsafe { asm("udf #0"); }
     exit(2)
 }
 

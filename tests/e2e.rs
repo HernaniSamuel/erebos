@@ -234,7 +234,7 @@ interrupt fn service() at core::arch::Vector::SVCall {
 
 entry fn main() -> ! {
     core::arch::enable_interrupts();
-    asm(\"svc #0\");
+    unsafe { asm(\"svc #0\"); }
     board::exit(0)
 }
 
@@ -254,7 +254,7 @@ interrupt fn call() -> ! at core::arch::Vector::EnvironmentCall {
 }
 
 entry fn main() -> ! {
-    asm(\"ecall\");
+    unsafe { asm(\"ecall\"); }
     board::exit(2)
 }
 
@@ -457,7 +457,7 @@ fn an_instruction_the_assembler_rejects_is_codegen_asm() {
         "    bad();
 ",
         "fn bad() {
-    asm(\"frobnicate x1, x2\");
+    unsafe { asm(\"frobnicate x1, x2\"); }
 }
 ",
     );
@@ -491,7 +491,7 @@ fn a_bad_template_called_from_three_places_is_reported_once() {
     bad();
 ",
         "fn bad() {
-    asm(\"frobnicate x1, x2\");
+    unsafe { asm(\"frobnicate x1, x2\"); }
 }
 ",
     );
@@ -522,7 +522,7 @@ fn a_label_defined_by_inlining_is_codegen_asm_without_a_label() {
 static mut COUNT: u32 = 0;
 
 fn once() {
-    asm(\"shared_label: nop\");
+    unsafe { asm(\"shared_label: nop\"); }
     COUNT = COUNT + 1;
 }
 
@@ -566,7 +566,7 @@ fn more_operands_than_registers_is_codegen_asm() {
     let placeholders = "{}".repeat(16);
     let definitions = format!(
         "fn many(a: u32) {{
-    asm(\"nop {placeholders}\", {});
+    unsafe {{ asm(\"nop {placeholders}\", {}); }}
 }}
 ",
         operands.trim_end_matches(", ")
@@ -611,11 +611,11 @@ fn codegen_asm_is_rendered() {
     first();
 ",
         "fn first() {
-    asm(\"frobnicate x1, x2\");
+    unsafe { asm(\"frobnicate x1, x2\"); }
 }
 
 fn second(x: u32) {
-    asm(\"addi a0, {}, 99999\", in(reg) x, out(\"a0\") _);
+    unsafe { asm(\"addi a0, {}, 99999\", in(reg) x, out(\"a0\") _); }
 }
 ",
     );
@@ -631,7 +631,7 @@ fn second(x: u32) {
         "static mut COUNT: u32 = 0;
 
 fn once() {
-    asm(\"shared_label: nop\");
+    unsafe { asm(\"shared_label: nop\"); }
     COUNT = COUNT + 1;
 }
 ",
@@ -646,7 +646,7 @@ fn once() {
 ",
         &format!(
             "fn many(a: u32) {{
-    asm(\"nop {}\", {});
+    unsafe {{ asm(\"nop {}\", {}); }}
 }}
 ",
             "{}".repeat(16),

@@ -28,7 +28,7 @@ fn widen(x: u32) -> u64 {
 
 interrupt fn tick() at Vector::SysTick {
     let mut sp: u32 = 0;
-    asm("mov {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags));
+    unsafe { asm("mov {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags)); }
     SP_MOD_8 = sp % 8;
     WIDE = widen(0x8000_0001 - 0x7fff_ffff);
 }
@@ -58,7 +58,7 @@ entry fn main() -> ! {
     *SYST_CSR = 7;
     core::arch::enable_interrupts();
     // `sp` is 4 modulo 8 while it waits.
-    asm("sub sp, sp, #4", "wfi", "add sp, sp, #4", clobber_abi("C"));
+    unsafe { asm("sub sp, sp, #4", "wfi", "add sp, sp, #4", clobber_abi("C")); }
     *SYST_CSR = 0;
     let sp: u32 = critical { SP_MOD_8 };
     if sp != 0 {

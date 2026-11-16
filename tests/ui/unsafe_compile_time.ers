@@ -39,7 +39,11 @@ fn operands() -> u32 {
     unsafe {
         asm("li {}, {}", in(reg) 0 as u32, const four());
     }
-    asm("li {}, {}", in(reg) 0 as u32, const unsafe { four() });
+    // The `asm` is its own unsafe operation, and the call in its operand is
+    // another, in the block nested in the operand.
+    unsafe {
+        asm("li {}, {}", in(reg) 0 as u32, const unsafe { four() });
+    }
     a + b
 }
 

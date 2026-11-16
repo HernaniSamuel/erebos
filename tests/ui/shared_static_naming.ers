@@ -17,7 +17,7 @@ interrupt fn tick() at Vector::MachineTimer {
     WRITE = 1;
     COMPOUND = 1;
     ADDRESS = 1;
-    asm("la {}, {}", out(reg) _, sym SYMBOL);
+    unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
     FOREIGN = 1;
 }
 
@@ -26,7 +26,7 @@ fn callee() {
     WRITE = value;
     COMPOUND += 1;
     let address: *mut u32 = &raw mut ADDRESS;
-    asm("la {}, {}", out(reg) _, sym SYMBOL);
+    unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
     FOREIGN = 2;
 }
 
@@ -35,7 +35,7 @@ entry fn main() -> ! {
     WRITE = value;
     COMPOUND += 1;
     let address: *mut u32 = &raw mut ADDRESS;
-    asm("la {}, {}", out(reg) _, sym SYMBOL);
+    unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
     FOREIGN = 2;
     callee();
     loop {}

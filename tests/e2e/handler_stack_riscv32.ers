@@ -29,7 +29,7 @@ fn widen(x: u32) -> u64 {
 
 interrupt fn tick() at Vector::MachineTimer {
     let mut sp: u32 = 0;
-    asm("mv {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags));
+    unsafe { asm("mv {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags)); }
     SP_MOD_16 = sp % 16;
     WIDE = widen(0x8000_0001 - 0x7fff_ffff);
     // The next tick, so that one that came before the `wfi` does not leave it
@@ -59,11 +59,11 @@ fn print_u64(value: u64) {
 entry fn main() -> ! {
     *MTIMECMP_HIGH = 0;
     *MTIMECMP_LOW = *MTIME + 1000;
-    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     // `sp` is aligned to 16 while it waits, as the compiler leaves it.
-    asm("wfi", clobber_abi("C"));
-    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("wfi", clobber_abi("C")); }
+    unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     let sp: u32 = critical { SP_MOD_16 };
     if sp != 0 {
         exit(2)

@@ -1508,7 +1508,7 @@ static mut OUT: u32 = 0;
 
 entry fn main() -> ! {{
     let mut v: u32 = 0;
-    asm(\"{template}\", out(\"{register}\") v, options(nomem, nostack));
+    unsafe {{ asm(\"{template}\", out(\"{register}\") v, options(nomem, nostack)); }}
     OUT = v;
     loop {{}}
 }}

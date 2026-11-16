@@ -80,7 +80,7 @@ fn addresses(f: Flags, p: &Packed) {
 }
 
 fn asm_operand(r: &u32) {
-    asm("{}", in(reg) r);
+    unsafe { asm("{}", in(reg) r); }
 }
 
 fn raw_mut_through_shared(r: &u32) {

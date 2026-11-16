@@ -21,13 +21,13 @@ static mut DONE: bool = false;
 interrupt fn tick() at Vector::MachineTimer {
     DONE = true;
     // One tick is enough: the interrupt is disabled until the code enables it.
-    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
 }
 
 entry fn main() -> ! {
     *MTIMECMP_HIGH = 0;
     *MTIMECMP_LOW = *MTIME + 1000;
-    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     loop {
         if critical { DONE } {

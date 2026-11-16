@@ -18,7 +18,7 @@ const MTIE: u32 = 0x80;
 entry fn main() -> ! {
     *MTIMECMP_HIGH = 0;
     *MTIMECMP_LOW = *MTIME + 1000;
-    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     loop {
         core::arch::wait_for_interrupt();
@@ -42,7 +42,7 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
     print(&b": ");
     print(&*info.message);
     let mut cause: u32 = 0;
-    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    unsafe { asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags)); }
     print(&b" mcause ");
     print_hex(cause);
     print(&b" mie ");

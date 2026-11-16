@@ -47,7 +47,7 @@ fn address_of_buf(r: &[u32; 4]) {
 }
 
 fn sym_of_buf(r: &[u32; 4]) {
-    asm("la {}, {}", out(reg) _, sym BUF);
+    unsafe { asm("la {}, {}", out(reg) _, sym BUF); }
 }
 
 fn refill() {

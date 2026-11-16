@@ -130,7 +130,7 @@ entry fn main() -> ! {
         PLIC.threshold = 0;
     }
     // `mie.MEIE`: the machine external interrupt is enabled.
-    asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
 
     // Nothing is enabled in the UART, and nothing is raised.

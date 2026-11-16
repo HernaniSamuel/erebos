@@ -1160,18 +1160,23 @@ fn injected_f(mut injected_t: InjLinear5) {
     ),
     // Inline assembly (ADR 0079). The templates are never assembled: the
     // stages stop before the object (`codegen::asm` is exempt below).
-    s!("ty::asm-template", Mir, Statements, "asm(\"nop {}\");"),
+    s!(
+        "ty::asm-template",
+        Mir,
+        Statements,
+        "unsafe { asm(\"nop {}\"); }"
+    ),
     s!(
         "ty::asm-register",
         Mir,
         Statements,
-        "asm(\"nop\", in(\"injected_register\") 1 as u32);"
+        "unsafe { asm(\"nop\", in(\"injected_register\") 1 as u32); }"
     ),
     s!(
         "ty::asm-operand-type",
         Mir,
         Statements,
-        "asm(\"nop {}\", in(reg) true);"
+        "unsafe { asm(\"nop {}\", in(reg) true); }"
     ),
     s!(
         "ty::asm-sym",
@@ -1179,14 +1184,14 @@ fn injected_f(mut injected_t: InjLinear5) {
         Items,
         "const INJ_C: u32 = 1;
 fn injected_f() {
-    asm(\"nop {}\", sym INJ_C);
+    unsafe { asm(\"nop {}\", sym INJ_C); }
 }"
     ),
     s!(
         "ty::asm-options",
         Mir,
         Statements,
-        "asm(\"nop\", options(nomem, readonly));"
+        "unsafe { asm(\"nop\", options(nomem, readonly)); }"
     ),
     s!(
         "ty::naked-body",
@@ -1213,7 +1218,7 @@ fn injected_f() {
         Mir,
         Items,
         "fn injected_f() {
-    asm(\"nop\");
+    unsafe { asm(\"nop\"); }
 }
 const INJ_C: u32 = comptime {
     injected_f();

@@ -15,7 +15,7 @@ analysis::unprotected-static
  17 │     WRITE = 1;
  18 │     COMPOUND = 1;
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -26,7 +26,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -35,7 +35,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
  40 │     callee();
     ·     ────┬───
@@ -53,7 +53,7 @@ analysis::unprotected-static
     ·         ╰── the handler `tick` reaches it here
  18 │     COMPOUND = 1;
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -64,7 +64,7 @@ analysis::unprotected-static
     ·           ╰── reached here, outside `critical`
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -73,7 +73,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
  40 │     callee();
     ·     ────┬───
@@ -90,7 +90,7 @@ analysis::unprotected-static
     ·     ──────┬─────
     ·           ╰── the handler `tick` reaches it here
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -101,7 +101,7 @@ analysis::unprotected-static
     ·     ──────┬──────
     ·           ╰── reached here, outside `critical`
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -110,7 +110,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
  40 │     callee();
     ·     ────┬───
@@ -126,7 +126,7 @@ analysis::unprotected-static
  19 │     ADDRESS = 1;
     ·     ─────┬─────
     ·          ╰── the handler `tick` reaches it here
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -137,7 +137,7 @@ analysis::unprotected-static
  28 │     let address: *mut u32 = &raw mut ADDRESS;
     ·                             ────────┬───────
     ·                                     ╰── reached here, outside `critical`
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -146,7 +146,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
  40 │     callee();
     ·     ────┬───
@@ -157,11 +157,11 @@ analysis::unprotected-static
 analysis::unprotected-static
 
   × `SYMBOL` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_naming.ers:29:5]
+    ╭─[shared_static_naming.ers:29:14]
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
-    ·     ────────────────────┬───────────────────
-    ·                         ╰── the handler `tick` reaches it here
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
+    ·              ────────────────────┬───────────────────
+    ·                                  ╰── the handler `tick` reaches it here
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -170,9 +170,9 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
-    ·     ────────────────────┬───────────────────
-    ·                         ╰── reached here, outside `critical`
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
+    ·              ────────────────────┬───────────────────
+    ·                                  ╰── reached here, outside `critical`
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -181,7 +181,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
  40 │     callee();
     ·     ────┬───
@@ -193,7 +193,7 @@ analysis::unprotected-static
 
   × `FOREIGN` is reached outside `critical` in the thread context, and a handler reaches it too
     ╭─[shared_static_naming.ers:30:5]
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
     ·     ─────┬─────
     ·          ╰── the handler `tick` reaches it here
@@ -204,7 +204,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
     ·     ─────┬─────
     ·          ╰── reached here, outside `critical`
@@ -215,7 +215,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
  40 │     callee();
     ·     ────┬───
@@ -251,7 +251,7 @@ analysis::unprotected-static
     ·         ╰── the handler `tick` reaches it here
  18 │     COMPOUND = 1;
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -260,7 +260,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -281,7 +281,7 @@ analysis::unprotected-static
     ·     ──────┬─────
     ·           ╰── the handler `tick` reaches it here
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -290,7 +290,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -311,7 +311,7 @@ analysis::unprotected-static
  19 │     ADDRESS = 1;
     ·     ─────┬─────
     ·          ╰── the handler `tick` reaches it here
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -320,7 +320,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -331,17 +331,17 @@ analysis::unprotected-static
  37 │     let address: *mut u32 = &raw mut ADDRESS;
     ·                             ────────┬───────
     ·                                     ╰── reached here, outside `critical`
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
 
   × `SYMBOL` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_naming.ers:38:5]
+    ╭─[shared_static_naming.ers:38:14]
  19 │     ADDRESS = 1;
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
-    ·     ────────────────────┬───────────────────
-    ·                         ╰── the handler `tick` reaches it here
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
+    ·              ────────────────────┬───────────────────
+    ·                                  ╰── the handler `tick` reaches it here
  21 │     FOREIGN = 1;
  22 │ }
  23 │ 
@@ -350,7 +350,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -359,9 +359,9 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
-    ·     ────────────────────┬───────────────────
-    ·                         ╰── reached here, outside `critical`
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
+    ·              ────────────────────┬───────────────────
+    ·                                  ╰── reached here, outside `critical`
  39 │     FOREIGN = 2;
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
@@ -369,7 +369,7 @@ analysis::unprotected-static
 
   × `FOREIGN` is reached outside `critical` in the thread context, and a handler reaches it too
     ╭─[shared_static_naming.ers:39:5]
- 20 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 20 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  21 │     FOREIGN = 1;
     ·     ─────┬─────
     ·          ╰── the handler `tick` reaches it here
@@ -380,7 +380,7 @@ analysis::unprotected-static
  26 │     WRITE = value;
  27 │     COMPOUND += 1;
  28 │     let address: *mut u32 = &raw mut ADDRESS;
- 29 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 29 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  30 │     FOREIGN = 2;
  31 │ }
  32 │ 
@@ -389,7 +389,7 @@ analysis::unprotected-static
  35 │     WRITE = value;
  36 │     COMPOUND += 1;
  37 │     let address: *mut u32 = &raw mut ADDRESS;
- 38 │     asm("la {}, {}", out(reg) _, sym SYMBOL);
+ 38 │     unsafe { asm("la {}, {}", out(reg) _, sym SYMBOL); }
  39 │     FOREIGN = 2;
     ·     ─────┬─────
     ·          ╰── reached here, outside `critical`

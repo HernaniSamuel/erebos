@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/borrow_static_conflict.ers
 ---
@@ -40,14 +39,14 @@ analysis::borrow-conflict
 analysis::borrow-conflict
 
   × cannot pass `COUNT` to `asm` as `sym` while it is borrowed
-    ╭─[borrow_static_conflict.ers:25:5]
+    ╭─[borrow_static_conflict.ers:25:14]
  23 │ fn sym_while_borrowed() {
  24 │     let r: &mut u32 = &mut COUNT;
     ·                       ─────┬────
     ·                            ╰── `COUNT` is borrowed as mutable here
- 25 │     asm("la {}, {}", out(reg) _, sym COUNT);
-    ·     ───────────────────┬───────────────────
-    ·                        ╰── passed as `sym` here
+ 25 │     unsafe { asm("la {}, {}", out(reg) _, sym COUNT); }
+    ·              ───────────────────┬───────────────────
+    ·                                 ╰── passed as `sym` here
  26 │     *r = 1;
     ·     ───┬──
     ·        ╰── the borrow is used later here

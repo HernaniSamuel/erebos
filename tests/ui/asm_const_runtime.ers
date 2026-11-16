@@ -3,7 +3,7 @@
 // 0079).
 fn operand(x: u32) {
     let y: u32 = 1;
-    asm("{} {}", const x, const y);
+    unsafe { asm("{} {}", const x, const y); }
 }
 
 entry fn main() -> ! { loop {} }

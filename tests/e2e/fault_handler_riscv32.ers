@@ -12,7 +12,7 @@ use core::arch::Vector;
 
 interrupt fn fault() -> ! at Vector::IllegalInstruction {
     let mut cause: u32 = 0;
-    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    unsafe { asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags)); }
     putc(b'i'); putc(b'l'); putc(b'l'); putc(b'e'); putc(b'g'); putc(b'a'); putc(b'l'); putc(b' ');
     putc(b'i'); putc(b'n'); putc(b's'); putc(b't'); putc(b'r'); putc(b'u'); putc(b'c');
     putc(b't'); putc(b'i'); putc(b'o'); putc(b'n'); putc(b' ');
@@ -22,7 +22,7 @@ interrupt fn fault() -> ! at Vector::IllegalInstruction {
 }
 
 entry fn main() -> ! {
-    asm("unimp");
+    unsafe { asm("unimp"); }
     exit(2)
 }
 

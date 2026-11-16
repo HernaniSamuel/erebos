@@ -3,7 +3,7 @@
 // dump names as it does a function (ADR 0083). Here the entry function is in
 // a module.
 fn jump() -> ! {
-    asm("j {}", sym entry, options(noreturn));
+    unsafe { asm("j {}", sym entry, options(noreturn)); }
 }
 
 mod app {

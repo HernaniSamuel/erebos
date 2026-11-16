@@ -37,7 +37,7 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
         _ => exit(3),
     }
     let mut ipsr: u32 = 0;
-    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags)); }
     print(&b" ipsr ");
     putc(b'0' + (ipsr / 10) as u8);
     putc(b'0' + (ipsr % 10) as u8);

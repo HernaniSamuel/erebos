@@ -1,0 +1,120 @@
+// emit: typeck
+// `asm` inside an `unsafe` block is accepted (ADR 0119): every operand form,
+// `noreturn`, in a function, in a method, in an `unsafe fn` through its own
+// block, nested in other blocks, and around and inside `critical`. The body of
+// a `#[naked]` function is the one `asm` that needs no block; the rejected
+// forms are `unsafe_asm_errors.ers`'s.
+struct Counter {
+    value: u32,
+}
+
+impl Counter {
+    fn fence(&self) {
+        unsafe {
+            asm("fence", options(nostack));
+        }
+    }
+}
+
+fn read() -> u32 {
+    let mut v: u32 = 0;
+    unsafe {
+        asm("csrr {}, mcause", out(reg) v, options(nomem, nostack));
+    }
+    v
+}
+
+fn operands(x: u32) -> u32 {
+    let mut a: u32 = 0;
+    let mut b: u32 = 0;
+    unsafe {
+        asm("add {}, {}, {}", out(reg) a, in(reg) x, in(reg) 1 as u32);
+        asm("addi {0}, {0}, 1", inout(reg) b);
+        asm("li a0, {}", const 7 as u32, out("a0") _);
+        asm("", clobber_abi("C"));
+    }
+    a + b
+}
+
+fn tail_value() -> ! {
+    unsafe { asm("wfi", options(noreturn)) }
+}
+
+fn statement_then_loop() -> ! {
+    unsafe {
+        asm("wfi");
+    }
+    loop {}
+}
+
+// A second `asm` in a block that holds a first: one block, used by both.
+fn two_in_one_block() {
+    unsafe {
+        asm("nop");
+        asm("nop");
+    }
+}
+
+// Nested blocks, each with an `asm` of its own.
+fn nested() {
+    unsafe {
+        asm("nop");
+        unsafe {
+            asm("nop");
+        }
+    }
+}
+
+fn with_critical() -> u32 {
+    let mut v: u32 = 0;
+    unsafe {
+        critical {
+            asm("csrr {}, mstatus", out(reg) v, options(nomem, nostack));
+        }
+    }
+    critical {
+        unsafe {
+            asm("nop");
+        }
+    }
+    v
+}
+
+// An `unsafe fn` is not an `unsafe` block: the `asm` in its body has a block
+// of its own.
+unsafe fn contract(n: u32) {
+    let mut m: u32 = n;
+    unsafe {
+        asm("addi {0}, {0}, 1", inout(reg) m);
+    }
+}
+
+// A naked function's body is one `asm` with no block (ADR 0079, 0119): as a
+// statement, as the tail, with `sym` and `const` operands, `#[export]`ed, and
+// an `unsafe fn`.
+#[naked]
+fn naked_statement() -> ! {
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+fn naked_tail() -> ! {
+    asm("ret", options(noreturn))
+}
+
+#[export]
+#[naked]
+fn naked_operands() -> ! {
+    asm("li a0, {}", "j {}", const 7 as u32, sym naked_tail, options(noreturn))
+}
+
+#[naked]
+unsafe fn naked_unsafe_fn() -> ! {
+    asm("ret", options(noreturn))
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -99,7 +99,23 @@ impl Checker<'_, '_> {
         if let Some(tail) = &body.tail {
             items.push((tail.span, asm_of(tail)));
         }
+        // An `unsafe` block as a statement or the tail: a second mark on a
+        // function that `#[naked]` marks already (ADR 0119).
+        let unsafe_blocks: Vec<Span> = (body.stmts.iter())
+            .filter_map(|stmt| match stmt {
+                Stmt::Expr { expr, .. } => Some(expr),
+                Stmt::Let { .. } => None,
+            })
+            .chain(body.tail.as_deref())
+            .filter(|expr| matches!(expr.kind, ExprKind::Unsafe(_)))
+            .map(|expr| expr.span)
+            .collect();
         let help = "the body of a naked function is one `asm(..., options(noreturn))` expression with only `sym` and `const` operands, which does everything, returning included; the compiler writes no code around it (ADR 0079)";
+        let help = if unsafe_blocks.is_empty() {
+            help.to_owned()
+        } else {
+            format!("remove the `unsafe` block: `#[naked]` is the mark (ADR 0119); {help}")
+        };
         let found = (items.iter().enumerate()).find_map(|(i, item)| item.1.map(|asm| (i, asm)));
         let Some((first, (expr, asm))) = found else {
             let mut diag = Diagnostic::error(
@@ -113,7 +129,11 @@ impl Checker<'_, '_> {
                 diag.label(body.span, "an empty body")
             } else {
                 items.iter().fold(diag, |diag, (span, _)| {
-                    diag.label(*span, "not an `asm` expression")
+                    if unsafe_blocks.contains(span) {
+                        diag.label(*span, "an `unsafe` block, not needed on a naked function")
+                    } else {
+                        diag.label(*span, "not an `asm` expression")
+                    }
                 })
             };
             self.q.diags.push(diag.help(help));

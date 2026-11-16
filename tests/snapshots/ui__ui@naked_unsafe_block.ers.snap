@@ -1,0 +1,53 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/naked_unsafe_block.ers
+---
+--- errors ---
+ty::naked-body
+
+  × the body of the naked function `block_as_body` is not one `asm` expression
+    ╭─[naked_unsafe_block.ers:9:5]
+  8 │     fn block_as_body() -> ! {
+  9 │ ╭─▶     unsafe {
+ 10 │ │           asm("ret", options(noreturn));
+ 11 │ ├─▶     }
+    · ╰──── an `unsafe` block, not needed on a naked function
+ 12 │     }
+    ╰────
+  help: remove the `unsafe` block: `#[naked]` is the mark (ADR 0119); the body of a naked function
+        is one `asm(..., options(noreturn))` expression with only `sym` and `const` operands,
+        which does everything, returning included; the compiler writes no code around it (ADR
+        0079)
+ty::naked-body
+
+  × the body of the naked function `block_as_tail` is not one `asm` expression
+    ╭─[naked_unsafe_block.ers:16:5]
+ 15 │ fn block_as_tail() -> ! {
+ 16 │     unsafe { asm("ret", options(noreturn)) }
+    ·     ────────────────────┬───────────────────
+    ·                         ╰── an `unsafe` block, not needed on a naked function
+ 17 │ }
+    ╰────
+  help: remove the `unsafe` block: `#[naked]` is the mark (ADR 0119); the body of a naked function
+        is one `asm(..., options(noreturn))` expression with only `sym` and `const` operands,
+        which does everything, returning included; the compiler writes no code around it (ADR
+        0079)
+ty::naked-body
+
+  × the body of the naked function `block_after_the_asm` is not one `asm` expression
+    ╭─[naked_unsafe_block.ers:22:5]
+ 20 │     fn block_after_the_asm() {
+ 21 │         asm("ret", options(noreturn));
+    ·         ──────────────┬──────────────
+    ·                       ╰── the one `asm`
+ 22 │ ╭─▶     unsafe {
+ 23 │ │           asm("nop");
+ 24 │ ├─▶     }
+    · ╰──── not allowed here
+ 25 │     }
+    ╰────
+  help: remove the `unsafe` block: `#[naked]` is the mark (ADR 0119); the body of a naked function
+        is one `asm(..., options(noreturn))` expression with only `sym` and `const` operands,
+        which does everything, returning included; the compiler writes no code around it (ADR
+        0079)

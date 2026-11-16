@@ -137,7 +137,7 @@ entry fn main() -> ! {
     }
     // `mie.MEIE` and `mie.MSIE`: the machine external and software interrupts
     // are enabled.
-    asm("csrs mie, {}", in(reg) 0x808 as u32, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) 0x808 as u32, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
 
     send(&b"uart owned by its handler\n");

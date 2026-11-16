@@ -2,37 +2,37 @@
 // operands, an option or `clobber_abi` given twice, an ABI other than "C".
 fn contradictions(x: u32) {
     let mut v: u32 = 0;
-    asm("", options(nomem, readonly));
-    asm("", options(readonly, nomem));
-    asm("{}", out(reg) v, options(pure));
-    asm("", options(pure, nomem));
-    asm("{}", out(reg) v, options(pure, nostack));
-    asm("", options(pure, readonly));
+    unsafe { asm("", options(nomem, readonly)); }
+    unsafe { asm("", options(readonly, nomem)); }
+    unsafe { asm("{}", out(reg) v, options(pure)); }
+    unsafe { asm("", options(pure, nomem)); }
+    unsafe { asm("{}", out(reg) v, options(pure, nostack)); }
+    unsafe { asm("", options(pure, readonly)); }
     // Accepted: with an output and `nomem` or `readonly`.
-    asm("{}", out(reg) v, options(pure, nomem));
-    asm("{}", out(reg) v, options(pure, readonly));
-    asm("{} {}", out(reg) v, in(reg) x, options(pure, nomem, nostack, preserves_flags));
+    unsafe { asm("{}", out(reg) v, options(pure, nomem)); }
+    unsafe { asm("{}", out(reg) v, options(pure, readonly)); }
+    unsafe { asm("{} {}", out(reg) v, in(reg) x, options(pure, nomem, nostack, preserves_flags)); }
 }
 
 fn stops(x: u32) {
     let mut v: u32 = 0;
-    asm("{}", out(reg) v, options(noreturn));
-    asm("{}", inout(reg) x => _, options(noreturn));
-    asm("", out("a0") _, options(noreturn));
-    asm("", in("a0") x, options(noreturn));
+    unsafe { asm("{}", out(reg) v, options(noreturn)); }
+    unsafe { asm("{}", inout(reg) x => _, options(noreturn)); }
+    unsafe { asm("", out("a0") _, options(noreturn)); }
+    unsafe { asm("", in("a0") x, options(noreturn)); }
 }
 
 fn twice() {
-    asm("", options(nomem, nomem));
-    asm("", options(nostack, nomem, nostack));
-    asm("", clobber_abi("C"), clobber_abi("C"));
+    unsafe { asm("", options(nomem, nomem)); }
+    unsafe { asm("", options(nostack, nomem, nostack)); }
+    unsafe { asm("", clobber_abi("C"), clobber_abi("C")); }
 }
 
 fn abis() {
-    asm("", clobber_abi("D"));
-    asm("", clobber_abi(""));
-    asm("", clobber_abi("c"));
-    asm("", clobber_abi("C"));
+    unsafe { asm("", clobber_abi("D")); }
+    unsafe { asm("", clobber_abi("")); }
+    unsafe { asm("", clobber_abi("c")); }
+    unsafe { asm("", clobber_abi("C")); }
 }
 
 entry fn main() -> ! { loop {} }

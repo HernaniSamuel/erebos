@@ -140,12 +140,12 @@ resolve::unknown-variant
     ·                                         ╰── unknown variant
  48 │ 
     ╰────
-    ╭─[rt/arch/riscv32.ers:71:10]
- 70 │ // have no variant, and reset has none: `_start` serves it (ADR 0083).
- 71 │ pub enum Vector: u32 {
+    ╭─[rt/arch/riscv32.ers:88:10]
+ 87 │ // have no variant, and reset has none: `_start` serves it (ADR 0083).
+ 88 │ pub enum Vector: u32 {
     ·          ───┬──
     ·             ╰── `core::arch::Vector` is declared here
- 72 │     InstructionMisaligned = 0,
+ 89 │     InstructionMisaligned = 0,
     ╰────
   help: its variants are `InstructionMisaligned`, `InstructionFault`, `IllegalInstruction`,
         `Breakpoint`, `LoadMisaligned`, `LoadFault`, `StoreMisaligned`, `StoreFault`,
@@ -160,12 +160,12 @@ resolve::unknown-variant
     ·                                           ╰── unknown variant
  50 │ 
     ╰────
-    ╭─[rt/arch/riscv32.ers:71:10]
- 70 │ // have no variant, and reset has none: `_start` serves it (ADR 0083).
- 71 │ pub enum Vector: u32 {
+    ╭─[rt/arch/riscv32.ers:88:10]
+ 87 │ // have no variant, and reset has none: `_start` serves it (ADR 0083).
+ 88 │ pub enum Vector: u32 {
     ·          ───┬──
     ·             ╰── `core::arch::Vector` is declared here
- 72 │     InstructionMisaligned = 0,
+ 89 │     InstructionMisaligned = 0,
     ╰────
   help: its variants are `InstructionMisaligned`, `InstructionFault`, `IllegalInstruction`,
         `Breakpoint`, `LoadMisaligned`, `LoadFault`, `StoreMisaligned`, `StoreFault`,

@@ -9,7 +9,7 @@ mod board;
 use board::{exit, putc};
 
 entry fn main() -> ! {
-    asm("udf #0");
+    unsafe { asm("udf #0"); }
     exit(2)
 }
 

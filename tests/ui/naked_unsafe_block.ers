@@ -1,0 +1,37 @@
+// emit: typeck
+// An `unsafe` block as the body of a `#[naked]` function, or around its `asm`,
+// is `ty::naked-body` with a help that `#[naked]` is the mark (ADR 0119): the
+// body is exactly one `asm` expression with no block. The `asm` inside the
+// block is covered, so there is no `ty::unsafe-required` on top. The accepted
+// body is `unsafe_asm.ers`'s.
+#[naked]
+fn block_as_body() -> ! {
+    unsafe {
+        asm("ret", options(noreturn));
+    }
+}
+
+#[naked]
+fn block_as_tail() -> ! {
+    unsafe { asm("ret", options(noreturn)) }
+}
+
+#[naked]
+fn block_after_the_asm() {
+    asm("ret", options(noreturn));
+    unsafe {
+        asm("nop");
+    }
+}
+
+// Without the block the body is right.
+#[naked]
+fn right() -> ! {
+    asm("ret", options(noreturn))
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

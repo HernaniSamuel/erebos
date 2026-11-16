@@ -23,8 +23,8 @@ interrupt fn service() at Vector::SVCall {
 
 entry fn main() -> ! {
     core::arch::enable_interrupts();
-    asm("svc #0");
-    asm("svc #0");
+    unsafe { asm("svc #0"); }
+    unsafe { asm("svc #0"); }
     putc(b's'); putc(b'v'); putc(b'c'); putc(b' ');
     putc(b'0' + *CALLS as u8);
     putc(b' '); putc(b'a'); putc(b'f'); putc(b't'); putc(b'e'); putc(b'r'); putc(b'\n');

@@ -23,14 +23,20 @@
 // across it in the generated code. It orders nothing in the hardware. The
 // `asm` has no memory option, so it is ordered like any `asm`.
 pub fn compiler_fence() {
-    asm("", options(nostack, preserves_flags));
+    // Sound in every context: it emits no instruction and writes nothing.
+    unsafe {
+        asm("", options(nostack, preserves_flags));
+    }
 }
 
 // A compiler fence and a hardware fence: every access to memory or to a
 // device before it, ordinary or volatile, is observed by every other observer
 // before any access after it. `dmb sy` is the full system barrier.
 pub fn fence() {
-    asm("dmb sy", options(nostack, preserves_flags));
+    // Sound in every context: `dmb` orders accesses and writes no register.
+    unsafe {
+        asm("dmb sy", options(nostack, preserves_flags));
+    }
 }
 
 // --- Interrupts (ADR 0086) ---------------------------------------------------
@@ -41,14 +47,22 @@ pub fn fence() {
 // are in memory. Inside a critical section or a handler it ends that
 // protection.
 pub fn enable_interrupts() {
-    asm("cpsie i", options(nostack, preserves_flags));
+    // Sound in privileged mode, where every program runs: it clears
+    // `PRIMASK`. Calling it inside `critical` or a handler ends their
+    // protection (ADR 0086); that is for the caller to avoid.
+    unsafe {
+        asm("cpsie i", options(nostack, preserves_flags));
+    }
 }
 
 // Runs `wfi`, a compiler fence too. It may return for no reason, so it belongs in
 // a loop; inside a `critical` block it returns for a pending interrupt, which
 // runs at the end of the block (ADR 0086).
 pub fn wait_for_interrupt() {
-    asm("wfi", options(nostack, preserves_flags));
+    // Sound in every context: `wfi` waits and may return at once.
+    unsafe {
+        asm("wfi", options(nostack, preserves_flags));
+    }
 }
 
 // Reads the mask state and nothing else: true when `PRIMASK` is 0 and `IPSR` is
@@ -58,13 +72,16 @@ pub fn wait_for_interrupt() {
 pub fn interrupts_enabled() -> bool {
     let mut primask: u32 = 0;
     let mut ipsr: u32 = 0;
-    asm(
-        "mrs {}, primask",
-        "mrs {}, ipsr",
-        out(reg) primask,
-        out(reg) ipsr,
-        options(nostack, preserves_flags),
-    );
+    // Sound in every context: two reads of special registers, into locals.
+    unsafe {
+        asm(
+            "mrs {}, primask",
+            "mrs {}, ipsr",
+            out(reg) primask,
+            out(reg) ipsr,
+            options(nostack, preserves_flags),
+        );
+    }
     primask == 0 && ipsr == 0
 }
 
@@ -158,7 +175,11 @@ pub fn nvic_disable(irq: u32) {
     let word: *mut volatile u32 = nvic_address(NVIC_ICER, irq) as *mut volatile u32;
     compiler_fence();
     *word = 1 << (irq % 32);
-    asm("dsb sy", "isb sy", options(nostack, preserves_flags));
+    // Sound in every context: the barriers order accesses and write no
+    // register.
+    unsafe {
+        asm("dsb sy", "isb sy", options(nostack, preserves_flags));
+    }
     compiler_fence();
 }
 
@@ -199,14 +220,22 @@ pub fn nvic_is_pending(irq: u32) -> bool {
 // masked already, 0 if not.
 fn __critical_enter() -> u32 {
     let mut was: u32 = 0;
-    asm("mrs {}, primask", "cpsid i", out(reg) was, options(nostack, preserves_flags));
+    // Sound where a `critical` block starts: it masks and returns the old
+    // state, which `__critical_exit` writes back on every path out.
+    unsafe {
+        asm("mrs {}, primask", "cpsid i", out(reg) was, options(nostack, preserves_flags));
+    }
     was
 }
 
 // Writes back what `__critical_enter` returned, so a block entered masked
 // leaves it masked.
 fn __critical_exit(was: u32) {
-    asm("msr primask, {}", in(reg) was, options(nostack, preserves_flags));
+    // Sound where a `critical` block ends: it writes back the `PRIMASK` that
+    // `__critical_enter` read, so a block entered masked leaves it masked.
+    unsafe {
+        asm("msr primask, {}", in(reg) was, options(nostack, preserves_flags));
+    }
 }
 
 // --- The reset entry (ADR 0083) ----------------------------------------------

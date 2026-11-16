@@ -62,7 +62,7 @@ fn reason(reason: core::PanicReason) -> &[u8] {
 // Prints `<reason>: <message> at <file>:<line>:<column>`.
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     let mut ipsr: u32 = 0;
-    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags)); }
     print(reason(info.reason));
     print(&b": ");
     print(&*info.message);

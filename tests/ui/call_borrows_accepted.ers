@@ -52,7 +52,7 @@ fn index(s: &mut [u32; 4], i: usize) {
 }
 
 fn passes_sym(r: &[u32; 2]) {
-    asm("la {}, {}", out(reg) _, sym TABLE);
+    unsafe { asm("la {}, {}", out(reg) _, sym TABLE); }
 }
 
 fn lend() {

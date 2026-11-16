@@ -16,7 +16,7 @@ use board::{exit, putc};
 static mut ENTERED: bool = false;
 
 entry fn main() -> ! {
-    asm("unimp");
+    unsafe { asm("unimp"); }
     exit(2)
 }
 
@@ -27,6 +27,6 @@ panic fn on_panic() -> ! {
     }
     ENTERED = true;
     putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b'\n');
-    asm("unimp");
+    unsafe { asm("unimp"); }
     exit(3)
 }

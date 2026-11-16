@@ -409,14 +409,14 @@ analysis::borrow-conflict
 analysis::borrow-conflict
 
   × cannot assign to `x` while it is borrowed
-     ╭─[borrow_conflict.ers:182:5]
+     ╭─[borrow_conflict.ers:182:14]
  180 │ fn asm_output_while_shared(mut x: u32) -> u32 {
  181 │     let r: &u32 = &x;
      ·                   ─┬
      ·                    ╰── `x` is borrowed here
- 182 │     asm("li {}, 7", out(reg) x);
-     ·     ─────────────┬─────────────
-     ·                  ╰── assigned here
+ 182 │     unsafe { asm("li {}, 7", out(reg) x); }
+     ·              ─────────────┬─────────────
+     ·                           ╰── assigned here
  183 │     *r
      ·     ─┬
      ·      ╰── the borrow is used later here

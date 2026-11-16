@@ -7,72 +7,85 @@ input_file: tests/ui/unsafe_compile_time_errors.ers
 ty::unsafe-required
 
   × calling `unsafe fn four` needs an `unsafe` block
-    ╭─[unsafe_compile_time_errors.ers:19:19]
- 18 │ 
- 19 │ const FOUR: u32 = four();
+    ╭─[unsafe_compile_time_errors.ers:21:19]
+ 20 │ 
+ 21 │ const FOUR: u32 = four();
     ·                   ───┬──
     ·                      ╰── this calls `unsafe fn four`
- 20 │ 
+ 22 │ 
     ╰────
   help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
         block, after checking that its contract holds (ADR 0119)
 ty::unsafe-required
 
   × calling `unsafe fn four` needs an `unsafe` block
-    ╭─[unsafe_compile_time_errors.ers:22:12]
- 21 │ comptime {
- 22 │     assert(four() == 4);
+    ╭─[unsafe_compile_time_errors.ers:24:12]
+ 23 │ comptime {
+ 24 │     assert(four() == 4);
     ·            ───┬──
     ·               ╰── this calls `unsafe fn four`
- 23 │ }
+ 25 │ }
     ╰────
   help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
         block, after checking that its contract holds (ADR 0119)
 ty::unsafe-required
 
   × calling `unsafe fn one` needs an `unsafe` block
-    ╭─[unsafe_compile_time_errors.ers:27:11]
- 26 │     Low = 0,
- 27 │     Mid = one(),
+    ╭─[unsafe_compile_time_errors.ers:29:11]
+ 28 │     Low = 0,
+ 29 │     Mid = one(),
     ·           ──┬──
     ·             ╰── this calls `unsafe fn one`
- 28 │     High = 2,
+ 30 │     High = 2,
     ╰────
   help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
         block, after checking that its contract holds (ADR 0119)
 ty::unsafe-required
 
   × calling `unsafe fn length` needs an `unsafe` block
-    ╭─[unsafe_compile_time_errors.ers:32:17]
- 31 │ struct Table {
- 32 │     cells: [u8; length()],
+    ╭─[unsafe_compile_time_errors.ers:34:17]
+ 33 │ struct Table {
+ 34 │     cells: [u8; length()],
     ·                 ────┬───
     ·                     ╰── this calls `unsafe fn length`
- 33 │ }
+ 35 │ }
     ╰────
   help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
         block, after checking that its contract holds (ADR 0119)
 ty::unsafe-required
 
   × calling `unsafe fn four` needs an `unsafe` block
-    ╭─[unsafe_compile_time_errors.ers:36:27]
- 35 │ fn operands() -> u32 {
- 36 │     let a: u32 = comptime four();
+    ╭─[unsafe_compile_time_errors.ers:38:27]
+ 37 │ fn operands() -> u32 {
+ 38 │     let a: u32 = comptime four();
     ·                           ───┬──
     ·                              ╰── this calls `unsafe fn four`
- 37 │     let b: u32 = unsafe { comptime four() };
+ 39 │     let b: u32 = unsafe { comptime four() };
     ╰────
   help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
         block, after checking that its contract holds (ADR 0119)
 ty::unsafe-required
 
+  × `asm` needs an `unsafe` block
+    ╭─[unsafe_compile_time_errors.ers:40:5]
+ 39 │     let b: u32 = unsafe { comptime four() };
+ 40 │     asm("li {}, {}", in(reg) 0 as u32, const four());
+    ·     ────────────────────────┬───────────────────────
+    ·                             ╰── this `asm`
+ 41 │     // Covered by the block around the `asm`: no error.
+    ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
   × calling `unsafe fn four` needs an `unsafe` block
-    ╭─[unsafe_compile_time_errors.ers:38:46]
- 37 │     let b: u32 = unsafe { comptime four() };
- 38 │     asm("li {}, {}", in(reg) 0 as u32, const four());
+    ╭─[unsafe_compile_time_errors.ers:40:46]
+ 39 │     let b: u32 = unsafe { comptime four() };
+ 40 │     asm("li {}, {}", in(reg) 0 as u32, const four());
     ·                                              ───┬──
     ·                                                 ╰── this calls `unsafe fn four`
- 39 │     // Covered by the block around the `asm`: no error.
+ 41 │     // Covered by the block around the `asm`: no error.
     ╰────
   help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
         block, after checking that its contract holds (ADR 0119)

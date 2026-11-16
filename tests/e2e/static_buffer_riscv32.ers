@@ -112,7 +112,7 @@ fn round(number: u32, last: bool) {
         }
         FILLED = 0;
         if last {
-            asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+            unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
         }
     }
     print(&b"round ");
@@ -127,7 +127,7 @@ fn round(number: u32, last: bool) {
 entry fn main() -> ! {
     *MTIMECMP_HIGH = 0;
     *MTIMECMP_LOW = *MTIME + PERIOD;
-    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     round(1, false);
     round(2, true);

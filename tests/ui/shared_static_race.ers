@@ -30,7 +30,7 @@ interrupt fn tick() at Vector::MachineTimer {
 entry fn main() -> ! {
     *MTIMECMP_HIGH = 0;
     *MTIMECMP_LOW = *MTIME + PERIOD;
-    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     let mut i: u32 = 0;
     while i < INCREMENTS {
@@ -41,7 +41,7 @@ entry fn main() -> ! {
         COUNT = seen + 1;
         i += 1;
     }
-    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     if TICKS == 0 {
         exit(2)
     }

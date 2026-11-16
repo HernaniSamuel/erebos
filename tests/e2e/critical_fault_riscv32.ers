@@ -14,7 +14,7 @@ use board::{exit, print, putc};
 entry fn main() -> ! {
     core::arch::enable_interrupts();
     critical {
-        asm("unimp");
+        unsafe { asm("unimp"); }
     }
     exit(2)
 }
@@ -27,7 +27,7 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
     print(&b": ");
     print(&*info.message);
     let mut mstatus: u32 = 0;
-    asm("csrr {}, mstatus", out(reg) mstatus, options(nostack, preserves_flags));
+    unsafe { asm("csrr {}, mstatus", out(reg) mstatus, options(nostack, preserves_flags)); }
     // `MIE` is bit 3 and `MPIE` bit 7.
     print(&b" mie ");
     putc(b'0' + ((mstatus >> 3) & 1) as u8);

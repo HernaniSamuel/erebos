@@ -25,7 +25,7 @@ mod drivers {
 }
 
 fn address() {
-    asm("la {}, {}", out(reg) _, sym timer);
+    unsafe { asm("la {}, {}", out(reg) _, sym timer); }
 }
 
 entry fn main() -> ! {

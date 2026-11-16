@@ -54,6 +54,10 @@ pub fn print(s: &[u8]) {
 // that the request does not need.
 pub fn exit(code: u32) -> ! {
     let block: [u32; 2] = [0x20026, code];
-    asm("bkpt 0xab", inout("r0") 0x20 as u32 => _, in("r1") &raw const block, options(nostack));
+    // Sound: the semihosting request reads the two-word `block`, which lives
+    // through the call, and the machine stops.
+    unsafe {
+        asm("bkpt 0xab", inout("r0") 0x20 as u32 => _, in("r1") &raw const block, options(nostack));
+    }
     loop {}
 }

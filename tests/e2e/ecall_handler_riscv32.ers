@@ -12,13 +12,13 @@ use core::arch::Vector;
 
 interrupt fn call() -> ! at Vector::EnvironmentCall {
     let mut cause: u32 = 0;
-    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    unsafe { asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags)); }
     if cause != 11 {
         exit(3)
     }
     let mut number: u32 = 0;
     // The trap entry saved `a7` and left it as it found it.
-    asm("mv {}, a7", out(reg) number, options(nostack, preserves_flags));
+    unsafe { asm("mv {}, a7", out(reg) number, options(nostack, preserves_flags)); }
     putc(b'e'); putc(b'c'); putc(b'a'); putc(b'l'); putc(b'l'); putc(b' ');
     putc(b'0' + (number / 10) as u8);
     putc(b'0' + (number % 10) as u8);
@@ -27,7 +27,7 @@ interrupt fn call() -> ! at Vector::EnvironmentCall {
 }
 
 entry fn main() -> ! {
-    asm("li a7, 93", "ecall", out("a7") _);
+    unsafe { asm("li a7, 93", "ecall", out("a7") _); }
     exit(2)
 }
 

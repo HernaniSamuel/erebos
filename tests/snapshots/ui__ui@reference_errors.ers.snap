@@ -330,11 +330,11 @@ ty::never-in-memory
 ty::asm-operand-type
 
   × `&u32` cannot be the operand of a register
-    ╭─[reference_errors.ers:83:23]
+    ╭─[reference_errors.ers:83:32]
  82 │ fn asm_operand(r: &u32) {
- 83 │     asm("{}", in(reg) r);
-    ·                       ┬
-    ·                       ╰── has type `&u32`
+ 83 │     unsafe { asm("{}", in(reg) r); }
+    ·                                ┬
+    ·                                ╰── has type `&u32`
  84 │ }
     ╰────
   help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with

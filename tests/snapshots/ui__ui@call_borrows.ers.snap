@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/call_borrows.ers
 ---
@@ -93,7 +92,7 @@ analysis::borrow-conflict-in-call
  47 │ }
  48 │ 
  49 │ fn sym_of_buf(r: &[u32; 4]) {
- 50 │     asm("la {}, {}", out(reg) _, sym BUF);
+ 50 │     unsafe { asm("la {}, {}", out(reg) _, sym BUF); }
  51 │ }
  52 │ 
  53 │ fn refill() {
@@ -137,7 +136,7 @@ analysis::borrow-conflict-in-call
  47 │ }
  48 │ 
  49 │ fn sym_of_buf(r: &[u32; 4]) {
- 50 │     asm("la {}, {}", out(reg) _, sym BUF);
+ 50 │     unsafe { asm("la {}, {}", out(reg) _, sym BUF); }
  51 │ }
  52 │ 
  53 │ fn refill() {
@@ -176,9 +175,9 @@ analysis::borrow-conflict-in-call
   × `BUF` is borrowed during this call, and the callee passes it to `asm` as `sym`
     ╭─[call_borrows.ers:77:5]
  49 │ fn sym_of_buf(r: &[u32; 4]) {
- 50 │     asm("la {}, {}", out(reg) _, sym BUF);
-    ·     ──────────────────┬──────────────────
-    ·                       ╰── `BUF` is passed as `sym` here
+ 50 │     unsafe { asm("la {}, {}", out(reg) _, sym BUF); }
+    ·              ──────────────────┬──────────────────
+    ·                                ╰── `BUF` is passed as `sym` here
  51 │ }
  52 │ 
  53 │ fn refill() {

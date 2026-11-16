@@ -64,11 +64,11 @@ entry fn main() -> ! {
     // `MSP` lies inside the 1 MiB stack that the board's `memory` block puts
     // at the start of the RAM at 0x2000_0000.
     let mut ipsr: u32 = 7;
-    asm("mrs {}, ipsr", out(reg) ipsr, options(nomem, nostack, preserves_flags));
+    unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nomem, nostack, preserves_flags)); }
     let mut control: u32 = 7;
-    asm("mrs {}, control", out(reg) control, options(nomem, nostack, preserves_flags));
+    unsafe { asm("mrs {}, control", out(reg) control, options(nomem, nostack, preserves_flags)); }
     let mut msp: u32 = 0;
-    asm("mrs {}, msp", out(reg) msp, options(nomem, nostack, preserves_flags));
+    unsafe { asm("mrs {}, msp", out(reg) msp, options(nomem, nostack, preserves_flags)); }
     print_u32(ipsr);
     space();
     print_u32(control);
@@ -79,24 +79,32 @@ entry fn main() -> ! {
     // `inout` adds in place; two `inout` with explicit registers swap by xor;
     // `lateout` may share a register with an input.
     let mut sum: u32 = 5;
-    asm("add {x}, {x}, {y}", x = inout(reg) sum, y = in(reg) 3 as u32,
-        options(pure, nomem, nostack));
+    unsafe {
+        asm("add {x}, {x}, {y}", x = inout(reg) sum, y = in(reg) 3 as u32,
+            options(pure, nomem, nostack));
+    }
     let mut first: u32 = 3;
     let mut second: u32 = 7;
-    asm(
-        "eor r0, r0, r1",
-        "eor r1, r0, r1",
-        "eor r0, r0, r1",
-        inout("r0") first,
-        inout("r1") second,
-        options(pure, nomem, nostack),
-    );
+    unsafe {
+        asm(
+            "eor r0, r0, r1",
+            "eor r1, r0, r1",
+            "eor r0, r0, r1",
+            inout("r0") first,
+            inout("r1") second,
+            options(pure, nomem, nostack),
+        );
+    }
     let mut total: u32 = 0;
-    asm("add {r}, {a}, {b}", a = in(reg) 20 as u32, b = in(reg) 22 as u32,
-        r = lateout(reg) total, options(pure, nomem, nostack));
+    unsafe {
+        asm("add {r}, {a}, {b}", a = in(reg) 20 as u32, b = in(reg) 22 as u32,
+            r = lateout(reg) total, options(pure, nomem, nostack));
+    }
     let mut immediate: u32 = 0;
-    asm("add {r}, {x}, #{k}", x = in(reg) 42 as u32, k = const 100 as u32,
-        r = lateout(reg) immediate, options(pure, nomem, nostack));
+    unsafe {
+        asm("add {r}, {x}, #{k}", x = in(reg) 42 as u32, k = const 100 as u32,
+            r = lateout(reg) immediate, options(pure, nomem, nostack));
+    }
     print_u32(sum);
     space();
     print_u32(first);
@@ -115,11 +123,13 @@ entry fn main() -> ! {
     let mut signed_register: u32 = 0;
     let mut unsigned_register: u32 = 0;
     let mut low: u8 = 0;
-    asm("mov {r}, {x}", x = in(reg) negative, r = lateout(reg) signed_register,
-        options(pure, nomem, nostack));
-    asm("mov {r}, {x}", x = in(reg) byte, r = lateout(reg) unsigned_register,
-        options(pure, nomem, nostack));
-    asm("movw {}, #0x1ff", out(reg) low, options(pure, nomem, nostack));
+    unsafe {
+        asm("mov {r}, {x}", x = in(reg) negative, r = lateout(reg) signed_register,
+            options(pure, nomem, nostack));
+        asm("mov {r}, {x}", x = in(reg) byte, r = lateout(reg) unsigned_register,
+            options(pure, nomem, nostack));
+    }
+    unsafe { asm("movw {}, #0x1ff", out(reg) low, options(pure, nomem, nostack)); }
     print_hex(signed_register);
     space();
     print_hex(unsigned_register);
@@ -130,15 +140,17 @@ entry fn main() -> ! {
     // A call from assembly: `triple` is `r0` in and out, and everything a C
     // call may change is clobbered, `lr` included.
     let mut tripled: u32 = 0;
-    asm("bl {f}", f = sym triple, inout("r0") 14 as u32 => tripled,
-        clobber_abi("C"));
+    unsafe {
+        asm("bl {f}", f = sym triple, inout("r0") 14 as u32 => tripled,
+            clobber_abi("C"));
+    }
     print_u32(tripled);
     space();
     flag(tripled == 42);
     space();
 
     // The program ends in the assembly: `finish` prints and stops QEMU.
-    asm("b.w {next}", next = sym finish, options(noreturn))
+    unsafe { asm("b.w {next}", next = sym finish, options(noreturn)) }
 }
 
 panic fn on_panic() -> ! {

@@ -45,14 +45,14 @@ interrupt fn tick() at Vector::MachineTimer {
 entry fn main() -> ! {
     *MTIMECMP_HIGH = 0;
     arm();
-    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     let mut seen: u32 = 0;
     loop {
         critical {
             if TICKS >= 5 {
                 // No tick is left to run when the block ends.
-                asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+                unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
                 seen = TICKS;
                 break;
             }

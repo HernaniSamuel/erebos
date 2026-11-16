@@ -22,7 +22,7 @@ fn two_in_one_call() {
 
 fn sym_while_borrowed() {
     let r: &mut u32 = &mut COUNT;
-    asm("la {}, {}", out(reg) _, sym COUNT);
+    unsafe { asm("la {}, {}", out(reg) _, sym COUNT); }
     *r = 1;
 }
 
@@ -30,9 +30,9 @@ fn accepted() {
     let r: &mut u32 = &mut COUNT;
     *r = 1;
     COUNT = 2;
-    asm("la {}, {}", out(reg) _, sym COUNT);
+    unsafe { asm("la {}, {}", out(reg) _, sym COUNT); }
     let t: &u32 = &TABLE[0];
-    asm("la {}, {}", out(reg) _, sym TABLE);
+    unsafe { asm("la {}, {}", out(reg) _, sym TABLE); }
     let x: u32 = *t;
 }
 

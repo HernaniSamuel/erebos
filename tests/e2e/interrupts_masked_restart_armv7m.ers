@@ -27,12 +27,14 @@ entry fn main() -> ! {
         }
         putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b' ');
         putc(b'r'); putc(b'u'); putc(b'n'); putc(b'\n');
-        asm(
-            "movw r0, :lower16:_start",
-            "movt r0, :upper16:_start",
-            "bx r0",
-            options(noreturn),
-        );
+        unsafe {
+            asm(
+                "movw r0, :lower16:_start",
+                "movt r0, :upper16:_start",
+                "bx r0",
+                options(noreturn),
+            );
+        }
     }
     if core::arch::interrupts_enabled() {
         exit(3)

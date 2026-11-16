@@ -23,7 +23,10 @@
 // across it in the generated code. It orders nothing in the hardware. The
 // `asm` has no memory option, so it is ordered like any `asm`.
 pub fn compiler_fence() {
-    asm("", options(nostack, preserves_flags));
+    // Sound in every context: it emits no instruction and writes nothing.
+    unsafe {
+        asm("", options(nostack, preserves_flags));
+    }
 }
 
 // A compiler fence and a hardware fence: every access to memory or to a
@@ -31,7 +34,10 @@ pub fn compiler_fence() {
 // before any access after it. `fence iorw, iorw` orders input, output, reads
 // and writes, where LLVM's own `fence` leaves I/O out.
 pub fn fence() {
-    asm("fence iorw, iorw", options(nostack, preserves_flags));
+    // Sound in every context: `fence` orders accesses and writes no register.
+    unsafe {
+        asm("fence iorw, iorw", options(nostack, preserves_flags));
+    }
 }
 
 // --- Interrupts (ADR 0086) ---------------------------------------------------
@@ -41,21 +47,32 @@ pub fn fence() {
 // option, so this is a compiler fence: statics written before it are in memory.
 // Inside a critical section or a handler it ends that protection.
 pub fn enable_interrupts() {
-    asm("csrsi mstatus, 8", options(nostack, preserves_flags));
+    // Sound in machine mode, where every program runs: it sets one bit of
+    // `mstatus`. Calling it inside `critical` or a handler ends their
+    // protection (ADR 0086); that is for the caller to avoid.
+    unsafe {
+        asm("csrsi mstatus, 8", options(nostack, preserves_flags));
+    }
 }
 
 // Runs `wfi`, a compiler fence too. It may return for no reason, so it belongs in
 // a loop; inside a `critical` block it returns for a pending interrupt, which
 // runs at the end of the block (ADR 0086).
 pub fn wait_for_interrupt() {
-    asm("wfi", options(nostack, preserves_flags));
+    // Sound in every context: `wfi` waits and may return at once.
+    unsafe {
+        asm("wfi", options(nostack, preserves_flags));
+    }
 }
 
 // Reads `mstatus.MIE`, and nothing else: whether a source is enabled (`mie`) is
 // not part of the answer. False in a critical section.
 pub fn interrupts_enabled() -> bool {
     let mut mstatus: u32 = 0;
-    asm("csrr {}, mstatus", out(reg) mstatus, options(nostack, preserves_flags));
+    // Sound in every context: a read of a CSR, into a local.
+    unsafe {
+        asm("csrr {}, mstatus", out(reg) mstatus, options(nostack, preserves_flags));
+    }
     (mstatus & 8) != 0
 }
 
@@ -95,14 +112,22 @@ pub enum Vector: u32 {
 // in bit 3: 8 if interrupts were enabled, 0 if not.
 fn __critical_enter() -> u32 {
     let mut was: u32 = 0;
-    asm("csrrci {}, mstatus, 8", out(reg) was, options(nostack, preserves_flags));
+    // Sound where a `critical` block starts: it masks and returns the old
+    // state, which `__critical_exit` sets back on every path out.
+    unsafe {
+        asm("csrrci {}, mstatus, 8", out(reg) was, options(nostack, preserves_flags));
+    }
     was & 8
 }
 
 // Sets back what `__critical_enter` returned: `csrs` sets `MIE` if `was` is 8
 // and changes nothing if it is 0, so a block entered masked leaves it masked.
 fn __critical_exit(was: u32) {
-    asm("csrs mstatus, {}", in(reg) was, options(nostack, preserves_flags));
+    // Sound where a `critical` block ends: it sets `MIE` back only if
+    // `__critical_enter` found it set (`was` is 8), and does nothing for 0.
+    unsafe {
+        asm("csrs mstatus, {}", in(reg) was, options(nostack, preserves_flags));
+    }
 }
 
 // --- The trap entry (ADR 0085) -----------------------------------------------

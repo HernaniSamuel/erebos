@@ -22,7 +22,7 @@ mod drivers {
 }
 
 fn address() {
-    asm("ldr {}, ={}", out(reg) _, sym tick);
+    unsafe { asm("ldr {}, ={}", out(reg) _, sym tick); }
 }
 
 entry fn main() -> ! {

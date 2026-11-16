@@ -220,7 +220,7 @@ fn builtins() -> u32 {
 static mut R: Ring = Ring::new();
 
 fn symbol() {
-    asm("call {f}", f = sym Ring::push, clobber_abi("C"));
+    unsafe { asm("call {f}", f = sym Ring::push, clobber_abi("C")); }
 }
 
 entry fn main() -> ! { loop {} }

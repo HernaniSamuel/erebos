@@ -179,7 +179,7 @@ fn raw_mut_while_shared(mut x: u32) -> u32 {
 
 fn asm_output_while_shared(mut x: u32) -> u32 {
     let r: &u32 = &x;
-    asm("li {}, 7", out(reg) x);
+    unsafe { asm("li {}, 7", out(reg) x); }
     *r
 }
 

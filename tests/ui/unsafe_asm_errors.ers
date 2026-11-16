@@ -1,0 +1,79 @@
+// emit: typeck
+// `asm` outside an `unsafe` block is `ty::unsafe-required` (ADR 0119), one
+// error for each, wherever it is: a statement, a tail, one with operands, a
+// method, the body of an `unsafe fn` (which is not a block), beside a block
+// that covers another `asm`, inside `critical` (which is not a block either),
+// and a handler. An `asm` whose operand is already in error is reported for
+// that error only, and counts as unsafe for the block around it.
+use core::arch::Vector;
+
+struct Counter {
+    value: u32,
+}
+
+impl Counter {
+    fn fence(&self) {
+        asm("fence", options(nostack));
+    }
+}
+
+fn statement() {
+    asm("nop");
+}
+
+fn operands(x: u32) -> u32 {
+    let mut a: u32 = 0;
+    asm("add {}, {}, {}", out(reg) a, in(reg) x, in(reg) 1 as u32);
+    a
+}
+
+fn tail() -> ! {
+    asm("wfi", options(noreturn))
+}
+
+// The first is covered, the second is not.
+fn beside_a_block() {
+    unsafe {
+        asm("nop");
+    }
+    asm("nop");
+}
+
+unsafe fn in_an_unsafe_fn() {
+    asm("nop");
+}
+
+fn in_critical() {
+    critical {
+        asm("nop");
+    }
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    asm("nop");
+}
+
+// An operand in error (a method that does not exist): that error is the only
+// one for the `asm`, with or without a block, and the block is used.
+fn operand_in_error(x: u32) {
+    asm("nop {}", in(reg) x.missing());
+    unsafe {
+        asm("nop {}", in(reg) x.missing());
+    }
+}
+
+// Two unsafe operations in one expression: an `asm` whose operand calls an
+// `unsafe fn`.
+unsafe fn four() -> u32 {
+    4
+}
+
+fn two_operations() {
+    asm("li {}, {}", in(reg) 0 as u32, const four());
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

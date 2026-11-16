@@ -11,7 +11,7 @@ mod board;
 use board::{exit, print};
 
 entry fn main() -> ! {
-    asm("udf #0");
+    unsafe { asm("udf #0"); }
     exit(2)
 }
 

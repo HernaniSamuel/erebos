@@ -7,11 +7,11 @@ input_file: tests/ui/asm_comptime.ers
 eval::asm
 
   × the evaluation reached an `asm` expression
-   ╭─[asm_comptime.ers:6:5]
+   ╭─[asm_comptime.ers:6:14]
  5 │     let mut v: u32 = 0;
- 6 │     asm("csrr {}, mcause", out(reg) v, options(nomem, nostack));
-   ·     ─────────────────────────────┬─────────────────────────────
-   ·                                  ╰── inline assembly cannot run at compile time
+ 6 │     unsafe { asm("csrr {}, mcause", out(reg) v, options(nomem, nostack)); }
+   ·              ─────────────────────────────┬─────────────────────────────
+   ·                                           ╰── inline assembly cannot run at compile time
  7 │     v
    ╰────
     ╭─[asm_comptime.ers:18:30]
@@ -26,11 +26,11 @@ eval::asm
 eval::asm
 
   × the evaluation reached an `asm` expression
-    ╭─[asm_comptime.ers:6:5]
+    ╭─[asm_comptime.ers:6:14]
   5 │     let mut v: u32 = 0;
-  6 │     asm("csrr {}, mcause", out(reg) v, options(nomem, nostack));
-    ·     ─────────────────────────────┬─────────────────────────────
-    ·                                  ╰── inline assembly cannot run at compile time
+  6 │     unsafe { asm("csrr {}, mcause", out(reg) v, options(nomem, nostack)); }
+    ·              ─────────────────────────────┬─────────────────────────────
+    ·                                           ╰── inline assembly cannot run at compile time
   7 │     v
   8 │ }
   9 │ 
@@ -52,11 +52,11 @@ eval::asm
 eval::asm
 
   × the evaluation reached an `asm` expression
-    ╭─[asm_comptime.ers:15:5]
+    ╭─[asm_comptime.ers:15:14]
  14 │ fn stops() -> u32 {
- 15 │     asm("wfi", options(noreturn));
-    ·     ──────────────┬──────────────
-    ·                   ╰── inline assembly cannot run at compile time
+ 15 │     unsafe { asm("wfi", options(noreturn)); }
+    ·              ──────────────┬──────────────
+    ·                            ╰── inline assembly cannot run at compile time
  16 │ }
  17 │ 
  18 │ const DIRECT: u32 = comptime { read() };
@@ -68,5 +68,21 @@ eval::asm
     ·                                  │     ╰── called here
     ·                                  ╰── while evaluating this `comptime` expression
  23 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[asm_comptime.ers:28:14]
+ 25 │     // block satisfies the check of `unsafe` (ADR 0119) and changes nothing here.
+ 26 │ ╭─▶ const WRITTEN_HERE: u32 = comptime {
+ 27 │ │       let mut v: u32 = 0;
+ 28 │ │       unsafe { asm("csrr {}, mcause", out(reg) v, options(nomem, nostack)); }
+    · │                ─────────────────────────────┬─────────────────────────────
+    · │                                             ╰── inline assembly cannot run at compile time
+ 29 │ │       v
+ 30 │ ├─▶ };
+    · ╰──── while evaluating this `comptime` expression
+ 31 │     
     ╰────
   help: this code runs at compile time (ADR 0027)

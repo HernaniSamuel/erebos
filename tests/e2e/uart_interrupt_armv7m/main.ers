@@ -49,7 +49,7 @@ interrupt fn transmitted() at Interrupt::Uart0Tx {
         exit(10)
     }
     let mut ipsr: u32 = 0;
-    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags)); }
     if ipsr != 16 + Interrupt::Uart0Tx as u32 {
         exit(11)
     }

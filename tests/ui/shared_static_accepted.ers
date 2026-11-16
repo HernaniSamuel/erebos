@@ -42,7 +42,7 @@ fn named() {
 }
 
 fn address() {
-    asm("la {}, {}", out(reg) _, sym named);
+    unsafe { asm("la {}, {}", out(reg) _, sym named); }
 }
 
 fn orphan() {
