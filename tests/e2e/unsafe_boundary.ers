@@ -1,0 +1,215 @@
+// The M5.9 milestone program: a safe interface built on `unsafe` (ADR 0119).
+// Module `ring` owns a static buffer and reaches it through a raw pointer. Its
+// public functions are safe: the fields are private, so only the module's own
+// code changes `head`, `tail` and `len`, and each `unsafe` block in it relies
+// on what that code keeps (`head` and `tail` are below `CAP`, `len` is at most
+// `CAP`) and says so in a comment.
+// - `push` and `pop` read and write a slot with a block, `pop` and `peek` use a
+//   block as the value of an expression.
+// - `clear` is safe and calls `fill`, an `unsafe fn` whose contract is that
+//   the pointer is valid for `n` writes: `clear` checks the length against
+//   the capacity before the call. A length that is too large is refused, and
+//   the ring is left as it was.
+// - `peek` holds a `critical` block inside the `unsafe` block, so the read of
+//   the slot is made with interrupts masked.
+// The program runs the same on both targets and at both levels (ADR 0077).
+// expect-output: hel
+// expect-output: full at !
+// expect-output: lo, ring
+// expect-output: empty
+// expect-output: cleared: ---
+// expect-output: refused 9
+// expect-output: peek: -,-,0
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+mod ring {
+    const CAP: usize = 8;
+
+    static mut SLOTS: [u8; 8] = [0; 8];
+
+    pub struct Ring {
+        // Points at the first of the `CAP` bytes of `SLOTS`.
+        slots: *mut u8,
+        // Where the next byte is written, below `CAP`.
+        head: usize,
+        // Where the next byte is read, below `CAP`.
+        tail: usize,
+        // How many bytes are held, at most `CAP`.
+        len: usize,
+    }
+
+    // Writes `value` to the `n` bytes from `p`.
+    // Contract: `p` is valid for `n` writes of one byte.
+    unsafe fn fill(p: *mut u8, n: usize, value: u8) {
+        let mut i: usize = 0;
+        while i < n {
+            unsafe { p[i] = value; }
+            i += 1;
+        }
+    }
+
+    // The ring over `SLOTS`. Called once: two rings would share the bytes.
+    pub fn new() -> Ring {
+        Ring { slots: &raw mut SLOTS as *mut u8, head: 0, tail: 0, len: 0 }
+    }
+
+    pub fn push(ring: &mut Ring, byte: u8) -> bool {
+        if ring.len == CAP {
+            return false;
+        }
+        // `head` is below `CAP`, so the slot is inside `SLOTS`.
+        unsafe { ring.slots[ring.head] = byte; }
+        ring.head = (ring.head + 1) % CAP;
+        ring.len += 1;
+        true
+    }
+
+    pub fn pop(ring: &mut Ring, byte: &mut u8) -> bool {
+        if ring.len == 0 {
+            return false;
+        }
+        // `tail` is below `CAP`, so the slot is inside `SLOTS`.
+        *byte = unsafe { ring.slots[ring.tail] };
+        ring.tail = (ring.tail + 1) % CAP;
+        ring.len -= 1;
+        true
+    }
+
+    // The byte in slot `at`, or 0 beyond the capacity, read with interrupts
+    // masked.
+    pub fn peek(ring: &Ring, at: usize) -> u8 {
+        if at >= CAP {
+            return 0;
+        }
+        // `at` is below `CAP`, so the slot is inside `SLOTS`.
+        unsafe {
+            critical { ring.slots[at] }
+        }
+    }
+
+    // Empties the ring and sets its first `n` slots to `value`; refuses an
+    // `n` larger than the capacity.
+    pub fn clear(ring: &mut Ring, n: usize, value: u8) -> bool {
+        if n > CAP {
+            return false;
+        }
+        // `n` is at most `CAP`, and `slots` is valid for `CAP` writes.
+        unsafe { fill(ring.slots, n, value); }
+        ring.head = 0;
+        ring.tail = 0;
+        ring.len = 0;
+        true
+    }
+}
+
+use ring::Ring;
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn push_all(r: &mut Ring, text: &[u8]) {
+    let mut i: usize = 0;
+    while i < len(text) {
+        if !ring::push(r, text[i]) {
+            let full: [u8; 8] = [b'f', b'u', b'l', b'l', b' ', b'a', b't', b' '];
+            let mut j: usize = 0;
+            while j < 8 {
+                putc(full[j]);
+                j += 1;
+            }
+            putc(text[i]);
+            putc(b'\n');
+            return;
+        }
+        i += 1;
+    }
+}
+
+fn pop_some(r: &mut Ring, n: u32) {
+    let mut byte: u8 = 0;
+    let mut i: u32 = 0;
+    while i < n && ring::pop(r, &mut byte) {
+        putc(byte);
+        i += 1;
+    }
+    putc(b'\n');
+}
+
+entry fn main() -> ! {
+    let mut r: Ring = ring::new();
+
+    let hello: [u8; 5] = [b'h', b'e', b'l', b'l', b'o'];
+    push_all(&mut r, &hello);
+    pop_some(&mut r, 3);
+
+    // Wraps around the end of the buffer, then overflows.
+    let more: [u8; 7] = [b',', b' ', b'r', b'i', b'n', b'g', b'!'];
+    push_all(&mut r, &more);
+    pop_some(&mut r, 100);
+
+    let mut byte: u8 = 0;
+    if !ring::pop(&mut r, &mut byte) {
+        let empty: [u8; 5] = [b'e', b'm', b'p', b't', b'y'];
+        let mut i: usize = 0;
+        while i < 5 {
+            putc(empty[i]);
+            i += 1;
+        }
+        putc(b'\n');
+    }
+
+    // A length within the capacity is filled in, one beyond it is refused.
+    if ring::clear(&mut r, 3, b'-') {
+        let cleared: [u8; 9] = [b'c', b'l', b'e', b'a', b'r', b'e', b'd', b':', b' '];
+        let mut i: usize = 0;
+        while i < 9 {
+            putc(cleared[i]);
+            i += 1;
+        }
+        i = 0;
+        while i < 3 {
+            putc(ring::peek(&r, i));
+            i += 1;
+        }
+        putc(b'\n');
+    }
+    if !ring::clear(&mut r, 9, b'+') {
+        let refused: [u8; 8] = [b'r', b'e', b'f', b'u', b's', b'e', b'd', b' '];
+        let mut i: usize = 0;
+        while i < 8 {
+            putc(refused[i]);
+            i += 1;
+        }
+        print_u32(9);
+        putc(b'\n');
+    }
+
+    // The refused call changed nothing: slots 0 and 1 still hold `-`, and a
+    // slot beyond the capacity reads as 0.
+    let kept: u8 = ring::peek(&r, 1);
+    let beyond: u8 = ring::peek(&r, 100);
+    let tag: [u8; 6] = [b'p', b'e', b'e', b'k', b':', b' '];
+    let mut i: usize = 0;
+    while i < 6 {
+        putc(tag[i]);
+        i += 1;
+    }
+    putc(ring::peek(&r, 0));
+    putc(b',');
+    putc(kept);
+    putc(b',');
+    print_u32(beyond as u32);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
