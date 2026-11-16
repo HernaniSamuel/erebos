@@ -121,7 +121,12 @@ fn same(r: &u32) -> &u32 {
 }
 
 fn last(s: &[u8]) -> &u8 {
-    if len(s) <= 1 { &s[0] } else { last(&s[1..]) }
+    let mut i: usize = 0;
+    while i + 1 < len(s) {
+        i += 1;
+    }
+    let tail: &[u8] = &s[i..];
+    &tail[0]
 }
 
 fn volatile_part(r: &mut volatile Ring) -> &mut volatile u8 {

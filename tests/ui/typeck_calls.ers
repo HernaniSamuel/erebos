@@ -4,7 +4,16 @@ fn add(a: u32, b: u32) -> u32 {
 }
 
 fn fib(n: u32) -> u32 {
-    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+    let mut previous: u32 = 0;
+    let mut current: u32 = 1;
+    let mut i: u32 = 0;
+    while i < n {
+        let next: u32 = previous + current;
+        previous = current;
+        current = next;
+        i += 1;
+    }
+    previous
 }
 
 fn countdown(mut n: u8) -> bool {

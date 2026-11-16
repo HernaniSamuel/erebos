@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/call_borrows_accepted.ers
 ---
@@ -70,29 +69,27 @@ fn through_pointer(_1: &mut u32) -> () {
     }
 }
 
-fn recurse(_1: &mut u32, _2: u32) -> () {
+fn repeat(_1: &mut u32, _2: u32) -> () {
     let _0: ();
     let _1: &mut u32; // r
     let _2: u32; // n
-    let _3: bool;
-    let _4: &mut u32;
-    let _5: u32;
+    let _3: u32; // left
+    let _4: bool;
 
     bb0: {
-        _3 = Ne(copy _2, const 0_u32);
-        if copy _3 -> [true: bb1, false: bb2];
+        _3 = copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        (*_1) = Add(copy (*_1), const 1_u32);
-        _4 = &mut (*_1);
-        _5 = Sub(copy _2, const 1_u32);
-        call recurse(move _4, copy _5);
-        goto -> bb3;
+        _4 = Ne(copy _3, const 0_u32);
+        if copy _4 -> [true: bb2, false: bb3];
     }
 
     bb2: {
-        goto -> bb3;
+        (*_1) = Add(copy (*_1), const 1_u32);
+        _3 = Sub(copy _3, const 1_u32);
+        goto -> bb1;
     }
 
     bb3: {
@@ -169,7 +166,7 @@ fn lend() -> () {
         call outside(move _11);
         _12 = const static COUNT;
         _13 = &mut (*_12);
-        call recurse(move _13, const 3_u32);
+        call repeat(move _13, const 3_u32);
         _14 = const static TABLE;
         _15 = &(*_14);
         call passes_sym(copy _15);

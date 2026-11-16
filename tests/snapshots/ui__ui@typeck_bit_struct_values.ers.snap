@@ -167,55 +167,57 @@ fn casts(l: Lcr, x: u8) -> u64
     expr 145 local control 2652..2659: Control
     expr 146 as u64 2669..2680: u64
     expr 147 local byte 2669..2673: u8
+fn same(l: Lcr) -> Lcr
+    expr 148 local l 2713..2714: Lcr
 fn pass(l: Lcr) -> Lcr
     let lines: [Lcr; 2]
     let mut copy: [Lcr; 2]
-    expr 148 array 2735..2762: [Lcr; 2]
-    expr 149 local l 2736..2737: Lcr
-    expr 150 struct Lcr .. 2739..2761: Lcr
-    expr 151 bool true 2751..2755: bool
-    expr 152 local lines 2793..2798: [Lcr; 2]
-    expr 153 assign 2804..2824: ()
-    expr 154 bit field dlab 2804..2816: bool
-    expr 155 index 2804..2811: Lcr
-    expr 156 local copy 2804..2808: [Lcr; 2]
-    expr 157 int 1 2809..2810: usize
-    expr 158 bool false 2819..2824: bool
-    expr 159 if 2830..2881: Lcr
-    expr 160 bit field dlab 2833..2846: bool
-    expr 161 index 2833..2841: Lcr
-    expr 162 local lines 2833..2838: [Lcr; 2]
-    expr 163 int 0 2839..2840: usize
-    expr 164 index 2849..2856: Lcr
-    expr 165 local copy 2849..2853: [Lcr; 2]
-    expr 166 int 0 2854..2855: usize
-    expr 167 block 2864..2881: Lcr
-    expr 168 call 2866..2879: Lcr
-    expr 169 index 2871..2878: Lcr
-    expr 170 local copy 2871..2875: [Lcr; 2]
-    expr 171 int 1 2876..2877: usize
+    expr 149 array 2769..2796: [Lcr; 2]
+    expr 150 local l 2770..2771: Lcr
+    expr 151 struct Lcr .. 2773..2795: Lcr
+    expr 152 bool true 2785..2789: bool
+    expr 153 local lines 2827..2832: [Lcr; 2]
+    expr 154 assign 2838..2858: ()
+    expr 155 bit field dlab 2838..2850: bool
+    expr 156 index 2838..2845: Lcr
+    expr 157 local copy 2838..2842: [Lcr; 2]
+    expr 158 int 1 2843..2844: usize
+    expr 159 bool false 2853..2858: bool
+    expr 160 if 2864..2915: Lcr
+    expr 161 bit field dlab 2867..2880: bool
+    expr 162 index 2867..2875: Lcr
+    expr 163 local lines 2867..2872: [Lcr; 2]
+    expr 164 int 0 2873..2874: usize
+    expr 165 index 2883..2890: Lcr
+    expr 166 local copy 2883..2887: [Lcr; 2]
+    expr 167 int 0 2888..2889: usize
+    expr 168 block 2898..2915: Lcr
+    expr 169 call 2900..2913: Lcr
+    expr 170 index 2905..2912: Lcr
+    expr 171 local copy 2905..2909: [Lcr; 2]
+    expr 172 int 1 2910..2911: usize
 fn sizes() -> usize
-    expr 172 binary + 2911..2994: usize
-    expr 173 binary + 2911..2978: usize
-    expr 174 binary + 2911..2958: usize
-    expr 175 binary + 2911..2939: usize
-    expr 176 size_of(Lcr) 2911..2923: usize
-    expr 177 align_of(Lcr) 2926..2939: usize
-    expr 178 size_of(Control) 2942..2958: usize
-    expr 179 align_of(Control) 2961..2978: usize
-    expr 180 size_of(Uart) 2981..2994: usize
+    expr 173 binary + 2945..3028: usize
+    expr 174 binary + 2945..3012: usize
+    expr 175 binary + 2945..2992: usize
+    expr 176 binary + 2945..2973: usize
+    expr 177 size_of(Lcr) 2945..2957: usize
+    expr 178 align_of(Lcr) 2960..2973: usize
+    expr 179 size_of(Control) 2976..2992: usize
+    expr 180 align_of(Control) 2995..3012: usize
+    expr 181 size_of(Uart) 3015..3028: usize
 entry fn main() -> !
-    expr 181 loop 3021..3028: !
+    expr 182 loop 3055..3062: !
 panic fn on_panic() -> !
-    expr 182 loop 3058..3065: !
+    expr 183 loop 3092..3099: !
 comptime fn WordLength::Five() -> u8
-    expr 183 int 0 733..734: u8
+    expr 184 int 0 733..734: u8
 comptime fn WordLength::Six() -> u8
-    expr 184 int 1 742..743: u8
+    expr 185 int 1 742..743: u8
 comptime fn WordLength::Seven() -> u8
-    expr 185 int 2 753..754: u8
+    expr 186 int 2 753..754: u8
 comptime fn WordLength::Eight() -> u8
-    expr 186 int 3 764..765: u8
+    expr 187 int 3 764..765: u8
 comptime fn default() -> WordLength
     expr 0 variant .Five (WordLength::Five) 829..834: WordLength
 comptime fn default() -> bool

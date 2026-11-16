@@ -350,75 +350,79 @@ fn same(_1: &u32) -> &u32 {
 fn last(_1: &[u8]) -> &u8 {
     let _0: &u8;
     let _1: &[u8]; // s
-    let _2: usize;
-    let _3: bool;
-    let _4: &u8;
+    let _2: usize; // i
+    let _3: &[u8]; // tail
+    let _4: usize;
     let _5: usize;
     let _6: usize;
     let _7: bool;
-    let _8: &u8;
+    let _8: usize;
     let _9: usize;
     let _10: usize;
-    let _11: usize;
+    let _11: bool;
     let _12: bool;
-    let _13: bool;
-    let _14: &[u8];
-    let _15: &u8;
+    let _13: &[u8];
+    let _14: usize;
+    let _15: usize;
+    let _16: bool;
+    let _17: &u8;
 
     bb0: {
-        _2 = len(_1);
-        _3 = Le(copy _2, const 1_usize);
-        if copy _3 -> [true: bb1, false: bb2];
+        _2 = const 0_usize;
+        goto -> bb1;
     }
 
     bb1: {
-        _5 = const 0_usize;
+        _4 = Add(copy _2, const 1_usize);
+        _5 = copy _4;
         _6 = len(_1);
         _7 = Lt(copy _5, copy _6);
-        if copy _7 -> [true: bb3, false: bb4];
+        if copy _7 -> [true: bb2, false: bb3];
     }
 
     bb2: {
-        _9 = len(_1);
-        _10 = const 1_usize;
-        _11 = copy _9;
-        _12 = Le(copy _10, copy _11);
-        if copy _12 -> [true: bb5, false: bb6];
+        _2 = Add(copy _2, const 1_usize);
+        goto -> bb1;
     }
 
     bb3: {
-        _8 = &(*_1)[_5];
-        _4 = copy _8;
-        goto -> bb9;
+        _8 = len(_1);
+        _9 = copy _2;
+        _10 = copy _8;
+        _11 = Le(copy _9, copy _10);
+        if copy _11 -> [true: bb4, false: bb5];
     }
 
     bb4: {
-        panic(index out of bounds);
+        _12 = Le(copy _10, copy _8);
+        if copy _12 -> [true: bb6, false: bb7];
     }
 
     bb5: {
-        _13 = Le(copy _11, copy _9);
-        if copy _13 -> [true: bb7, false: bb8];
+        panic(index out of bounds);
     }
 
     bb6: {
-        panic(index out of bounds);
+        _13 = &(*_1)[_9.._10];
+        _3 = copy _13;
+        _14 = const 0_usize;
+        _15 = len(_3);
+        _16 = Lt(copy _14, copy _15);
+        if copy _16 -> [true: bb8, false: bb9];
     }
 
     bb7: {
-        _14 = &(*_1)[_10.._11];
-        _15 = call last(copy _14);
-        _4 = copy _15;
-        goto -> bb9;
-    }
-
-    bb8: {
         panic(index out of bounds);
     }
 
-    bb9: {
-        _0 = copy _4;
+    bb8: {
+        _17 = &(*_3)[_14];
+        _0 = copy _17;
         return;
+    }
+
+    bb9: {
+        panic(index out of bounds);
     }
 }
 

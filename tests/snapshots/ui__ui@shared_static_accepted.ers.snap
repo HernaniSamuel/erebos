@@ -7,7 +7,7 @@ input_file: tests/ui/shared_static_accepted.ers
 static mut AROUND: u32; // align 4
 static mut CALLED: u32; // align 4
 static mut NESTED: u32; // align 4
-static mut RECURSIVE: u32; // align 4
+static mut REPEATED: u32; // align 4
 static mut DONE: bool; // align 1
 static mut WOKEN: u32; // align 4
 static mut BETWEEN: u32; // align 4
@@ -29,28 +29,28 @@ fn called() -> () {
     }
 }
 
-fn recursive(_1: u32) -> () {
+fn repeated(_1: u32) -> () {
     let _0: ();
     let _1: u32; // n
-    let _2: *mut u32;
+    let _2: u32; // left
     let _3: bool;
-    let _4: u32;
+    let _4: *mut u32;
 
     bb0: {
-        _2 = const static RECURSIVE;
-        (*_2) = copy _1;
-        _3 = Gt(copy _1, const 0_u32);
-        if copy _3 -> [true: bb1, false: bb2];
+        _2 = copy _1;
+        goto -> bb1;
     }
 
     bb1: {
-        _4 = Sub(copy _1, const 1_u32);
-        call recursive(copy _4);
-        goto -> bb3;
+        _3 = Gt(copy _2, const 0_u32);
+        if copy _3 -> [true: bb2, false: bb3];
     }
 
     bb2: {
-        goto -> bb3;
+        _4 = const static REPEATED;
+        (*_4) = copy _2;
+        _2 = Sub(copy _2, const 1_u32);
+        goto -> bb1;
     }
 
     bb3: {
@@ -171,7 +171,7 @@ interrupt fn tick() -> () at MachineTimer {
         (*_3) = const 0_u32;
         _4 = const static NESTED;
         (*_4) = const 0_u32;
-        _5 = const static RECURSIVE;
+        _5 = const static REPEATED;
         (*_5) = const 0_u32;
         _6 = const static DONE;
         (*_6) = const true;
@@ -246,7 +246,7 @@ entry fn main() -> ! {
         (*_8) = Add(copy (*_8), const 2_u32);
         critical_exit _5;
         critical_enter _9;
-        call recursive(const 3_u32);
+        call repeated(const 3_u32);
         critical_exit _9;
         goto -> bb1;
     }
@@ -344,7 +344,7 @@ comptime fn NESTED() -> u32 {
     }
 }
 
-comptime fn RECURSIVE() -> u32 {
+comptime fn REPEATED() -> u32 {
     let _0: u32;
 
     bb0: {

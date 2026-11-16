@@ -35,17 +35,18 @@ analysis::unprotected-static
  36 │ }
  37 │ 
  38 │ fn spin(n: u32) {
- 39 │     LOOPED = n;
- 40 │     if n > 0 {
- 41 │         spin(n - 1);
- 42 │     }
- 43 │ }
- 44 │ 
- 45 │ entry fn main() -> ! {
- 46 │     first();
+ 39 │     let mut left: u32 = n;
+ 40 │     while left > 0 {
+ 41 │         LOOPED = left;
+ 42 │         left -= 1;
+ 43 │     }
+ 44 │ }
+ 45 │ 
+ 46 │ entry fn main() -> ! {
+ 47 │     first();
     ·     ───┬───
     ·        ╰── called here, outside `critical`
- 47 │     critical {
+ 48 │     critical {
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
@@ -76,27 +77,28 @@ analysis::unprotected-static
  36 │ }
  37 │ 
  38 │ fn spin(n: u32) {
- 39 │     LOOPED = n;
- 40 │     if n > 0 {
- 41 │         spin(n - 1);
- 42 │     }
- 43 │ }
- 44 │ 
- 45 │ entry fn main() -> ! {
- 46 │     first();
- 47 │     critical {
- 48 │         both();
- 49 │     }
- 50 │     both();
+ 39 │     let mut left: u32 = n;
+ 40 │     while left > 0 {
+ 41 │         LOOPED = left;
+ 42 │         left -= 1;
+ 43 │     }
+ 44 │ }
+ 45 │ 
+ 46 │ entry fn main() -> ! {
+ 47 │     first();
+ 48 │     critical {
+ 49 │         both();
+ 50 │     }
+ 51 │     both();
     ·     ───┬──
     ·        ╰── called here, outside `critical`
- 51 │     spin(3);
+ 52 │     spin(3);
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
 
   × `LOOPED` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_path.ers:39:5]
+    ╭─[shared_static_path.ers:41:9]
  20 │     BOTH = 0;
  21 │     LOOPED = 0;
     ·     ─────┬────
@@ -118,24 +120,25 @@ analysis::unprotected-static
  36 │ }
  37 │ 
  38 │ fn spin(n: u32) {
- 39 │     LOOPED = n;
-    ·     ─────┬────
-    ·          ╰── reached here, outside `critical`
- 40 │     if n > 0 {
- 41 │         spin(n - 1);
- 42 │     }
- 43 │ }
- 44 │ 
- 45 │ entry fn main() -> ! {
- 46 │     first();
- 47 │     critical {
- 48 │         both();
- 49 │     }
- 50 │     both();
- 51 │     spin(3);
+ 39 │     let mut left: u32 = n;
+ 40 │     while left > 0 {
+ 41 │         LOOPED = left;
+    ·         ──────┬──────
+    ·               ╰── reached here, outside `critical`
+ 42 │         left -= 1;
+ 43 │     }
+ 44 │ }
+ 45 │ 
+ 46 │ entry fn main() -> ! {
+ 47 │     first();
+ 48 │     critical {
+ 49 │         both();
+ 50 │     }
+ 51 │     both();
+ 52 │     spin(3);
     ·     ───┬───
     ·        ╰── called here, outside `critical`
- 52 │     MANY = 3;
+ 53 │     MANY = 3;
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
@@ -148,11 +151,11 @@ analysis::unprotected-static
     ·         ╰── the handler `tick` reaches it here
  16 │ }
     ╰────
-    ╭─[shared_static_path.ers:52:5]
- 51 │     spin(3);
- 52 │     MANY = 3;
+    ╭─[shared_static_path.ers:53:5]
+ 52 │     spin(3);
+ 53 │     MANY = 3;
     ·     ────┬───
     ·         ╰── reached here, outside `critical`
- 53 │     loop {}
+ 54 │     loop {}
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block

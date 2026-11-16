@@ -180,4 +180,27 @@ mod tests {
         let path = reach.path(&calls, BodyId(3));
         assert_eq!(path.iter().map(|c| c.callee.0).collect::<Vec<_>>(), [1, 3]);
     }
+
+    #[test]
+    fn a_cycle_ends_the_search_and_each_body_is_reached_once() {
+        // 0 calls 1; 1 calls 2 and itself; 2 calls 1 again and 3; 3 calls 0,
+        // the root. Every call back to a body already found adds nothing.
+        let calls = vec![
+            vec![call(1, false)],
+            vec![call(2, false), call(1, false)],
+            vec![call(1, false), call(3, false)],
+            vec![call(0, false)],
+        ];
+        for edges in [Edges::Calls, Edges::CallsAndPanics] {
+            let reach = Reach::search(&calls, &[BodyId(0)], edges, false);
+            assert_eq!(reach.order(), [BodyId(0), BodyId(1), BodyId(2), BodyId(3)]);
+            assert!((0..4).all(|b| reach.root(BodyId(b)) == Some(BodyId(0))));
+            let path = reach.path(&calls, BodyId(3));
+            assert_eq!(
+                path.iter().map(|c| c.callee.0).collect::<Vec<_>>(),
+                [1, 2, 3]
+            );
+            assert!(reach.path(&calls, BodyId(0)).is_empty());
+        }
+    }
 }

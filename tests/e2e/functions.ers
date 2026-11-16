@@ -1,5 +1,6 @@
 // The M1 goal program: UART output and exit through functions, plus
-// recursion and calls to functions declared later.
+// a loop that computes Fibonacci numbers and calls to functions declared
+// later.
 // expect-output: hi
 // expect-output: 012
 // expect-output: 55 89
@@ -29,7 +30,16 @@ entry fn main() -> ! {
 }
 
 fn fib(n: u32) -> u32 {
-    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+    let mut previous: u32 = 0;
+    let mut current: u32 = 1;
+    let mut i: u32 = 0;
+    while i < n {
+        let next: u32 = previous + current;
+        previous = current;
+        current = next;
+        i += 1;
+    }
+    previous
 }
 
 /// Prints a value below 100 without division (which arrives later).

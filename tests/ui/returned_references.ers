@@ -6,10 +6,10 @@
 // with no reference parameter, a shared reference to read-only static data (a
 // byte string, a `static`, an element of one, an `extern static` without
 // `mut`); an `extern fn`, an `#[export]` function and a `#[naked]` one.
-// Chaining, recursion, a method of a peripheral type that returns a cluster,
-// a getter of a part that is not copy, the result used as a place, an
-// argument and a `let`, and `counter`, which returns a reference made through
-// a raw pointer. Nothing here is reported.
+// Chaining, a loop that ends on a sub-slice, a method of a peripheral type that
+// returns a cluster, a getter of a part that is not copy, the result used as a
+// place, an argument and a `let`, and `counter`, which returns a reference made
+// through a raw pointer. Nothing here is reported.
 use core::arch::Vector;
 
 static TABLE: [u8; 4] = [1, 2, 3, 4];
@@ -123,7 +123,12 @@ fn same(r: &u32) -> &u32 {
 }
 
 fn last(s: &[u8]) -> &u8 {
-    if len(s) <= 1 { &s[0] } else { last(&s[1..]) }
+    let mut i: usize = 0;
+    while i + 1 < len(s) {
+        i += 1;
+    }
+    let tail: &[u8] = &s[i..];
+    &tail[0]
 }
 
 fn volatile_part(r: &mut volatile Ring) -> &mut volatile u8 {

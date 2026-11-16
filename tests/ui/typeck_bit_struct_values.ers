@@ -83,11 +83,15 @@ fn casts(l: Lcr, x: u8) -> u64 {
     made as u64 + from as u64 + control as u64 + byte as u64
 }
 
+fn same(l: Lcr) -> Lcr {
+    l
+}
+
 fn pass(l: Lcr) -> Lcr {
     let lines: [Lcr; 2] = [l, Lcr { dlab: true, .. }];
     let mut copy: [Lcr; 2] = lines;
     copy[1].dlab = false;
-    if lines[0].dlab { copy[0] } else { pass(copy[1]) }
+    if lines[0].dlab { copy[0] } else { same(copy[1]) }
 }
 
 fn sizes() -> usize {

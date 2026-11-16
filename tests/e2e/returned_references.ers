@@ -10,9 +10,10 @@
 //   "ring-buf" after the loop, "Ring-buF" after the two writes that follow,
 //   and `peek` with `head` at 1 reads the `i`, 105.
 // - A decoder that walks a buffer of messages (a length byte, then that many
-//   bytes) by recursion over `rest(s: &[u8], n: usize) -> &[u8]`: each call
-//   gets the tail of the slice it was given and holds the loan of the caller's
-//   `s`; `rest(&STREAM, 14)` is the empty slice at `len(s)`.
+//   bytes) in a loop over `rest(s: &[u8], n: usize) -> &[u8]`: each turn
+//   gets, in a new `let`, the tail of `s` from the offset of the next message
+//   and holds the loan of `s` until the turn ends; `rest(&STREAM, 14)` is the
+//   empty slice at `len(s)`.
 // - Panic reasons from `reason(r: core::PanicReason) -> &[u8]`, a function
 //   with no reference parameter that returns static data chosen by a value. It
 //   is called once by `main`, and by the panic function, which prints it.
@@ -68,16 +69,20 @@ fn rest(s: &[u8], n: usize) -> &[u8] {
 // Prints the messages in `s` and answers how many there were: the first byte
 // is the length of the first message, which `rest` skips along with it.
 fn walk(s: &[u8], index: u32) -> u32 {
-    if len(s) == 0 {
-        return index;
+    let mut at: usize = 0;
+    let mut count: u32 = index;
+    while at < len(s) {
+        let tail: &[u8] = rest(s, at);
+        let n: usize = tail[0] as usize;
+        print(&b"msg ");
+        print_u32(count + 1);
+        print(&b": ");
+        print(&tail[1..1 + n]);
+        print(&b"\n");
+        at += 1 + n;
+        count += 1;
     }
-    let n: usize = s[0] as usize;
-    print(&b"msg ");
-    print_u32(index + 1);
-    print(&b": ");
-    print(&s[1..1 + n]);
-    print(&b"\n");
-    walk(rest(s, 1 + n), index + 1)
+    count
 }
 
 fn reason(r: core::PanicReason) -> &[u8] {

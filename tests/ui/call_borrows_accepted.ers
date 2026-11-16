@@ -3,7 +3,7 @@
 // static under a `&` borrow of it; a write of one field under a borrow of
 // another; a borrow that ends before the call; a callee that reaches the
 // static only through its reference parameter, or through a raw pointer from a
-// `const`; an `extern fn` given a borrow; a recursion over a reference to a
+// `const`; an `extern fn` given a borrow; a loop over a reference to a
 // static; a callee with a check whose panic function writes the lent static;
 // a body holding `&mut S` with a check of its own and such a panic function;
 // `f(&TABLE)` with `f` passing `sym TABLE`.
@@ -40,10 +40,11 @@ fn through_pointer(r: &mut u32) {
     *r += 1;
 }
 
-fn recurse(r: &mut u32, n: u32) {
-    if n != 0 {
+fn repeat(r: &mut u32, n: u32) {
+    let mut left: u32 = n;
+    while left != 0 {
         *r += 1;
-        recurse(r, n - 1);
+        left -= 1;
     }
 }
 
@@ -61,7 +62,7 @@ fn lend() {
     only_through(&mut COUNT);
     through_pointer(&mut COUNT);
     unsafe { outside(&mut COUNT); }
-    recurse(&mut COUNT, 3);
+    repeat(&mut COUNT, 3);
     passes_sym(&TABLE);
 }
 
