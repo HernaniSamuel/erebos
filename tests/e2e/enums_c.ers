@@ -48,11 +48,11 @@ fn print_u64(n: u64) {
 }
 
 entry fn main() -> ! {
-    let mode: Mode = c_next_mode(Mode::Idle);
+    let mode: Mode = unsafe { c_next_mode(Mode::Idle) };
     print(&b"mode ");
     print_u64(mode as u64);
     putc(b'\n');
-    let level: Level = c_same_level(Level::Low);
+    let level: Level = unsafe { c_same_level(Level::Low) };
     if level != Level::Low {
         exit(2);
     }
@@ -60,13 +60,13 @@ entry fn main() -> ! {
     print_i64(level as i64);
     putc(b'\n');
     print(&b"c sees ");
-    print_i64(c_level_as_int(Level::Low) as i64);
+    print_i64(unsafe { c_level_as_int(Level::Low) } as i64);
     putc(b'\n');
     print(&b"from c ");
-    print_u64(c_calls_erebos() as u64);
+    print_u64(unsafe { c_calls_erebos() } as u64);
     putc(b'\n');
     print(&b"c gets ");
-    print_i64(c_level_from_erebos() as i64);
+    print_i64(unsafe { c_level_from_erebos() } as i64);
     putc(b'\n');
     exit(0)
 }

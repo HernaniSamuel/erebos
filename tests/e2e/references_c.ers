@@ -41,14 +41,14 @@ fn print_u32(n: u32) {
 
 // `acc` is lent to the first call and to the second.
 fn add_twice(acc: &mut u32, p: &Pair) {
-    c_add_pair(acc, p);
-    c_add_pair(acc, p);
+    unsafe { c_add_pair(acc, p); }
+    unsafe { c_add_pair(acc, p); }
 }
 
 entry fn main() -> ! {
     let mut total: u32 = 10;
     let pair: Pair = Pair { a: 3, b: 4 };
-    print_u32(c_add_pair(&mut total, &pair));
+    print_u32(unsafe { c_add_pair(&mut total, &pair) });
     putc(b' ');
     print_u32(total);
     putc(b'\n');
@@ -59,13 +59,13 @@ entry fn main() -> ! {
 
     let mut out: u32 = 0;
     let input: u32 = 5;
-    c_forward(&mut out, &input);
+    unsafe { c_forward(&mut out, &input); }
     print_u32(out);
     putc(b' ');
     print_u32(input);
     putc(b'\n');
 
-    print_u32(c_roundtrip(7));
+    print_u32(unsafe { c_roundtrip(7) });
     putc(b' ');
     print_u32(pair.a + pair.b);
     putc(b'\n');

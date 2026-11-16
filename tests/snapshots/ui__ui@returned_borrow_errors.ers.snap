@@ -92,12 +92,12 @@ analysis::returned-borrow
 analysis::returned-borrow
 
   × cannot return a reference to `OUTSIDE`, an `extern static mut`
-    ╭─[returned_borrow_errors.ers:76:5]
+    ╭─[returned_borrow_errors.ers:76:14]
  75 │ fn extern_static_mut() -> &u32 {
- 76 │     &OUTSIDE
-    ·     ────┬───┬
-    ·         │   ╰── returned here
-    ·         ╰── `OUTSIDE` is borrowed here
+ 76 │     unsafe { &OUTSIDE }
+    ·     ─────────┬─────────┬
+    ·              │         ╰── `OUTSIDE` is borrowed here
+    ·              ╰── returned here
  77 │ }
     ╰────
   help: a returned reference cannot borrow a `static mut`: borrow it in the caller and pass the

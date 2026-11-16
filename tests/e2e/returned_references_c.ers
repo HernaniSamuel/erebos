@@ -59,17 +59,17 @@ fn print_u32(value: u32) {
 
 entry fn main() -> ! {
     print(&b"tail ");
-    print_u32(c_tail_len());
+    print_u32(unsafe { c_tail_len() });
     print(&b", first ");
-    print_u32(c_tail_first());
+    print_u32(unsafe { c_tail_first() });
     print(&b", inside ");
-    print_u32(c_tail_inside());
+    print_u32(unsafe { c_tail_inside() });
     putc(b'\n');
 
     print(&b"empty ");
-    print_u32(c_empty_len());
+    print_u32(unsafe { c_empty_len() });
     print(&b", inside ");
-    print_u32(c_empty_inside());
+    print_u32(unsafe { c_empty_inside() });
     putc(b'\n');
 
     let tail: &[u8] = erebos_tail(&BYTES, 3);

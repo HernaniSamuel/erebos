@@ -66,15 +66,15 @@ fn print_u32(n: u32) {
 }
 
 entry fn main() -> ! {
-    print_u32(erebos_sum(3, 4));
+    print_u32(unsafe { erebos_sum(3, 4) });
     putc(b' ');
-    print_u32(scale(5));
+    print_u32(unsafe { scale(5) });
     putc(b' ');
-    print_u32(plus_two(40));
+    print_u32(unsafe { plus_two(40) });
     putc(b' ');
-    print_u32(sum3(1, 2, 3));
+    print_u32(unsafe { sum3(1, 2, 3) });
     putc(b' ');
-    print_u32(c_sum_plus_one(10, 20));
+    print_u32(unsafe { c_sum_plus_one(10, 20) });
     putc(b'\n');
     exit(0)
 }

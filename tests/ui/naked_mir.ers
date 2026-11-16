@@ -19,9 +19,9 @@ fn constant() {
 }
 
 entry fn main() -> ! {
-    statement(1);
-    tail(2);
-    constant();
+    unsafe { statement(1); }
+    unsafe { tail(2); }
+    unsafe { constant(); }
     loop {}
 }
 

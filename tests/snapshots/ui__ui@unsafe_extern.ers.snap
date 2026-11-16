@@ -1,0 +1,301 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_extern.ers
+---
+--- typeck ---
+struct Pair { a: u32 at 0, b: u32 at 4 } size 8, align 4
+struct Reg { n: u32 at 0 } size 4, align 4
+extern fn c_add(a: u32, b: u32) -> u32
+extern fn c_sum(s: &[u8]) -> u32
+extern fn c_poke(p: &mut u32) -> ()
+extern fn c_noop() -> ()
+extern fn device::c_ready() -> bool
+fn Reg::get(self: &Reg) -> u32
+    expr 0 field n 938..944: u32
+    expr 1 local self 938..942: &Reg, dereferenced
+fn Reg::set(self: &mut Reg, n: u32) -> ()
+    expr 2 assign 992..1002: ()
+    expr 3 field n 992..998: u32
+    expr 4 local self 992..996: &mut Reg, dereferenced
+    expr 5 local n 1001..1002: u32
+fn Reg::take(self: Reg) -> u32
+    expr 6 field n 1046..1052: u32
+    expr 7 local self 1046..1050: Reg
+naked fn Reg::flush(self: &Reg) -> ()
+    expr 8 asm 1103..1132: !
+naked fn naked_sum(a: u32, b: u32) -> u32
+    expr 9 asm 1193..1240: !
+naked fn naked_exported(a: u32) -> u32
+    expr 10 asm 1302..1349: !
+naked fn naked_jumps() -> ()
+    expr 11 asm 1501..1551: !
+naked fn naked_jumps_to_c() -> ()
+    expr 12 asm 1592..1639: !
+naked fn naked_unsafe() -> ()
+    expr 13 asm 1683..1712: !
+fn calls(buffer: &[u8], slot: &mut u32) -> u32
+    let a: u32
+    let b: u32
+    let c: bool
+    expr 14 unsafe 2054..2076: u32
+    expr 15 call 2063..2074: u32
+    expr 16 int 1 2069..2070: u32
+    expr 17 int 2 2072..2073: u32
+    expr 18 unsafe 2095..2119: u32
+    expr 19 call 2104..2117: u32
+    expr 20 local buffer 2110..2116: &[u8]
+    expr 21 unsafe 2125..2179: ()
+    expr 22 call 2142..2154: ()
+    expr 23 local slot 2149..2153: &mut u32
+    expr 24 call 2164..2172: ()
+    expr 25 unsafe 2198..2226: bool
+    expr 26 call 2207..2224: bool
+    expr 27 binary + 2232..2248: u32
+    expr 28 binary + 2232..2237: u32
+    expr 29 local a 2232..2233: u32
+    expr 30 local b 2236..2237: u32
+    expr 31 as u32 2240..2248: u32
+    expr 32 local c 2240..2241: bool
+fn naked_calls(reg: &Reg) -> u32
+    let a: u32
+    let b: u32
+    expr 33 unsafe 2304..2330: u32
+    expr 34 call 2313..2328: u32
+    expr 35 int 1 2323..2324: u32
+    expr 36 int 2 2326..2327: u32
+    expr 37 unsafe 2349..2377: u32
+    expr 38 call 2358..2375: u32
+    expr 39 int 3 2373..2374: u32
+    expr 40 unsafe 2383..2442: ()
+    expr 41 call 2400..2414: ()
+    expr 42 method Reg::flush (&self) 2424..2435: ()
+    expr 43 local reg 2424..2427: &Reg, dereferenced
+    expr 44 binary + 2447..2452: u32
+    expr 45 local a 2447..2448: u32
+    expr 46 local b 2451..2452: u32
+fn together(buffer: &[u8]) -> u32
+    expr 47 unsafe 2558..2616: u32
+    expr 48 binary + 2567..2614: u32
+    expr 49 call 2567..2596: u32
+    expr 50 static c_count 2573..2580: u32
+    expr 51 call 2582..2595: u32
+    expr 52 local buffer 2588..2594: &[u8]
+    expr 53 call 2599..2614: u32
+    expr 54 int 1 2609..2610: u32
+    expr 55 int 2 2612..2613: u32
+fn arguments() -> u32
+    expr 56 unsafe 2721..2768: u32
+    expr 57 call 2730..2766: u32
+    expr 58 unsafe 2736..2762: u32
+    expr 59 call 2745..2760: u32
+    expr 60 int 1 2755..2756: u32
+    expr 61 int 2 2758..2759: u32
+    expr 62 int 3 2764..2765: u32
+fn statics() -> u32
+    let read: u32
+    let element: u16
+    let field: u32
+    let cell: u8
+    let base: u32
+    expr 63 unsafe 2814..2832: u32
+    expr 64 static c_count 2823..2830: u32
+    expr 65 unsafe 2838..2895: ()
+    expr 66 assign 2855..2866: ()
+    expr 67 static c_count 2855..2862: u32
+    expr 68 int 1 2865..2866: u32
+    expr 69 assign += 2876..2888: ()
+    expr 70 static c_count 2876..2883: u32
+    expr 71 int 2 2887..2888: u32
+    expr 72 unsafe 2919..2940: u16
+    expr 73 index 2928..2938: u16
+    expr 74 static c_table 2928..2935: [u16; 4]
+    expr 75 int 1 2936..2937: usize
+    expr 76 unsafe 2963..2982: u32
+    expr 77 field a 2972..2980: u32
+    expr 78 static c_pair 2972..2978: Pair
+    expr 79 unsafe 2988..3082: ()
+    expr 80 assign 3005..3017: ()
+    expr 81 field b 3005..3013: u32
+    expr 82 static c_pair 3005..3011: Pair
+    expr 83 int 5 3016..3017: u32
+    expr 84 assign += 3027..3047: ()
+    expr 85 field b 3027..3035: u32
+    expr 86 static c_pair 3027..3033: Pair
+    expr 87 field a 3039..3047: u32
+    expr 88 static c_pair 3039..3045: Pair
+    expr 89 assign 3057..3075: ()
+    expr 90 index 3057..3071: u8
+    expr 91 index 3057..3068: [u8; 2]
+    expr 92 static c_matrix 3057..3065: [[u8; 2]; 3]
+    expr 93 int 1 3066..3067: usize
+    expr 94 int 0 3069..3070: usize
+    expr 95 int 7 3074..3075: u8
+    expr 96 unsafe 3102..3127: u8
+    expr 97 index 3111..3125: u8
+    expr 98 index 3111..3122: [u8; 2]
+    expr 99 static c_matrix 3111..3119: [[u8; 2]; 3]
+    expr 100 int 2 3120..3121: usize
+    expr 101 int 1 3123..3124: usize
+    expr 102 unsafe 3149..3174: u32
+    expr 103 static device::c_base 3158..3172: u32
+    expr 104 binary + 3180..3230: u32
+    expr 105 binary + 3180..3223: u32
+    expr 106 binary + 3180..3209: u32
+    expr 107 binary + 3180..3201: u32
+    expr 108 local read 3180..3184: u32
+    expr 109 as u32 3187..3201: u32
+    expr 110 local element 3187..3194: u16
+    expr 111 local field 3204..3209: u32
+    expr 112 as u32 3212..3223: u32
+    expr 113 local cell 3212..3216: u8
+    expr 114 local base 3226..3230: u32
+fn borrows() -> u32
+    let r: &u32
+    let m: &mut u32
+    let t: &u16
+    let p: &mut u32
+    expr 115 unsafe 3274..3293: &u32
+    expr 116 & 3283..3291: &u32
+    expr 117 static c_count 3284..3291: u32
+    expr 118 unsafe 3317..3340: &mut u32
+    expr 119 &mut 3326..3338: &mut u32
+    expr 120 static c_count 3331..3338: u32
+    expr 121 unsafe 3360..3382: &u16
+    expr 122 & 3369..3380: &u16
+    expr 123 index 3370..3380: u16
+    expr 124 static c_table 3370..3377: [u16; 4]
+    expr 125 int 3 3378..3379: usize
+    expr 126 unsafe 3406..3430: &mut u32
+    expr 127 &mut 3415..3428: &mut u32
+    expr 128 field a 3420..3428: u32
+    expr 129 static c_pair 3420..3426: Pair
+    expr 130 assign 3436..3460: ()
+    expr 131 deref 3436..3438: u32
+    expr 132 local m 3437..3438: &mut u32
+    expr 133 binary + 3441..3460: u32
+    expr 134 binary + 3441..3455: u32
+    expr 135 deref 3441..3443: u32
+    expr 136 local r 3442..3443: &u32
+    expr 137 as u32 3446..3455: u32
+    expr 138 deref 3446..3448: u16
+    expr 139 local t 3447..3448: &u16
+    expr 140 deref 3458..3460: u32
+    expr 141 local p 3459..3460: &mut u32
+    expr 142 int 0 3466..3467: u32
+fn receivers() -> u32
+    expr 143 unsafe 3573..3644: u32
+    expr 144 method Reg::set (&mut self) 3590..3602: ()
+    expr 145 static c_reg 3590..3595: Reg
+    expr 146 int 3 3600..3601: u32
+    expr 147 binary + 3612..3638: u32
+    expr 148 method Reg::get (&self) 3612..3623: u32
+    expr 149 static c_reg 3612..3617: Reg
+    expr 150 method Reg::take (self) 3626..3638: u32
+    expr 151 static c_reg 3626..3631: Reg
+fn addresses() -> usize
+    let a: *const u32
+    let b: *mut u32
+    let c: *const u16
+    let d: *const [u16; 4]
+    let e: *mut u32
+    let f: *mut u8
+    let g: *const u32
+    expr 152 &raw const 3751..3769: *const u32
+    expr 153 static c_count 3762..3769: u32
+    expr 154 &raw mut 3793..3809: *mut u32
+    expr 155 static c_count 3802..3809: u32
+    expr 156 &raw const 3835..3856: *const u16
+    expr 157 index 3846..3856: u16
+    expr 158 static c_table 3846..3853: [u16; 4]
+    expr 159 int 1 3854..3855: usize
+    expr 160 &raw const 3887..3905: *const [u16; 4]
+    expr 161 static c_table 3898..3905: [u16; 4]
+    expr 162 &raw mut 3929..3946: *mut u32
+    expr 163 field a 3938..3946: u32
+    expr 164 static c_pair 3938..3944: Pair
+    expr 165 &raw mut 3969..3992: *mut u8
+    expr 166 index 3978..3992: u8
+    expr 167 index 3978..3989: [u8; 2]
+    expr 168 static c_matrix 3978..3986: [[u8; 2]; 3]
+    expr 169 int 1 3987..3988: usize
+    expr 170 int 1 3990..3991: usize
+    expr 171 &raw const 4018..4043: *const u32
+    expr 172 static device::c_base 4029..4043: u32
+    expr 173 binary + 4049..4137: usize
+    expr 174 binary + 4049..4124: usize
+    expr 175 binary + 4049..4111: usize
+    expr 176 binary + 4049..4098: usize
+    expr 177 binary + 4049..4085: usize
+    expr 178 binary + 4049..4072: usize
+    expr 179 as usize 4049..4059: usize
+    expr 180 local a 4049..4050: *const u32
+    expr 181 as usize 4062..4072: usize
+    expr 182 local b 4062..4063: *mut u32
+    expr 183 as usize 4075..4085: usize
+    expr 184 local c 4075..4076: *const u16
+    expr 185 as usize 4088..4098: usize
+    expr 186 local d 4088..4089: *const [u16; 4]
+    expr 187 as usize 4101..4111: usize
+    expr 188 local e 4101..4102: *mut u32
+    expr 189 as usize 4114..4124: usize
+    expr 190 local f 4114..4115: *mut u8
+    expr 191 as usize 4127..4137: usize
+    expr 192 local g 4127..4128: *const u32
+fn symbols() -> ()
+    expr 193 unsafe 4202..4337: ()
+    expr 194 asm 4219..4271: ()
+    expr 195 asm 4281..4330: ()
+fn in_an_unsafe_fn() -> u32
+    expr 196 unsafe 4452..4484: u32
+    expr 197 binary + 4461..4482: u32
+    expr 198 call 4461..4472: u32
+    expr 199 int 1 4467..4468: u32
+    expr 200 int 2 4470..4471: u32
+    expr 201 static c_count 4475..4482: u32
+entry fn main() -> !
+    expr 202 loop 4515..4522: !
+panic fn on_panic() -> !
+    expr 203 loop 4557..4564: !
+fn bound_and_length() -> usize
+    let p: *const u16
+    expr 204 unsafe 4857..4904: *const u16
+    expr 205 &raw const 4866..4902: *const u16
+    expr 206 index 4877..4902: u16
+    expr 207 static c_table 4877..4884: [u16; 4]
+    expr 208 as usize 4885..4901: usize
+    expr 209 static c_count 4885..4892: u32
+    expr 210 unsafe 4910..4933: usize
+    expr 211 len 4919..4931: usize
+    expr 212 static c_slice 4923..4930: *const [u16]
+fn asm_operands() -> ()
+    expr 213 unsafe 5130..5481: ()
+    expr 214 asm 5147..5177: ()
+    expr 215 static c_count 5169..5176: u32
+    expr 216 asm 5187..5218: ()
+    expr 217 static c_count 5210..5217: u32
+    expr 218 asm 5228..5263: ()
+    expr 219 static c_count 5255..5262: u32
+    expr 220 asm 5273..5306: ()
+    expr 221 static c_count 5298..5305: u32
+    expr 222 asm 5316..5361: ()
+    expr 223 as u32 5341..5349: u32
+    expr 224 int 1 5341..5342: u32
+    expr 225 static c_count 5353..5360: u32
+    expr 226 asm 5371..5409: ()
+    expr 227 static c_count 5396..5403: u32
+    expr 228 asm 5419..5474: ()
+    expr 229 field a 5445..5453: u32
+    expr 230 static c_pair 5445..5451: Pair
+    expr 231 index 5463..5473: u16
+    expr 232 static c_table 5463..5470: [u16; 4]
+    expr 233 int 1 5471..5472: usize
+comptime fn TABLE_THIRD() -> *const u16
+    expr 234 &raw const 1919..1940: *const u16
+    expr 235 index 1930..1940: u16
+    expr 236 static c_table 1930..1937: [u16; 4]
+    expr 237 int 2 1938..1939: usize
+comptime fn PAIR_B() -> *mut u32
+    expr 238 &raw mut 1968..1985: *mut u32
+    expr 239 field b 1977..1985: u32
+    expr 240 static c_pair 1977..1983: Pair

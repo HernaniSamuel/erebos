@@ -12,13 +12,13 @@ static mut LOCAL: u32 = 0;
 static AFTER_END: *const u8 = &raw const (&raw const LINKER_END as *const u8)[16];
 static ENTRY: *const u32 = &raw const CRC_TABLE[2];
 
-const READ: u32 = CRC_TABLE[0];
+const READ: u32 = unsafe { CRC_TABLE[0] };
 const WRITE: u32 = write();
 const TWO_EXTERNS: bool = &raw const CRC_TABLE as *const u8 == &raw const LINKER_END;
 const WITH_STATIC: bool = &raw mut RX_COUNT == &raw mut LOCAL;
 
 fn write() -> u32 {
-    RX_COUNT = 1;
+    unsafe { RX_COUNT = 1; }
     0
 }
 

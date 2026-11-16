@@ -19,7 +19,7 @@ entry fn main() -> ! {
     aligned();
     plain();
     one();
-    naked_ret();
+    unsafe { naked_ret(); }
     loop {}
 }
 

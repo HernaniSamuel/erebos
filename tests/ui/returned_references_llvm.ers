@@ -80,7 +80,7 @@ fn greeting_length() -> usize {
 }
 
 fn through_extern(p: &u32, s: &[u8]) -> usize {
-    *imported_word(p) as usize + len(imported_slice(s))
+    *unsafe { imported_word(p) } as usize + len(unsafe { imported_slice(s) })
 }
 
 entry fn main() -> ! { loop {} }

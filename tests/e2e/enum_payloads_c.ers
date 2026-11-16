@@ -144,16 +144,16 @@ fn show_big(x: Big) {
 }
 
 entry fn main() -> ! {
-    show_one(c_one(One::B(3, 5)));
-    show_one(c_one(One::A));
-    show_pair(c_pair(Pair::B(0x1234_0078)));
-    show_pair(c_pair(Pair::C(1, 2)));
-    show_long(c_long(Long::A));
-    show_long(c_long(Long::B(())));
-    show_big(c_big(Big::B(8, 9)));
-    show_big(c_big(Big::C(5)));
+    show_one(unsafe { c_one(One::B(3, 5)) });
+    show_one(unsafe { c_one(One::A) });
+    show_pair(unsafe { c_pair(Pair::B(0x1234_0078)) });
+    show_pair(unsafe { c_pair(Pair::C(1, 2)) });
+    show_long(unsafe { c_long(Long::A) });
+    show_long(unsafe { c_long(Long::B(())) });
+    show_big(unsafe { c_big(Big::B(8, 9)) });
+    show_big(unsafe { c_big(Big::C(5)) });
     print(&b"from c");
-    field(c_calls_erebos() as u64);
+    field(unsafe { c_calls_erebos() } as u64);
     putc(b'\n');
     exit(0)
 }

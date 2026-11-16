@@ -5,8 +5,8 @@ extern fn c_add(a: u32, b: u32) -> u32;
 extern fn c_reset();
 
 fn twice(x: u32) -> u32 {
-    c_reset();
-    c_add(x, x)
+    unsafe { c_reset(); }
+    unsafe { c_add(x, x) }
 }
 
 entry fn main() -> ! { loop {} }

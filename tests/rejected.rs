@@ -1114,7 +1114,7 @@ fn injected_f(mut injected_t: InjLinear5) {
         "eval::extern-call",
         Mir,
         Items,
-        "extern fn injected_x() -> u32;\nconst INJ_C: u32 = comptime { injected_x() };"
+        "extern fn injected_x() -> u32;\nconst INJ_C: u32 = comptime { unsafe { injected_x() } };"
     ),
     s!(
         "eval::static-mut",
@@ -1126,7 +1126,7 @@ fn injected_f(mut injected_t: InjLinear5) {
         "eval::extern-static",
         Mir,
         Items,
-        "extern static INJ_S: u32;\nconst INJ_C: u32 = comptime { INJ_S };"
+        "extern static INJ_S: u32;\nconst INJ_C: u32 = comptime { unsafe { INJ_S } };"
     ),
     s!(
         "eval::read-only-write",

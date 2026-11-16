@@ -20,7 +20,7 @@ fn print_u32(n: u32) {
 }
 
 entry fn main() -> ! {
-    print_u32(c_debug(3));
+    print_u32(unsafe { c_debug(3) });
     putc(b'\n');
     exit(0)
 }

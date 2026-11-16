@@ -567,7 +567,7 @@ fn link_failure_other() {
 extern fn missing(x: u32) -> u32;
 
 entry fn main() -> ! {
-    let x: u32 = missing(1);
+    let x: u32 = unsafe { missing(1) };
     loop {}
 }
 panic fn on_panic() -> ! { loop {} }
@@ -815,7 +815,7 @@ fn naked_aligned() {{
 entry fn main() -> ! {{
     aligned(1);
     unaligned(1);
-    naked_aligned();
+    unsafe {{ naked_aligned(); }}
     loop {{}}
 }}
 
@@ -878,8 +878,8 @@ fn next() {{
 }}
 
 entry fn main() -> ! {{
-    pad();
-    next();
+    unsafe {{ pad(); }}
+    unsafe {{ next(); }}
     loop {{}}
 }}
 
@@ -1621,7 +1621,7 @@ static mut OUT: u64 = 0;
 entry fn main() -> ! {{
     let mut u: u64 = 0;
     let mut s: i64 = 0;
-    OUT = c_udivmod(7, 2, &raw mut u) + c_sdivmod(7, 2, &raw mut s) as u64;
+    OUT = unsafe {{ c_udivmod(7, 2, &raw mut u) + c_sdivmod(7, 2, &raw mut s) as u64 }};
     loop {{}}
 }}
 

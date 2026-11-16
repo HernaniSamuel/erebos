@@ -73,37 +73,38 @@ fn timer::uses(m: uart::Mode) -> u8
     expr 37 align_of(uart::regs::Block) 2249..2283: usize
     expr 38 variant uart::Mode::Run 2324..2353: uart::Mode
     expr 39 const timer::SMALL 2347..2352: u8
-    expr 40 binary + 2380..2396: u32
-    expr 41 static timer::TICKS 2380..2385: u32
-    expr 42 call 2388..2396: u32
-    expr 43 match 2406..2592: u8
-    expr 44 local m 2412..2413: uart::Mode
-    expr 45 call 2454..2467: u8
-    expr 46 int 1 2528..2529: u8
-    expr 47 local x 2580..2581: u8
+    expr 40 unsafe 2380..2407: u32
+    expr 41 binary + 2389..2405: u32
+    expr 42 static timer::TICKS 2389..2394: u32
+    expr 43 call 2397..2405: u32
+    expr 44 match 2417..2603: u8
+    expr 45 local m 2423..2424: uart::Mode
+    expr 46 call 2465..2478: u8
+    expr 47 int 1 2539..2540: u8
+    expr 48 local x 2591..2592: u8
 comptime fn LIMIT() -> u32
-    expr 48 binary + 527..566: u32
-    expr 49 as u32 527..550: u32
-    expr 50 const uart::regs::BASE 527..543: usize
-    expr 51 const timer::PERIOD 553..566: u32
+    expr 49 binary + 527..566: u32
+    expr 50 as u32 527..550: u32
+    expr 51 const uart::regs::BASE 527..543: usize
+    expr 52 const timer::PERIOD 553..566: u32
 comptime fn uart::MODE() -> uart::Mode
-    expr 52 variant uart::Mode::Off 932..941: uart::Mode
+    expr 53 variant uart::Mode::Off 932..941: uart::Mode
 comptime fn uart::regs::BASE() -> usize
-    expr 53 int 268435456 1276..1287: usize
+    expr 54 int 268435456 1276..1287: usize
 comptime fn timer::PERIOD() -> u32
-    expr 54 int 10 1672..1674: u32
+    expr 55 int 10 1672..1674: u32
 comptime fn timer::SMALL() -> u8
-    expr 55 int 2 1698..1699: u8
+    expr 56 int 2 1698..1699: u8
 comptime fn COUNT() -> u32
-    expr 56 int 0 592..593: u32
+    expr 57 int 0 592..593: u32
 comptime fn uart::LAST() -> Option(uart::Mode)
-    expr 57 variant .None (Option(uart::Mode)::None) 983..988: Option(uart::Mode)
+    expr 58 variant .None (Option(uart::Mode)::None) 983..988: Option(uart::Mode)
 comptime fn comptime() -> ()
-    expr 58 assert 1197..1220: ()
-    expr 59 binary != 1204..1219: bool
-    expr 60 const uart::regs::BASE 1204..1214: usize
-    expr 61 int 0 1218..1219: usize
+    expr 59 assert 1197..1220: ()
+    expr 60 binary != 1204..1219: bool
+    expr 61 const uart::regs::BASE 1204..1214: usize
+    expr 62 int 0 1218..1219: usize
 comptime fn uart::Mode::Off() -> u8
-    expr 62 int 0 888..889: u8
+    expr 63 int 0 888..889: u8
 comptime fn uart::Mode::Run() -> u8
-    expr 63 int 1 901..902: u8
+    expr 64 int 1 901..902: u8

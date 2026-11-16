@@ -55,9 +55,9 @@ fn parts() {
     let e: &u32 = &TABLE[3];
     sum(&TABLE[2..6]);
     clear(&mut TABLE[0..4]);
-    take(&OUTSIDE);
-    add(&mut OUTSIDE);
-    sum(&OUTSIDE_TABLE[1..3]);
+    take(unsafe { &OUTSIDE });
+    add(unsafe { &mut OUTSIDE });
+    sum(unsafe { &OUTSIDE_TABLE[1..3] });
 }
 
 // A shared static, borrowed inside `critical` and lent to functions that name

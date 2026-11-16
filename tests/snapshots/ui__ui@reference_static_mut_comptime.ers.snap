@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/reference_static_mut_comptime.ers
 ---
@@ -62,7 +61,7 @@ eval::extern-static
  12 │ 
     ╰────
     ╭─[reference_static_mut_comptime.ers:26:5]
- 25 │     let r: &u32 = &OUTSIDE;
+ 25 │     let r: &u32 = unsafe { &OUTSIDE };
  26 │     *r
     ·     ─┬
     ·      ╰── read here

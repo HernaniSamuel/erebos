@@ -31,11 +31,11 @@ eval::step-limit
 eval::extern-call
 
   × `c_function` is an `extern fn`, which cannot run at compile time
-   ╭─[eval_errors.ers:8:21]
+   ╭─[eval_errors.ers:8:30]
  7 │ const DEVICE: u8 = read_uart();
- 8 │ const C_CODE: u32 = c_function();
-   ·       ───┬──        ──────┬─────
-   ·          │                ╰── called here
+ 8 │ const C_CODE: u32 = unsafe { c_function() };
+   ·       ───┬──                 ──────┬─────
+   ·          │                         ╰── called here
    ·          ╰── while evaluating the constant `C_CODE`
  9 │ const PADDING: u32 = padding();
    ╰────
@@ -94,7 +94,7 @@ eval::volatile-access
    ·       ───┬──       ─────┬─────
    ·          │              ╰── called here
    ·          ╰── while evaluating the constant `DEVICE`
- 8 │ const C_CODE: u32 = c_function();
+ 8 │ const C_CODE: u32 = unsafe { c_function() };
    ╰────
     ╭─[eval_errors.ers:29:5]
  28 │     let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
@@ -108,7 +108,7 @@ eval::uninit-read
 
   × these bytes were never written
     ╭─[eval_errors.ers:9:7]
-  8 │ const C_CODE: u32 = c_function();
+  8 │ const C_CODE: u32 = unsafe { c_function() };
   9 │ const PADDING: u32 = padding();
     ·       ───┬───        ────┬────
     ·          │               ╰── called here

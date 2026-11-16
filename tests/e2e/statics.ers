@@ -71,10 +71,10 @@ entry fn main() -> ! {
         putc(b'\n');
     }
 
-    c_double_shared();
+    unsafe { c_double_shared(); }
     let doubled: u32 = SHARED;
     SHARED = 7;
-    print_pair(doubled, c_read_shared());
+    print_pair(doubled, unsafe { c_read_shared() });
     exit(0)
 }
 

@@ -21,7 +21,7 @@ mod uart {
     extern static mut c_counter: u32;
 
     pub fn init() -> u32 {
-        c_checksum(c_counter) + BASE
+        unsafe { c_checksum(c_counter) + BASE }
     }
 
     #[export]

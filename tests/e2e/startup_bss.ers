@@ -29,7 +29,7 @@ entry fn main() -> ! {
         INITIAL = 3;
         putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b' ');
         putc(b'r'); putc(b'u'); putc(b'n'); putc(b'\n');
-        c_restart();
+        unsafe { c_restart(); }
         exit(2)
     }
     if COUNTER != 0 || TABLE[4] != 0 || INITIAL != 17 {

@@ -1,0 +1,208 @@
+// emit: typeck
+// A call to an `extern fn` or a `#[naked]` function, and a read, write or
+// borrow of an `extern static` or of a part of one, outside an `unsafe` block
+// are `ty::unsafe-required` (ADR 0119), one error for each, and the label
+// says which: an `extern fn` taking references included (ADR 0105), a
+// method, an `unsafe fn` that is also `#[naked]` (reported as an `unsafe fn`),
+// a call in the body of an `unsafe fn` (which is not a block), in `critical`
+// (which is not one either), in a `const` initializer and an array length. An
+// expression with two operations gives two errors. `&raw const` and `&raw
+// mut` of an `extern static` are not operations, so a block holding only
+// those is `ty::unused-unsafe`. An operation whose operand is already in
+// error is reported for that error only, and counts as unsafe for the block
+// around it.
+extern fn c_add(a: u32, b: u32) -> u32;
+extern fn c_sum(s: &[u8]) -> u32;
+extern fn c_noop();
+extern fn c_len() -> usize;
+
+mod device {
+    pub extern fn c_ready() -> bool;
+}
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+#[copy]
+struct Reg {
+    n: u32,
+}
+
+impl Reg {
+    fn get(&self) -> u32 {
+        self.n
+    }
+
+    fn take(self) -> u32 {
+        self.n
+    }
+
+    #[naked]
+    fn flush(&self) {
+        asm("ret", options(noreturn))
+    }
+}
+
+#[naked]
+fn naked_sum(a: u32, b: u32) -> u32 {
+    asm("add a0, a0, a1", "ret", options(noreturn))
+}
+
+#[naked]
+unsafe fn naked_unsafe() {
+    asm("ret", options(noreturn))
+}
+
+extern static c_table: [u16; 4];
+extern static mut c_count: u32;
+extern static mut c_pair: Pair;
+extern static mut c_reg: Reg;
+extern static c_ref: &u32;
+
+fn calls(buffer: &[u8]) -> u32 {
+    let a: u32 = c_add(1, 2);
+    let b: u32 = c_sum(buffer);
+    c_noop();
+    let c: bool = device::c_ready();
+    a + b + c as u32
+}
+
+fn naked_calls(reg: &Reg) -> u32 {
+    let a: u32 = naked_sum(1, 2);
+    naked_unsafe();
+    reg.flush();
+    a
+}
+
+// The first is covered, the second is not.
+fn beside_a_block() {
+    unsafe {
+        c_noop();
+    }
+    c_noop();
+}
+
+// Three operations, three errors: the call, and the two in its arguments.
+fn three_in_one() -> u32 {
+    c_add(naked_sum(1, 2), c_count)
+}
+
+fn statics() -> u32 {
+    let read: u32 = c_count;
+    c_count = 1;
+    c_count += 2;
+    let element: u16 = c_table[1];
+    let field: u32 = c_pair.a;
+    c_pair.b = 5;
+    read + element as u32 + field
+}
+
+fn borrows() {
+    let r: &u32 = &c_count;
+    let m: &mut u32 = &mut c_count;
+    let t: &u16 = &c_table[3];
+    let p: &mut u32 = &mut c_pair.a;
+}
+
+// A method whose receiver is borrowed (`&self`) or copied (`self`).
+fn receivers() -> u32 {
+    c_reg.get() + c_reg.take()
+}
+
+// A `sym` operand is no call: the only error is the `asm`'s own.
+fn symbols() {
+    asm("call {f}", f = sym naked_sum, clobber_abi("C"));
+    asm("call {f}", f = sym c_noop, clobber_abi("C"));
+}
+
+unsafe fn in_an_unsafe_fn() -> u32 {
+    c_add(1, 2) + c_count
+}
+
+fn in_critical() {
+    critical {
+        c_noop();
+        c_count = 1;
+    }
+}
+
+// The same rule at compile time: the error is the type checker's, before the
+// evaluator runs.
+const FROM_C: u32 = c_add(1, 2);
+const FROM_STATIC: u16 = c_table[0];
+const BUFFER: [u8; c_len()] = [0; c_len()];
+
+// Nothing in these blocks needs `unsafe`.
+fn only_addresses() -> usize {
+    let a: *const u32 = unsafe { &raw const c_count };
+    unsafe {
+        let b: *const u16 = &raw const c_table[1];
+        let c: *mut u32 = &raw mut c_pair.a;
+    }
+    a as usize
+}
+
+// An operand in error (a method that does not exist) is the only error for
+// the call, with or without a block; the block is used. The value written to
+// an `extern static` is not an operand of the write: `c_count = x.missing()`
+// outside a block is still an unsafe write, and inside one it is accepted.
+fn operand_in_error(x: u32) {
+    c_add(x.missing(), 1);
+    naked_sum(1, x.missing());
+    c_count = x.missing();
+    unsafe {
+        c_add(x.missing(), 1);
+        naked_sum(1, x.missing());
+        c_count = x.missing();
+    }
+}
+
+// A static whose type is a reference was reported at its type; its uses
+// report nothing more.
+fn reference_static() -> u32 {
+    let outside: u32 = *c_ref;
+    outside + unsafe { *c_ref }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
+
+// The index of a place and the length of a slice are read like any other
+// operand: one error for `c_count`, and one for `c_slice`; the address taken
+// by `&raw const` is not an operation.
+extern static c_slice: *const [u16];
+
+fn bound_and_length() -> usize {
+    let p: *const u16 = &raw const c_table[c_count as usize];
+    len(c_slice)
+}
+
+// An `extern static` as an `asm` operand is touched as the operand says: `in`
+// reads, `out` and `lateout` write, `inout` reads and writes, and `inout ...
+// => place` reads the value and writes the place. Each is two errors outside
+// a block, the `asm`'s and the static's; `_` holds nothing.
+fn asm_operands() {
+    asm("nop {}", in(reg) c_count);
+    asm("nop {}", out(reg) c_count);
+    asm("nop {}", lateout(reg) c_count);
+    asm("nop {}", inout(reg) c_count);
+    asm("nop {}", inout(reg) 1 as u32 => c_count);
+    asm("nop {}", inout(reg) c_count => _);
+    asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+    asm("nop {}", out(reg) _);
+}
+
+// The `asm` of a naked body needs no block, but its operands are checked on
+// their own: this one reads an `extern static` (and is a malformed naked
+// body, with its own two errors).
+#[naked]
+fn naked_operand() {
+    asm("ret", in(reg) c_count, options(noreturn))
+}

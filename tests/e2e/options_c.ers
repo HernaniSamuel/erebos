@@ -155,46 +155,46 @@ fn seen(name: &[u8], tag: u8, value: u64) {
 entry fn main() -> ! {
     // C: `.Some(0)` becomes `.None`, `.Some(v)` becomes `.Some(v + 1)`,
     // and `.None` becomes `.Some` of a value of its own.
-    show_u8(c_u8(.Some(5)));
-    show_u8(c_u8(.Some(0)));
-    show_u8(c_u8(.None));
-    show_u32(c_u32(.Some(0x1234_5678)));
-    show_u32(c_u32(.Some(0)));
-    show_u32(c_u32(.None));
-    show_u64(c_u64(.Some(0x1_0000_0001)));
-    show_u64(c_u64(.Some(0)));
-    show_u64(c_u64(.None));
+    show_u8(unsafe { c_u8(.Some(5)) });
+    show_u8(unsafe { c_u8(.Some(0)) });
+    show_u8(unsafe { c_u8(.None) });
+    show_u32(unsafe { c_u32(.Some(0x1234_5678)) });
+    show_u32(unsafe { c_u32(.Some(0)) });
+    show_u32(unsafe { c_u32(.None) });
+    show_u64(unsafe { c_u64(.Some(0x1_0000_0001)) });
+    show_u64(unsafe { c_u64(.Some(0)) });
+    show_u64(unsafe { c_u64(.None) });
     // C: `.Ok(0)` becomes `.Err(.Busy)`, `.Ok(v)` becomes `.Ok(v + 1)`,
     // and `.Err(e)` becomes `.Ok(e * 100)`.
-    show_result(c_result(.Ok(4_000_000_000)));
-    show_result(c_result(.Ok(0)));
-    show_result(c_result(.Err(.Timeout)));
+    show_result(unsafe { c_result(.Ok(4_000_000_000)) });
+    show_result(unsafe { c_result(.Ok(0)) });
+    show_result(unsafe { c_result(.Err(.Timeout)) });
 
     let mut tag: u8 = 0;
     let mut value: u64 = 0;
-    c_sees_u8(1, 5, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u8(1, 5, &raw mut tag, &raw mut value); }
     seen(&b"u8", tag, value);
-    c_sees_u8(1, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u8(1, 0, &raw mut tag, &raw mut value); }
     seen(&b"u8", tag, value);
-    c_sees_u8(0, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u8(0, 0, &raw mut tag, &raw mut value); }
     seen(&b"u8", tag, value);
-    c_sees_u32(1, 1_000_000_000, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u32(1, 1_000_000_000, &raw mut tag, &raw mut value); }
     seen(&b"u32", tag, value);
-    c_sees_u32(1, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u32(1, 0, &raw mut tag, &raw mut value); }
     seen(&b"u32", tag, value);
-    c_sees_u32(0, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u32(0, 0, &raw mut tag, &raw mut value); }
     seen(&b"u32", tag, value);
-    c_sees_u64(1, 0x1_0000_0001, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u64(1, 0x1_0000_0001, &raw mut tag, &raw mut value); }
     seen(&b"u64", tag, value);
-    c_sees_u64(1, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u64(1, 0, &raw mut tag, &raw mut value); }
     seen(&b"u64", tag, value);
-    c_sees_u64(0, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_u64(0, 0, &raw mut tag, &raw mut value); }
     seen(&b"u64", tag, value);
-    c_sees_result(0, 500, &raw mut tag, &raw mut value);
+    unsafe { c_sees_result(0, 500, &raw mut tag, &raw mut value); }
     seen(&b"result", tag, value);
-    c_sees_result(0, 0, &raw mut tag, &raw mut value);
+    unsafe { c_sees_result(0, 0, &raw mut tag, &raw mut value); }
     seen(&b"result", tag, value);
-    c_sees_result(1, 7, &raw mut tag, &raw mut value);
+    unsafe { c_sees_result(1, 7, &raw mut tag, &raw mut value); }
     seen(&b"result", tag, value);
     exit(0)
 }

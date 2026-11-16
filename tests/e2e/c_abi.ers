@@ -89,28 +89,28 @@ fn last(n: u64) {
 
 entry fn main() -> ! {
     label([b'o', b'n', b'e', b' ', b' ', b' ']);
-    last(c_one(One { a: 7 }).a as u64);
+    last(unsafe { c_one(One { a: 7 }) }.a as u64);
 
-    let three: Three = c_three(Three { a: 1, b: 2, c: 3 });
+    let three: Three = unsafe { c_three(Three { a: 1, b: 2, c: 3 }) };
     label([b't', b'h', b'r', b'e', b'e', b' ']);
     number(three.a as u64);
     number(three.b as u64);
     last(three.c as u64);
 
     label([b'w', b'o', b'r', b'd', b' ', b' ']);
-    last(c_word(Word { a: 21 }).a as u64);
+    last(unsafe { c_word(Word { a: 21 }) }.a as u64);
 
-    let pair: Pair = c_pair(Pair { a: 7, b: 3 });
+    let pair: Pair = unsafe { c_pair(Pair { a: 7, b: 3 }) };
     label([b'p', b'a', b'i', b'r', b' ', b' ']);
     number(pair.a as u64);
     last(pair.b as u64);
 
     label([b'w', b'i', b'd', b'e', b' ', b' ']);
-    last(c_wide(Wide { a: 5_000_000_000 }).a);
+    last(unsafe { c_wide(Wide { a: 5_000_000_000 }) }.a);
 
     // A large argument is the callee's copy (ADR 0025).
     let mine: Big = Big { a: 1, b: 2, c: 3 };
-    let big: Big = c_big(mine);
+    let big: Big = unsafe { c_big(mine) };
     label([b'b', b'i', b'g', b' ', b' ', b' ']);
     number(big.a as u64);
     number(big.b as u64);
@@ -122,12 +122,12 @@ entry fn main() -> ! {
     number(mine.b as u64);
     last(mine.c as u64);
 
-    let packed: Packed = c_packed(Packed { a: 7, b: 1_000_000 });
+    let packed: Packed = unsafe { c_packed(Packed { a: 7, b: 1_000_000 }) };
     label([b'p', b'a', b'c', b'k', b'e', b'd']);
     number(packed.a as u64);
     last(packed.b as u64);
 
-    let bytes: [u8; 5] = c_bytes([1, 2, 3, 4, 5]);
+    let bytes: [u8; 5] = unsafe { c_bytes([1, 2, 3, 4, 5]) };
     label([b'b', b'y', b't', b'e', b's', b' ']);
     let mut i: usize = 0;
     while i < 5 {
@@ -143,21 +143,21 @@ entry fn main() -> ! {
         i += 1;
     }
     label([b'h', b'u', b'g', b'e', b' ', b' ']);
-    last(c_huge_sum(huge) as u64);
+    last(unsafe { c_huge_sum(huge) } as u64);
 
-    let late: Pair = c_late(1, 2, 3, 4, 5, 6, 7, Pair { a: 8, b: 3 });
+    let late: Pair = unsafe { c_late(1, 2, 3, 4, 5, 6, 7, Pair { a: 8, b: 3 }) };
     label([b'l', b'a', b't', b'e', b' ', b' ']);
     number(late.a as u64);
     last(late.b as u64);
 
     label([b'e', b'm', b'p', b't', b'y', b' ']);
-    last(c_around_empty(1, Empty {}, 2) as u64);
+    last(unsafe { c_around_empty(1, Empty {}, 2) } as u64);
 
     // swap(1, 2) = (2, 1); big(1, 2, 3) + 10 = 36; three(4, 5, 6) = (6, 5, 4)
     label([b'f', b'r', b'o', b'm', b' ', b' ']);
     putc(b'c');
     putc(b' ');
-    last(c_calls_erebos() as u64);
+    last(unsafe { c_calls_erebos() } as u64);
     exit(0)
 }
 

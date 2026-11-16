@@ -155,7 +155,7 @@ fn entry_of(i: usize) -> &u8 {
 }
 
 fn limit() -> &u32 {
-    &LIMIT
+    unsafe { &LIMIT }
 }
 
 extern fn lookup(s: &[u8]) -> &u8;

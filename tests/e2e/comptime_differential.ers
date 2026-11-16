@@ -1044,139 +1044,139 @@ fn check(id: u32, at_compile_time: u64, at_run_time: u64) -> u32 {
 
 entry fn main() -> ! {
     let mut failures: u32 = 0;
-    failures += check(1, comptime u8_ops(200, 100), u8_ops(opaque_u8(200), opaque_u8(100)));
-    failures += check(2, comptime u8_ops(7, 9), u8_ops(opaque_u8(7), opaque_u8(9)));
-    failures += check(3, comptime i8_ops(-128, -1), i8_ops(opaque_i8(-128), opaque_i8(-1)));
-    failures += check(4, comptime i8_ops(-7, 2), i8_ops(opaque_i8(-7), opaque_i8(2)));
-    failures += check(5, comptime u16_ops(65_000, 300), u16_ops(opaque_u16(65_000), opaque_u16(300)));
-    failures += check(6, comptime i16_ops(-30_000, 7), i16_ops(opaque_i16(-30_000), opaque_i16(7)));
-    failures += check(7, comptime u32_ops(4_000_000_000, 7), u32_ops(opaque_u32(4_000_000_000), opaque_u32(7)));
-    failures += check(8, comptime u32_ops(3, 33), u32_ops(opaque_u32(3), opaque_u32(33)));
-    failures += check(9, comptime i32_ops(-2_147_483_648, -1), i32_ops(opaque_i32(-2_147_483_648), opaque_i32(-1)));
-    failures += check(10, comptime i32_ops(-7, 3), i32_ops(opaque_i32(-7), opaque_i32(3)));
-    failures += check(11, comptime u64_ops(18_000_000_000_000_000_000, 3), u64_ops(opaque_u64(18_000_000_000_000_000_000), opaque_u64(3)));
-    failures += check(12, comptime u64_ops(12_345_678_901, 65), u64_ops(opaque_u64(12_345_678_901), opaque_u64(65)));
-    failures += check(13, comptime i64_ops(-9_000_000_000_000_000_000, 7), i64_ops(opaque_i64(-9_000_000_000_000_000_000), opaque_i64(7)));
-    failures += check(14, comptime conversions(-300, 4_000_000_000), conversions(opaque_i32(-300), opaque_u32(4_000_000_000)));
-    failures += check(15, comptime conversions(70_000, 200), conversions(opaque_i32(70_000), opaque_u32(200)));
-    failures += check(16, comptime pointers(0x8000_0000), pointers(opaque_usize(0x8000_0000)));
-    failures += check(17, comptime pointers(0xFFFF_FFF0), pointers(opaque_usize(0xFFFF_FFF0)));
-    failures += check(18, comptime aggregates(41), aggregates(opaque_u32(41)));
-    failures += check(19, comptime bools(2), bools(opaque_u8(2)));
-    failures += check(20, comptime bools(0), bools(opaque_u8(0)));
+    unsafe { failures += check(1, comptime u8_ops(200, 100), u8_ops(opaque_u8(200), opaque_u8(100))); }
+    unsafe { failures += check(2, comptime u8_ops(7, 9), u8_ops(opaque_u8(7), opaque_u8(9))); }
+    unsafe { failures += check(3, comptime i8_ops(-128, -1), i8_ops(opaque_i8(-128), opaque_i8(-1))); }
+    unsafe { failures += check(4, comptime i8_ops(-7, 2), i8_ops(opaque_i8(-7), opaque_i8(2))); }
+    unsafe { failures += check(5, comptime u16_ops(65_000, 300), u16_ops(opaque_u16(65_000), opaque_u16(300))); }
+    unsafe { failures += check(6, comptime i16_ops(-30_000, 7), i16_ops(opaque_i16(-30_000), opaque_i16(7))); }
+    unsafe { failures += check(7, comptime u32_ops(4_000_000_000, 7), u32_ops(opaque_u32(4_000_000_000), opaque_u32(7))); }
+    unsafe { failures += check(8, comptime u32_ops(3, 33), u32_ops(opaque_u32(3), opaque_u32(33))); }
+    unsafe { failures += check(9, comptime i32_ops(-2_147_483_648, -1), i32_ops(opaque_i32(-2_147_483_648), opaque_i32(-1))); }
+    unsafe { failures += check(10, comptime i32_ops(-7, 3), i32_ops(opaque_i32(-7), opaque_i32(3))); }
+    unsafe { failures += check(11, comptime u64_ops(18_000_000_000_000_000_000, 3), u64_ops(opaque_u64(18_000_000_000_000_000_000), opaque_u64(3))); }
+    unsafe { failures += check(12, comptime u64_ops(12_345_678_901, 65), u64_ops(opaque_u64(12_345_678_901), opaque_u64(65))); }
+    unsafe { failures += check(13, comptime i64_ops(-9_000_000_000_000_000_000, 7), i64_ops(opaque_i64(-9_000_000_000_000_000_000), opaque_i64(7))); }
+    unsafe { failures += check(14, comptime conversions(-300, 4_000_000_000), conversions(opaque_i32(-300), opaque_u32(4_000_000_000))); }
+    unsafe { failures += check(15, comptime conversions(70_000, 200), conversions(opaque_i32(70_000), opaque_u32(200))); }
+    unsafe { failures += check(16, comptime pointers(0x8000_0000), pointers(opaque_usize(0x8000_0000))); }
+    unsafe { failures += check(17, comptime pointers(0xFFFF_FFF0), pointers(opaque_usize(0xFFFF_FFF0))); }
+    unsafe { failures += check(18, comptime aggregates(41), aggregates(opaque_u32(41))); }
+    unsafe { failures += check(19, comptime bools(2), bools(opaque_u8(2))); }
+    unsafe { failures += check(20, comptime bools(0), bools(opaque_u8(0))); }
     failures += check(21, comptime layout(), layout());
-    failures += check(22, comptime ring(5), ring(opaque_u32(5)));
-    failures += check(23, comptime weights(6), weights(opaque_usize(6)));
-    failures += check(24, comptime slices(1), slices(opaque_usize(1)));
-    failures += check(25, comptime slices(5), slices(opaque_usize(5)));
-    failures += check(26, comptime message_sum(1), message_sum(opaque_usize(1)));
-    failures += check(27, comptime message_sum(6), message_sum(opaque_usize(6)));
-    failures += check(28, comptime message_sum(2), message_sum(opaque_usize(2)));
-    failures += check(29, comptime repeated(1), repeated(opaque_usize(1)));
-    failures += check(30, comptime repeated(4), repeated(opaque_usize(4)));
-    failures += check(31, comptime enums(Mode::Run, Level::Minus, Port::Top, Code::Neg), enums(opaque_mode(Mode::Run), opaque_level(Level::Minus), opaque_port(Port::Top), opaque_code(Code::Neg)));
-    failures += check(32, comptime enums(Mode::Max, Level::Low, Port::Data, Code::Fault), enums(opaque_mode(Mode::Max), opaque_level(Level::Low), opaque_port(Port::Data), opaque_code(Code::Fault)));
-    failures += check(33, comptime enums(Mode::Off, Level::High, Port::Data, Code::Fine), enums(opaque_mode(Mode::Off), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Fine)));
-    failures += check(34, comptime matches(0x1B, -128, -70_000, 0x1_0000_0000, -9_000_000_000_000_000_000, true), matches(opaque_u8(0x1B), opaque_i8(-128), opaque_i32(-70_000), opaque_u64(0x1_0000_0000), opaque_i64(-9_000_000_000_000_000_000), opaque_u8(1) == 1));
-    failures += check(35, comptime matches(255, -1, -2_147_483_648, 0xFFFF_FFFF_FFFF_FFFF, -1, false), matches(opaque_u8(255), opaque_i8(-1), opaque_i32(-2_147_483_648), opaque_u64(0xFFFF_FFFF_FFFF_FFFF), opaque_i64(-1), opaque_u8(0) == 1));
-    failures += check(36, comptime matches(77, 1, 0, 0xFFFF_FFFF, 4_294_967_296, true), matches(opaque_u8(77), opaque_i8(1), opaque_i32(0), opaque_u64(0xFFFF_FFFF), opaque_i64(4_294_967_296), opaque_u8(1) == 1));
-    failures += check(37, comptime matches(200, -77, 5, 12_345, 5, false), matches(opaque_u8(200), opaque_i8(-77), opaque_i32(5), opaque_u64(12_345), opaque_i64(5), opaque_u8(2) == 1));
-    failures += check(38, comptime matches(0, 127, 2_147_483_647, 0, 0, true), matches(opaque_u8(0), opaque_i8(127), opaque_i32(2_147_483_647), opaque_u64(0), opaque_i64(0), opaque_u8(1) == 1));
-    failures += check(39, comptime enum_matches(Mode::Off, Level::Low, Port::Top, Code::Fault, 7), enum_matches(opaque_mode(Mode::Off), opaque_level(Level::Low), opaque_port(Port::Top), opaque_code(Code::Fault), opaque_u8(7)));
-    failures += check(40, comptime enum_matches(Mode::Max, Level::Minus, Port::Data, Code::Fine, 3), enum_matches(opaque_mode(Mode::Max), opaque_level(Level::Minus), opaque_port(Port::Data), opaque_code(Code::Fine), opaque_u8(3)));
-    failures += check(41, comptime enum_matches(Mode::Run, Level::High, Port::Data, Code::Neg, 200), enum_matches(opaque_mode(Mode::Run), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Neg), opaque_u8(200)));
-    failures += check(42, comptime packet_hash(EMPTY), packet_hash(opaque_packet(Packet::Empty)));
-    failures += check(43, comptime packet_hash(BYTE), packet_hash(opaque_packet(Packet::Byte(opaque_u8(200)))));
-    failures += check(44, comptime packet_hash(TWO), packet_hash(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(70_000)))));
-    failures += check(45, comptime packet_hash(FLAGS), packet_hash(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Max)))));
-    failures += check(46, comptime packet_hash(DATA), packet_hash(opaque_packet(Packet::Data([opaque_u8(1), 2, 255], opaque_i16(-2)))));
-    failures += check(47, comptime packet_hash(NESTED), packet_hash(opaque_packet(Packet::Nested(Pair { a: opaque_u32(7), b: 0xFFFF_FFFF }))));
-    failures += check(48, comptime packet_hash(INNER_ON), packet_hash(opaque_packet(Packet::Inner(Small::On(opaque_u8(9))))));
-    failures += check(49, comptime packet_hash(INNER_OFF), packet_hash(opaque_packet(Packet::Inner(Small::Off))));
-    failures += check(50, comptime packet_hash(ZERO), packet_hash(opaque_packet(Packet::Zero((), opaque_u8(5)))));
+    unsafe { failures += check(22, comptime ring(5), ring(opaque_u32(5))); }
+    unsafe { failures += check(23, comptime weights(6), weights(opaque_usize(6))); }
+    unsafe { failures += check(24, comptime slices(1), slices(opaque_usize(1))); }
+    unsafe { failures += check(25, comptime slices(5), slices(opaque_usize(5))); }
+    unsafe { failures += check(26, comptime message_sum(1), message_sum(opaque_usize(1))); }
+    unsafe { failures += check(27, comptime message_sum(6), message_sum(opaque_usize(6))); }
+    unsafe { failures += check(28, comptime message_sum(2), message_sum(opaque_usize(2))); }
+    unsafe { failures += check(29, comptime repeated(1), repeated(opaque_usize(1))); }
+    unsafe { failures += check(30, comptime repeated(4), repeated(opaque_usize(4))); }
+    unsafe { failures += check(31, comptime enums(Mode::Run, Level::Minus, Port::Top, Code::Neg), enums(opaque_mode(Mode::Run), opaque_level(Level::Minus), opaque_port(Port::Top), opaque_code(Code::Neg))); }
+    unsafe { failures += check(32, comptime enums(Mode::Max, Level::Low, Port::Data, Code::Fault), enums(opaque_mode(Mode::Max), opaque_level(Level::Low), opaque_port(Port::Data), opaque_code(Code::Fault))); }
+    unsafe { failures += check(33, comptime enums(Mode::Off, Level::High, Port::Data, Code::Fine), enums(opaque_mode(Mode::Off), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Fine))); }
+    unsafe { failures += check(34, comptime matches(0x1B, -128, -70_000, 0x1_0000_0000, -9_000_000_000_000_000_000, true), matches(opaque_u8(0x1B), opaque_i8(-128), opaque_i32(-70_000), opaque_u64(0x1_0000_0000), opaque_i64(-9_000_000_000_000_000_000), opaque_u8(1) == 1)); }
+    unsafe { failures += check(35, comptime matches(255, -1, -2_147_483_648, 0xFFFF_FFFF_FFFF_FFFF, -1, false), matches(opaque_u8(255), opaque_i8(-1), opaque_i32(-2_147_483_648), opaque_u64(0xFFFF_FFFF_FFFF_FFFF), opaque_i64(-1), opaque_u8(0) == 1)); }
+    unsafe { failures += check(36, comptime matches(77, 1, 0, 0xFFFF_FFFF, 4_294_967_296, true), matches(opaque_u8(77), opaque_i8(1), opaque_i32(0), opaque_u64(0xFFFF_FFFF), opaque_i64(4_294_967_296), opaque_u8(1) == 1)); }
+    unsafe { failures += check(37, comptime matches(200, -77, 5, 12_345, 5, false), matches(opaque_u8(200), opaque_i8(-77), opaque_i32(5), opaque_u64(12_345), opaque_i64(5), opaque_u8(2) == 1)); }
+    unsafe { failures += check(38, comptime matches(0, 127, 2_147_483_647, 0, 0, true), matches(opaque_u8(0), opaque_i8(127), opaque_i32(2_147_483_647), opaque_u64(0), opaque_i64(0), opaque_u8(1) == 1)); }
+    unsafe { failures += check(39, comptime enum_matches(Mode::Off, Level::Low, Port::Top, Code::Fault, 7), enum_matches(opaque_mode(Mode::Off), opaque_level(Level::Low), opaque_port(Port::Top), opaque_code(Code::Fault), opaque_u8(7))); }
+    unsafe { failures += check(40, comptime enum_matches(Mode::Max, Level::Minus, Port::Data, Code::Fine, 3), enum_matches(opaque_mode(Mode::Max), opaque_level(Level::Minus), opaque_port(Port::Data), opaque_code(Code::Fine), opaque_u8(3))); }
+    unsafe { failures += check(41, comptime enum_matches(Mode::Run, Level::High, Port::Data, Code::Neg, 200), enum_matches(opaque_mode(Mode::Run), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Neg), opaque_u8(200))); }
+    unsafe { failures += check(42, comptime packet_hash(EMPTY), packet_hash(opaque_packet(Packet::Empty))); }
+    unsafe { failures += check(43, comptime packet_hash(BYTE), packet_hash(opaque_packet(Packet::Byte(opaque_u8(200))))); }
+    unsafe { failures += check(44, comptime packet_hash(TWO), packet_hash(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(70_000))))); }
+    unsafe { failures += check(45, comptime packet_hash(FLAGS), packet_hash(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Max))))); }
+    unsafe { failures += check(46, comptime packet_hash(DATA), packet_hash(opaque_packet(Packet::Data([opaque_u8(1), 2, 255], opaque_i16(-2))))); }
+    unsafe { failures += check(47, comptime packet_hash(NESTED), packet_hash(opaque_packet(Packet::Nested(Pair { a: opaque_u32(7), b: 0xFFFF_FFFF })))); }
+    unsafe { failures += check(48, comptime packet_hash(INNER_ON), packet_hash(opaque_packet(Packet::Inner(Small::On(opaque_u8(9)))))); }
+    unsafe { failures += check(49, comptime packet_hash(INNER_OFF), packet_hash(opaque_packet(Packet::Inner(Small::Off)))); }
+    unsafe { failures += check(50, comptime packet_hash(ZERO), packet_hash(opaque_packet(Packet::Zero((), opaque_u8(5))))); }
     // Built in a `comptime` expression, whose bytes outside the variant
     // were never written; and constant data read at run time.
-    failures += check(51, comptime packet_hash(Packet::Two(3, 70_000)), packet_hash(opaque_packet(TWO)));
-    failures += check(52, comptime packet_hash(Packet::Nested(Pair { a: 7, b: 0xFFFF_FFFF })), packet_hash(opaque_packet(NESTED)));
-    failures += check(53, comptime packet_match(EMPTY), packet_match(opaque_packet(Packet::Empty)));
-    failures += check(54, comptime packet_match(BYTE), packet_match(opaque_packet(Packet::Byte(opaque_u8(200)))));
-    failures += check(55, comptime packet_match(Packet::Byte(7)), packet_match(opaque_packet(Packet::Byte(opaque_u8(7)))));
-    failures += check(56, comptime packet_match(TWO), packet_match(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(70_000)))));
-    failures += check(57, comptime packet_match(Packet::Two(9, 0xFFFF_FFFF)), packet_match(opaque_packet(Packet::Two(opaque_u8(9), opaque_u32(0xFFFF_FFFF)))));
-    failures += check(58, comptime packet_match(Packet::Two(3, 5)), packet_match(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(5)))));
-    failures += check(59, comptime packet_match(FLAGS), packet_match(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Max)))));
-    failures += check(60, comptime packet_match(Packet::Flags(false, Mode::Run)), packet_match(opaque_packet(Packet::Flags(opaque_u8(0) == 1, opaque_mode(Mode::Run)))));
-    failures += check(61, comptime packet_match(Packet::Flags(true, Mode::Off)), packet_match(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Off)))));
-    failures += check(62, comptime packet_match(DATA), packet_match(opaque_packet(Packet::Data([opaque_u8(1), 2, 255], opaque_i16(-2)))));
-    failures += check(63, comptime packet_match(Packet::Data([4, 5, 6], 300)), packet_match(opaque_packet(Packet::Data([opaque_u8(4), 5, 6], opaque_i16(300)))));
-    failures += check(64, comptime packet_match(NESTED), packet_match(opaque_packet(Packet::Nested(Pair { a: opaque_u32(7), b: 0xFFFF_FFFF }))));
-    failures += check(65, comptime packet_match(INNER_ON), packet_match(opaque_packet(Packet::Inner(Small::On(opaque_u8(9))))));
-    failures += check(66, comptime packet_match(Packet::Inner(Small::On(4))), packet_match(opaque_packet(Packet::Inner(Small::On(opaque_u8(4))))));
-    failures += check(67, comptime packet_match(INNER_OFF), packet_match(opaque_packet(Packet::Inner(Small::Off))));
-    failures += check(68, comptime packet_match(ZERO), packet_match(opaque_packet(Packet::Zero((), opaque_u8(5)))));
-    failures += check(69, comptime widths_match(Widths::U(0xFFFF, 0xFFFF_FFFF_FFFF_FFFF)), widths_match(opaque_widths(Widths::U(opaque_u16(0xFFFF), opaque_u64(0xFFFF_FFFF_FFFF_FFFF)))));
-    failures += check(70, comptime widths_match(Widths::U(2, 77)), widths_match(opaque_widths(Widths::U(opaque_u16(2), opaque_u64(77)))));
-    failures += check(71, comptime widths_match(Widths::U(0xFFFF, 0x1_0000_0000)), widths_match(opaque_widths(Widths::U(opaque_u16(0xFFFF), opaque_u64(0x1_0000_0000)))));
-    failures += check(72, comptime widths_match(Widths::U(5, 6)), widths_match(opaque_widths(Widths::U(opaque_u16(5), opaque_u64(6)))));
-    failures += check(73, comptime widths_match(Widths::S(-128, -2_147_483_648, -9_000_000_000_000_000_000)), widths_match(opaque_widths(Widths::S(opaque_i8(-128), opaque_i32(-2_147_483_648), opaque_i64(-9_000_000_000_000_000_000)))));
-    failures += check(74, comptime widths_match(Widths::S(-1, 70_000, 1)), widths_match(opaque_widths(Widths::S(opaque_i8(-1), opaque_i32(70_000), opaque_i64(1)))));
-    failures += check(75, comptime widths_match(Widths::S(-1, 3, 7)), widths_match(opaque_widths(Widths::S(opaque_i8(-1), opaque_i32(3), opaque_i64(7)))));
-    failures += check(76, comptime widths_match(Widths::E(Level::Low, Code::Fault, Port::Top)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Fault), opaque_port(Port::Top)))));
-    failures += check(77, comptime widths_match(Widths::E(Level::High, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::High), opaque_code(Code::Neg), opaque_port(Port::Data)))));
-    failures += check(78, comptime widths_match(Widths::E(Level::Low, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Neg), opaque_port(Port::Data)))));
-    failures += check(79, comptime duo_match(Duo::Pair(5, 0)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(0)))));
-    failures += check(80, comptime duo_match(Duo::Pair(0, 9)), duo_match(opaque_duo(Duo::Pair(opaque_u8(0), opaque_u8(9)))));
-    failures += check(81, comptime duo_match(Duo::Pair(0, 0)), duo_match(opaque_duo(Duo::Pair(opaque_u8(0), opaque_u8(0)))));
-    failures += check(82, comptime duo_match(Duo::One(42)), duo_match(opaque_duo(Duo::One(opaque_u8(42)))));
-    failures += check(83, comptime duo_match(Duo::Wrap(Side::Left(3), 7)), duo_match(opaque_duo(Duo::Wrap(Side::Left(opaque_u8(3)), opaque_u8(7)))));
-    failures += check(84, comptime duo_match(Duo::Wrap(Side::Right(4), 7)), duo_match(opaque_duo(Duo::Wrap(Side::Right(opaque_u8(4)), opaque_u8(7)))));
-    failures += check(85, comptime duo_match(Duo::Wrap(Side::Mid, 11)), duo_match(opaque_duo(Duo::Wrap(Side::Mid, opaque_u8(11)))));
-    failures += check(86, comptime duo_match(Duo::Pair(1, 6)), duo_match(opaque_duo(Duo::Pair(opaque_u8(1), opaque_u8(6)))));
-    failures += check(87, comptime duo_match(Duo::Wrap(Side::Left(8), 9)), duo_match(opaque_duo(Duo::Wrap(Side::Left(opaque_u8(8)), opaque_u8(9)))));
-    failures += check(88, comptime duo_match(Duo::Wrap(Side::Right(250), 1)), duo_match(opaque_duo(Duo::Wrap(Side::Right(opaque_u8(250)), opaque_u8(1)))));
-    failures += check(89, comptime duo_match(Duo::Pair(2, 200)), duo_match(opaque_duo(Duo::Pair(opaque_u8(2), opaque_u8(200)))));
-    failures += check(90, comptime duo_match(Duo::Wrap(Side::Wide(0xBEEF), 0)), duo_match(opaque_duo(Duo::Wrap(Side::Wide(opaque_u16(0xBEEF)), opaque_u8(0)))));
-    failures += check(91, comptime duo_match(Duo::Empty), duo_match(opaque_duo(Duo::Empty)));
-    failures += check(92, comptime duo_match(Duo::Pair(5, 7)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7)))));
-    failures += check(93, comptime duo_match(Duo::Pair(9, 7)), duo_match(opaque_duo(Duo::Pair(opaque_u8(9), opaque_u8(7)))));
-    failures += check(94, comptime duo_match(Duo::Pair(5, 3)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(3)))));
+    unsafe { failures += check(51, comptime packet_hash(Packet::Two(3, 70_000)), packet_hash(opaque_packet(TWO))); }
+    unsafe { failures += check(52, comptime packet_hash(Packet::Nested(Pair { a: 7, b: 0xFFFF_FFFF })), packet_hash(opaque_packet(NESTED))); }
+    unsafe { failures += check(53, comptime packet_match(EMPTY), packet_match(opaque_packet(Packet::Empty))); }
+    unsafe { failures += check(54, comptime packet_match(BYTE), packet_match(opaque_packet(Packet::Byte(opaque_u8(200))))); }
+    unsafe { failures += check(55, comptime packet_match(Packet::Byte(7)), packet_match(opaque_packet(Packet::Byte(opaque_u8(7))))); }
+    unsafe { failures += check(56, comptime packet_match(TWO), packet_match(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(70_000))))); }
+    unsafe { failures += check(57, comptime packet_match(Packet::Two(9, 0xFFFF_FFFF)), packet_match(opaque_packet(Packet::Two(opaque_u8(9), opaque_u32(0xFFFF_FFFF))))); }
+    unsafe { failures += check(58, comptime packet_match(Packet::Two(3, 5)), packet_match(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(5))))); }
+    unsafe { failures += check(59, comptime packet_match(FLAGS), packet_match(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Max))))); }
+    unsafe { failures += check(60, comptime packet_match(Packet::Flags(false, Mode::Run)), packet_match(opaque_packet(Packet::Flags(opaque_u8(0) == 1, opaque_mode(Mode::Run))))); }
+    unsafe { failures += check(61, comptime packet_match(Packet::Flags(true, Mode::Off)), packet_match(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Off))))); }
+    unsafe { failures += check(62, comptime packet_match(DATA), packet_match(opaque_packet(Packet::Data([opaque_u8(1), 2, 255], opaque_i16(-2))))); }
+    unsafe { failures += check(63, comptime packet_match(Packet::Data([4, 5, 6], 300)), packet_match(opaque_packet(Packet::Data([opaque_u8(4), 5, 6], opaque_i16(300))))); }
+    unsafe { failures += check(64, comptime packet_match(NESTED), packet_match(opaque_packet(Packet::Nested(Pair { a: opaque_u32(7), b: 0xFFFF_FFFF })))); }
+    unsafe { failures += check(65, comptime packet_match(INNER_ON), packet_match(opaque_packet(Packet::Inner(Small::On(opaque_u8(9)))))); }
+    unsafe { failures += check(66, comptime packet_match(Packet::Inner(Small::On(4))), packet_match(opaque_packet(Packet::Inner(Small::On(opaque_u8(4)))))); }
+    unsafe { failures += check(67, comptime packet_match(INNER_OFF), packet_match(opaque_packet(Packet::Inner(Small::Off)))); }
+    unsafe { failures += check(68, comptime packet_match(ZERO), packet_match(opaque_packet(Packet::Zero((), opaque_u8(5))))); }
+    unsafe { failures += check(69, comptime widths_match(Widths::U(0xFFFF, 0xFFFF_FFFF_FFFF_FFFF)), widths_match(opaque_widths(Widths::U(opaque_u16(0xFFFF), opaque_u64(0xFFFF_FFFF_FFFF_FFFF))))); }
+    unsafe { failures += check(70, comptime widths_match(Widths::U(2, 77)), widths_match(opaque_widths(Widths::U(opaque_u16(2), opaque_u64(77))))); }
+    unsafe { failures += check(71, comptime widths_match(Widths::U(0xFFFF, 0x1_0000_0000)), widths_match(opaque_widths(Widths::U(opaque_u16(0xFFFF), opaque_u64(0x1_0000_0000))))); }
+    unsafe { failures += check(72, comptime widths_match(Widths::U(5, 6)), widths_match(opaque_widths(Widths::U(opaque_u16(5), opaque_u64(6))))); }
+    unsafe { failures += check(73, comptime widths_match(Widths::S(-128, -2_147_483_648, -9_000_000_000_000_000_000)), widths_match(opaque_widths(Widths::S(opaque_i8(-128), opaque_i32(-2_147_483_648), opaque_i64(-9_000_000_000_000_000_000))))); }
+    unsafe { failures += check(74, comptime widths_match(Widths::S(-1, 70_000, 1)), widths_match(opaque_widths(Widths::S(opaque_i8(-1), opaque_i32(70_000), opaque_i64(1))))); }
+    unsafe { failures += check(75, comptime widths_match(Widths::S(-1, 3, 7)), widths_match(opaque_widths(Widths::S(opaque_i8(-1), opaque_i32(3), opaque_i64(7))))); }
+    unsafe { failures += check(76, comptime widths_match(Widths::E(Level::Low, Code::Fault, Port::Top)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Fault), opaque_port(Port::Top))))); }
+    unsafe { failures += check(77, comptime widths_match(Widths::E(Level::High, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::High), opaque_code(Code::Neg), opaque_port(Port::Data))))); }
+    unsafe { failures += check(78, comptime widths_match(Widths::E(Level::Low, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Neg), opaque_port(Port::Data))))); }
+    unsafe { failures += check(79, comptime duo_match(Duo::Pair(5, 0)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(0))))); }
+    unsafe { failures += check(80, comptime duo_match(Duo::Pair(0, 9)), duo_match(opaque_duo(Duo::Pair(opaque_u8(0), opaque_u8(9))))); }
+    unsafe { failures += check(81, comptime duo_match(Duo::Pair(0, 0)), duo_match(opaque_duo(Duo::Pair(opaque_u8(0), opaque_u8(0))))); }
+    unsafe { failures += check(82, comptime duo_match(Duo::One(42)), duo_match(opaque_duo(Duo::One(opaque_u8(42))))); }
+    unsafe { failures += check(83, comptime duo_match(Duo::Wrap(Side::Left(3), 7)), duo_match(opaque_duo(Duo::Wrap(Side::Left(opaque_u8(3)), opaque_u8(7))))); }
+    unsafe { failures += check(84, comptime duo_match(Duo::Wrap(Side::Right(4), 7)), duo_match(opaque_duo(Duo::Wrap(Side::Right(opaque_u8(4)), opaque_u8(7))))); }
+    unsafe { failures += check(85, comptime duo_match(Duo::Wrap(Side::Mid, 11)), duo_match(opaque_duo(Duo::Wrap(Side::Mid, opaque_u8(11))))); }
+    unsafe { failures += check(86, comptime duo_match(Duo::Pair(1, 6)), duo_match(opaque_duo(Duo::Pair(opaque_u8(1), opaque_u8(6))))); }
+    unsafe { failures += check(87, comptime duo_match(Duo::Wrap(Side::Left(8), 9)), duo_match(opaque_duo(Duo::Wrap(Side::Left(opaque_u8(8)), opaque_u8(9))))); }
+    unsafe { failures += check(88, comptime duo_match(Duo::Wrap(Side::Right(250), 1)), duo_match(opaque_duo(Duo::Wrap(Side::Right(opaque_u8(250)), opaque_u8(1))))); }
+    unsafe { failures += check(89, comptime duo_match(Duo::Pair(2, 200)), duo_match(opaque_duo(Duo::Pair(opaque_u8(2), opaque_u8(200))))); }
+    unsafe { failures += check(90, comptime duo_match(Duo::Wrap(Side::Wide(0xBEEF), 0)), duo_match(opaque_duo(Duo::Wrap(Side::Wide(opaque_u16(0xBEEF)), opaque_u8(0))))); }
+    unsafe { failures += check(91, comptime duo_match(Duo::Empty), duo_match(opaque_duo(Duo::Empty))); }
+    unsafe { failures += check(92, comptime duo_match(Duo::Pair(5, 7)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7))))); }
+    unsafe { failures += check(93, comptime duo_match(Duo::Pair(9, 7)), duo_match(opaque_duo(Duo::Pair(opaque_u8(9), opaque_u8(7))))); }
+    unsafe { failures += check(94, comptime duo_match(Duo::Pair(5, 3)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(3))))); }
     // Both sides against the value the first alternative gives.
     failures += check(95, comptime duo_match(Duo::Pair(5, 7)), mix(7, 5));
-    failures += check(96, duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7)))), mix(7, 5));
-    failures += check(97, comptime pairs_hash(0), pairs_hash(opaque_u16(0)));
-    failures += check(98, comptime ors_hash(0), ors_hash(opaque_u16(0)));
-    failures += check(99, comptime tree_hash(0), tree_hash(opaque_u8(0)));
-    failures += check(100, comptime lamp_hash(0), lamp_hash(opaque_u8(0)));
+    unsafe { failures += check(96, duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7)))), mix(7, 5)); }
+    unsafe { failures += check(97, comptime pairs_hash(0), pairs_hash(opaque_u16(0))); }
+    unsafe { failures += check(98, comptime ors_hash(0), ors_hash(opaque_u16(0))); }
+    unsafe { failures += check(99, comptime tree_hash(0), tree_hash(opaque_u8(0))); }
+    unsafe { failures += check(100, comptime lamp_hash(0), lamp_hash(opaque_u8(0))); }
     // Both sides against the arms ADR 0042 says are taken: `x` copied
     // before the `7` fails, and the tag that is no variant.
     failures += check(101, comptime tree_match(tree_value(4, 5)), mix(2, 8));
-    failures += check(102, tree_match(tree_value(opaque_u8(4), opaque_u8(5))), mix(2, 8));
+    unsafe { failures += check(102, tree_match(tree_value(opaque_u8(4), opaque_u8(5))), mix(2, 8)); }
     failures += check(103, comptime lamp_match(lamp_value(6)), 4);
-    failures += check(104, lamp_match(lamp_value(opaque_u8(6))), 4);
-    failures += check(105, comptime holder_hash(0), holder_hash(opaque_u8(0)));
+    unsafe { failures += check(104, lamp_match(lamp_value(opaque_u8(6))), 4); }
+    unsafe { failures += check(105, comptime holder_hash(0), holder_hash(opaque_u8(0))); }
     // `Lamp::Off` with 8 fails the `7` and is taken by the second arm.
     failures += check(106, comptime holder_match(Holder::Of(Lamp::Off, 8)), mix(2, 8));
-    failures += check(107, holder_match(Holder::Of(lamp_value(opaque_u8(0)), opaque_u8(8))), mix(2, 8));
-    failures += check(108, comptime mul_chain(7), mul_chain(opaque_u32(7)));
-    failures += check(109, comptime mul_chain(0), mul_chain(opaque_u32(0)));
-    failures += check(110, comptime options_hash(0), options_hash(opaque_u32(0)));
+    unsafe { failures += check(107, holder_match(Holder::Of(lamp_value(opaque_u8(0)), opaque_u8(8))), mix(2, 8)); }
+    unsafe { failures += check(108, comptime mul_chain(7), mul_chain(opaque_u32(7))); }
+    unsafe { failures += check(109, comptime mul_chain(0), mul_chain(opaque_u32(0))); }
+    unsafe { failures += check(110, comptime options_hash(0), options_hash(opaque_u32(0))); }
     // Built by a `comptime` expression and read at run time.
-    failures += check(111, option_hash(comptime checked_mul10(7)), option_hash(checked_mul10(opaque_u32(7))));
-    failures += check(112, option_hash(comptime checked_mul10(429_496_730)), option_hash(checked_mul10(opaque_u32(429_496_730))));
-    failures += check(113, comptime try_hash(0), try_hash(opaque_u32(0)));
-    failures += check(114, comptime try_hash(13), try_hash(opaque_u32(13)));
-    failures += check(115, comptime bit_structs(0x9E, 0x1234_5678), bit_structs(opaque_u8(0x9E), opaque_u32(0x1234_5678)));
-    failures += check(116, comptime bit_structs(0x50, 0xFFFF_FFFF), bit_structs(opaque_u8(0x50), opaque_u32(0xFFFF_FFFF)));
-    failures += check(117, comptime bit_structs(0, 0), bit_structs(opaque_u8(0), opaque_u32(0)));
-    failures += check(118, comptime line_hash(0xD5 as Line), line_hash(opaque_line(opaque_u8(0xD5) as Line)));
+    unsafe { failures += check(111, option_hash(comptime checked_mul10(7)), option_hash(checked_mul10(opaque_u32(7)))); }
+    unsafe { failures += check(112, option_hash(comptime checked_mul10(429_496_730)), option_hash(checked_mul10(opaque_u32(429_496_730)))); }
+    unsafe { failures += check(113, comptime try_hash(0), try_hash(opaque_u32(0))); }
+    unsafe { failures += check(114, comptime try_hash(13), try_hash(opaque_u32(13))); }
+    unsafe { failures += check(115, comptime bit_structs(0x9E, 0x1234_5678), bit_structs(opaque_u8(0x9E), opaque_u32(0x1234_5678))); }
+    unsafe { failures += check(116, comptime bit_structs(0x50, 0xFFFF_FFFF), bit_structs(opaque_u8(0x50), opaque_u32(0xFFFF_FFFF))); }
+    unsafe { failures += check(117, comptime bit_structs(0, 0), bit_structs(opaque_u8(0), opaque_u32(0))); }
+    unsafe { failures += check(118, comptime line_hash(0xD5 as Line), line_hash(opaque_line(opaque_u8(0xD5) as Line))); }
     // Built by a `comptime` expression and read at run time.
-    failures += check(119, (comptime frame(200, 0xABC0_0000)) as u64, frame(opaque_u8(200), opaque_u32(0xABC0_0000)) as u64);
-    failures += check(120, (comptime frame(7, 0x1230_0000)).low as u64, frame(opaque_u8(7), opaque_u32(0x1230_0000)).low as u64);
-    failures += check(121, comptime zero_sized(7), zero_sized(opaque_u32(7)));
-    failures += check(122, comptime local_slots(5), local_slots(opaque_u32(5)));
+    unsafe { failures += check(119, (comptime frame(200, 0xABC0_0000)) as u64, frame(opaque_u8(200), opaque_u32(0xABC0_0000)) as u64); }
+    unsafe { failures += check(120, (comptime frame(7, 0x1230_0000)).low as u64, frame(opaque_u8(7), opaque_u32(0x1230_0000)).low as u64); }
+    unsafe { failures += check(121, comptime zero_sized(7), zero_sized(opaque_u32(7))); }
+    unsafe { failures += check(122, comptime local_slots(5), local_slots(opaque_u32(5))); }
     // The initializer of the static wrote the tag of each element.
-    failures += check(123, static_slots(opaque_u32(0)), mix(mix(mix(mix(0, 2), 2), 2), 2));
-    failures += check(124, comptime option_slots(5), option_slots(opaque_u32(5)));
+    unsafe { failures += check(123, static_slots(opaque_u32(0)), mix(mix(mix(mix(0, 2), 2), 2), 2)); }
+    unsafe { failures += check(124, comptime option_slots(5), option_slots(opaque_u32(5))); }
     failures += check(125, option_tags(&NO_TOKENS), mix(mix(mix(0, 2), 2), 2));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');

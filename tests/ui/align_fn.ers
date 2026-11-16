@@ -36,7 +36,7 @@ fn naked_ret() {
 #[align(8)]
 entry fn main() -> ! {
     let total: u32 = plain(1) + computed(2) + one(3) + exported(4);
-    naked_ret();
+    unsafe { naked_ret(); }
     loop {}
 }
 

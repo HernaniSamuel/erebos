@@ -7,8 +7,8 @@ extern static mut RX_COUNT: u32;
 static ENTRY: *const u32 = &raw const CRC_TABLE[2];
 
 fn count() -> u32 {
-    RX_COUNT += 1;
-    RX_COUNT + CRC_TABLE[1] + *ENTRY
+    unsafe { RX_COUNT += 1; }
+    unsafe { RX_COUNT + CRC_TABLE[1] + *ENTRY }
 }
 
 entry fn main() -> ! { loop {} }

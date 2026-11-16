@@ -6,10 +6,10 @@ fn sum(a: u32, b: u32) -> u32 {
     asm("add a0, a0, a1", "ret", options(noreturn));
 }
 
-const TOTAL: u32 = comptime { sum(1, 2) };
+const TOTAL: u32 = comptime { unsafe { sum(1, 2) } };
 
 entry fn main() -> ! {
-    sum(1, 2);
+    unsafe { sum(1, 2); }
     loop {}
 }
 

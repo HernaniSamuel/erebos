@@ -46,8 +46,8 @@ fn table() -> u32 {
 
 // An `extern static` that is not `mut` is borrowed the same way.
 fn outside() -> u32 {
-    let r: &u32 = &OUTSIDE;
-    OUTSIDE + read(&OUTSIDE) + *r
+    let r: &u32 = unsafe { &OUTSIDE };
+    unsafe { OUTSIDE + read(&OUTSIDE) + *r }
 }
 
 entry fn main() -> ! {

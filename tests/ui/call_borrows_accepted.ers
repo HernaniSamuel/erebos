@@ -60,7 +60,7 @@ fn lend() {
     writes_b(&mut PAIR.a);
     only_through(&mut COUNT);
     through_pointer(&mut COUNT);
-    outside(&mut COUNT);
+    unsafe { outside(&mut COUNT); }
     recurse(&mut COUNT, 3);
     passes_sym(&TABLE);
 }

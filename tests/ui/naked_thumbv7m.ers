@@ -40,9 +40,9 @@ fn no_result() {
 }
 
 entry fn main() -> ! {
-    let total: u32 = sum(1, 2) + scale_then_add_one(3) + exported(4);
-    widths(1, 2, 0 as *const u8, 3);
-    no_result();
+    let total: u32 = unsafe { sum(1, 2) } + unsafe { scale_then_add_one(3) } + unsafe { exported(4) };
+    unsafe { widths(1, 2, 0 as *const u8, 3); }
+    unsafe { no_result(); }
     loop {}
 }
 

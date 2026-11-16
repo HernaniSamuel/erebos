@@ -6,13 +6,13 @@ extern static UNIT: ();
 extern static mut UNIT_EXTERN_MUT: ();
 static mut UNIT_MUT: () = ();
 
-const READ_EXTERN_UNIT: () = UNIT;
+const READ_EXTERN_UNIT: () = unsafe { UNIT };
 const WRITE_EXTERN_UNIT: () = write_extern_unit();
 const READ_MUT_UNIT: () = UNIT_MUT;
 const WRITE_MUT_UNIT: () = write_mut_unit();
 
 fn write_extern_unit() {
-    UNIT_EXTERN_MUT = ();
+    unsafe { UNIT_EXTERN_MUT = (); }
 }
 
 fn write_mut_unit() {

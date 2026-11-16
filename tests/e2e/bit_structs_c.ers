@@ -83,17 +83,17 @@ fn print_bool(b: bool) {
 }
 
 entry fn main() -> ! {
-    let lcr: Lcr = c_flip_dlab(Lcr { .. });
+    let lcr: Lcr = unsafe { c_flip_dlab(Lcr { .. }) };
     print(&b"lcr");
     print_hex(lcr as u64, 2);
     print_bool(lcr.dlab);
     putc(b'\n');
 
     print(&b"c sees lcr");
-    print_hex(c_lcr_as_int(Lcr { word_length: 2, dlab: true, .. }) as u64, 8);
+    print_hex(unsafe { c_lcr_as_int(Lcr { word_length: 2, dlab: true, .. }) } as u64, 8);
     putc(b'\n');
 
-    let status: Status = c_status(5);
+    let status: Status = unsafe { c_status(5) };
     print(&b"status ");
     print_u64(status.count as u64);
     print_bool(status.ready);
@@ -101,10 +101,10 @@ entry fn main() -> ! {
     putc(b'\n');
 
     print(&b"c sees status");
-    print_hex(c_status_as_int(Status { count: 9, ready: true }) as u64, 8);
+    print_hex(unsafe { c_status_as_int(Status { count: 9, ready: true }) } as u64, 8);
     putc(b'\n');
 
-    let control: Control = c_rotate(Control { low: 0xBEEF, high: 0xC3 });
+    let control: Control = unsafe { c_rotate(Control { low: 0xBEEF, high: 0xC3 }) };
     print(&b"control");
     print_hex(control.low as u64, 4);
     print_hex(control.high as u64, 2);
@@ -112,11 +112,11 @@ entry fn main() -> ! {
     putc(b'\n');
 
     print(&b"c gets");
-    print_hex(c_lcr_from_erebos() as u64, 8);
-    print_hex(c_status_from_erebos() as u64, 8);
+    print_hex(unsafe { c_lcr_from_erebos() } as u64, 8);
+    print_hex(unsafe { c_status_from_erebos() } as u64, 8);
     putc(b' ');
-    print_u64(c_count_in_erebos() as u64);
-    print_hex(c_control_from_erebos() as u64, 8);
+    print_u64(unsafe { c_count_in_erebos() } as u64);
+    print_hex(unsafe { c_control_from_erebos() } as u64, 8);
     putc(b'\n');
     exit(0)
 }

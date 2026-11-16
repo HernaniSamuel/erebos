@@ -65,7 +65,7 @@ fn print_i64(n: i64) {
 // The quotient and the remainder of one C expression, on a line.
 fn udivmod(a: u64, b: u64) {
     let mut rem: u64 = 0;
-    let quotient: u64 = c_udivmod(a, b, &raw mut rem);
+    let quotient: u64 = unsafe { c_udivmod(a, b, &raw mut rem) };
     print_u64(quotient);
     putc(b' ');
     print_u64(rem);
@@ -74,7 +74,7 @@ fn udivmod(a: u64, b: u64) {
 
 fn sdivmod(a: i64, b: i64) {
     let mut rem: i64 = 0;
-    let quotient: i64 = c_sdivmod(a, b, &raw mut rem);
+    let quotient: i64 = unsafe { c_sdivmod(a, b, &raw mut rem) };
     print_i64(quotient);
     putc(b' ');
     print_i64(rem);
@@ -83,27 +83,27 @@ fn sdivmod(a: i64, b: i64) {
 
 entry fn main() -> ! {
     let big: u64 = 1234567890123 * 1000 + 89;
-    print_u64(c_udiv(big, 1000));
+    print_u64(unsafe { c_udiv(big, 1000) });
     putc(b' ');
-    print_u64(c_urem(big, 1000));
+    print_u64(unsafe { c_urem(big, 1000) });
     putc(b' ');
-    print_u64(c_urem(1000, 8));
+    print_u64(unsafe { c_urem(1000, 8) });
     putc(b'\n');
 
     let neg: i64 = 0 - big as i64;
-    print_i64(c_sdiv(neg, 1000));
+    print_i64(unsafe { c_sdiv(neg, 1000) });
     putc(b' ');
-    print_i64(c_srem(neg, 1000));
+    print_i64(unsafe { c_srem(neg, 1000) });
     putc(b' ');
-    print_i64(c_sdiv(neg, -1000));
+    print_i64(unsafe { c_sdiv(neg, -1000) });
     putc(b' ');
-    print_i64(c_srem(big as i64, -1000));
+    print_i64(unsafe { c_srem(big as i64, -1000) });
     putc(b'\n');
 
     let max: u64 = 0xFFFF_FFFF_FFFF_FFFF;
-    print_u64(c_udiv(max, 2));
+    print_u64(unsafe { c_udiv(max, 2) });
     putc(b' ');
-    print_u64(c_udiv(max, 0xFFFF_FFFF));
+    print_u64(unsafe { c_udiv(max, 0xFFFF_FFFF) });
     putc(b'\n');
 
     udivmod(big, 1000);

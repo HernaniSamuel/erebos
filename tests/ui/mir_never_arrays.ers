@@ -12,7 +12,7 @@ fn repeat() -> [u32; 3] {
 }
 
 fn literal() -> [u32; 3] {
-    [1, halt(), 3]
+    [1, unsafe { halt() }, 3]
 }
 
 fn returns() -> u32 {

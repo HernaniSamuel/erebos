@@ -540,7 +540,9 @@ impl Gen {
     /// `memory` block QEMU needs. Each function is called with two sets of
     /// literals, at compile time in `const CT_<f>_<k>: u64 = comptime ...;`
     /// and at run time with the same values through the `opaque_*`
-    /// functions of `OPAQUE_C`. `main` stops with `generated ok` and exit
+    /// functions of `OPAQUE_C`, whose calls the statement holds in an
+    /// `unsafe` block (ADR 0119); a function has two parameters at least, so
+    /// the block always holds a call. `main` stops with `generated ok` and exit
     /// code 0, or with the number (from 1) of the first function whose two
     /// results differ, after printing `#<number> <comptime> <run time>`.
     fn main(&mut self, functions: &[Function]) -> String {
@@ -566,7 +568,7 @@ impl Gen {
                 );
                 let _ = writeln!(
                     body,
-                    "    if bad == 0 {{ bad = check({}, CT_{i}_{k}, {}({})); }}",
+                    "    if bad == 0 {{ unsafe {{ bad = check({}, CT_{i}_{k}, {}({})); }} }}",
                     i + 1,
                     function.name,
                     run_time.join(", ")

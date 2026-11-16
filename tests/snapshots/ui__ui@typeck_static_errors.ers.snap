@@ -97,11 +97,11 @@ ty::assign-immutable
    ·                   ╰── help: declare it `extern static mut EXTERNAL`
  8 │ 
    ╰────
-    ╭─[typeck_static_errors.ers:25:5]
+    ╭─[typeck_static_errors.ers:25:14]
  24 │     let r: *const u32 = &raw const LIMIT;
- 25 │     EXTERNAL = 1;
-    ·     ────┬───
-    ·         ╰── assigned here
+ 25 │     unsafe { EXTERNAL = 1; }
+    ·              ────┬───
+    ·                  ╰── assigned here
  26 │     let e: *mut u32 = &raw mut EXTERNAL;
     ╰────
 ty::address-of-immutable
@@ -115,7 +115,7 @@ ty::address-of-immutable
  8 │ 
    ╰────
     ╭─[typeck_static_errors.ers:26:32]
- 25 │     EXTERNAL = 1;
+ 25 │     unsafe { EXTERNAL = 1; }
  26 │     let e: *mut u32 = &raw mut EXTERNAL;
     ·                                ────┬───
     ·                                    ╰── address taken here

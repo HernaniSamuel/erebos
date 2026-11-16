@@ -22,7 +22,7 @@ fn writes() {
     COUNT = 5;
     let q: *mut u32 = &raw mut COUNT;
     let r: *const u32 = &raw const LIMIT;
-    EXTERNAL = 1;
+    unsafe { EXTERNAL = 1; }
     let e: *mut u32 = &raw mut EXTERNAL;
 }
 

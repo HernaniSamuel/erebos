@@ -41,7 +41,7 @@ fn mut_borrows(r: &u32, p: *const u32, pair: Pair) {
     let d: &mut Pair = &mut make();
     let e: &mut u32 = &mut *r;
     let f: &mut u32 = &mut *p;
-    let g: &mut u32 = &mut EXTERNAL;
+    let g: &mut u32 = unsafe { &mut EXTERNAL };
     let h: &mut u32 = &mut make().a;
     let i: &mut u32 = &mut pair.a;
     let j: &mut u32 = &mut 5;

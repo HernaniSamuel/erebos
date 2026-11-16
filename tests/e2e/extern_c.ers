@@ -30,20 +30,20 @@ fn print_u64(n: u64) {
 }
 
 entry fn main() -> ! {
-    print_u64(c_add(40, 2) as u64);
+    print_u64(unsafe { c_add(40, 2) } as u64);
     putc(b'\n');
-    let negated: i16 = c_negate(7);
+    let negated: i16 = unsafe { c_negate(7) };
     if negated < 0 {
         putc(b'-');
     }
     print_u64((0 - negated) as u64);
     putc(b'\n');
-    print_u64(c_mul64(1_000_000, 1_000_000));
+    print_u64(unsafe { c_mul64(1_000_000, 1_000_000) });
     putc(b'\n');
-    print_u64(c_sum_squares(4) as u64);
+    print_u64(unsafe { c_sum_squares(4) } as u64);
     putc(b'\n');
     let mut buf: [u8; 4] = [0; 4];
-    c_fill(&raw mut buf[0], 4, b'z');
+    unsafe { c_fill(&raw mut buf[0], 4, b'z'); }
     let mut i: usize = 0;
     while i < 4 {
         putc(buf[i]);

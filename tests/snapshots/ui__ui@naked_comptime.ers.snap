@@ -14,10 +14,10 @@ eval::asm
     ·                            ╰── inline assembly cannot run at compile time
   7 │ }
   8 │ 
-  9 │ const TOTAL: u32 = comptime { sum(1, 2) };
-    ·                             ──────┬──────┬
-    ·                                   │      ╰── called here
-    ·                                   ╰── while evaluating this `comptime` expression
+  9 │ const TOTAL: u32 = comptime { unsafe { sum(1, 2) } };
+    ·                             ────────────┬───────────┬
+    ·                                         │           ╰── called here
+    ·                                         ╰── while evaluating this `comptime` expression
  10 │ 
     ╰────
   help: this code runs at compile time (ADR 0027)

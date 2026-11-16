@@ -29,12 +29,12 @@ fn print_u32(n: u32) {
 }
 
 entry fn main() -> ! {
-    print_u32(c_read_ticks());
+    print_u32(unsafe { c_read_ticks() });
     putc(b' ');
     timer::ticks += 1;
-    print_u32(c_read_ticks());
+    print_u32(unsafe { c_read_ticks() });
     putc(b' ');
-    print_u32(c_double_plus_one(42));
+    print_u32(unsafe { c_double_plus_one(42) });
     putc(b'\n');
     exit(0)
 }

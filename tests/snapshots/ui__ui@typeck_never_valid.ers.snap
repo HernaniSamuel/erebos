@@ -23,11 +23,12 @@ fn arrays() -> [u32; 3]
     let a: [u32; 3]
     expr 8 repeat 545..557: !
     expr 9 loop 546..553: !
-    expr 10 array 563..577: !
+    expr 10 array 563..588: !
     expr 11 int 1 564..565: u32
-    expr 12 call 567..573: !
-    expr 13 int 3 575..576: u32
+    expr 12 unsafe 567..584: !
+    expr 13 call 576..582: !
+    expr 14 int 3 586..587: u32
 entry fn main() -> !
-    expr 14 loop 604..611: !
+    expr 15 loop 615..622: !
 panic fn on_panic() -> !
-    expr 15 loop 641..648: !
+    expr 16 loop 652..659: !

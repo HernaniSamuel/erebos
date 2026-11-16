@@ -23,18 +23,18 @@ fn print_u32(n: u32) {
 }
 
 entry fn main() -> ! {
-    let before: u32 = rx_count;
-    rx_count += 2;
+    let before: u32 = unsafe { rx_count };
+    unsafe { rx_count += 2; }
     print_u32(before);
     putc(b' ');
-    print_u32(rx_count);
+    print_u32(unsafe { rx_count });
     putc(b' ');
-    print_u32(c_rx_count());
+    print_u32(unsafe { c_rx_count() });
     putc(b'\n');
 
-    print_u32(crc_lookup[0] as u32);
+    print_u32(unsafe { crc_lookup[0] } as u32);
     putc(b' ');
-    print_u32(crc_lookup[3] as u32);
+    print_u32(unsafe { crc_lookup[3] } as u32);
     putc(b' ');
     print_u32(*THIRD as u32);
     putc(b'\n');

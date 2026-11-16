@@ -1,0 +1,825 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_extern_errors.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the type of a static
+    ╭─[unsafe_extern_errors.ers:62:22]
+ 61 │ extern static mut c_reg: Reg;
+ 62 │ extern static c_ref: &u32;
+    ·                      ──┬─
+    ·                        ╰── `&u32` is a reference
+ 63 │ 
+    ╰────
+  help: a static or a constant holds a value computed at compile time, which is never a reference
+        (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
+ty::unsafe-required
+
+  × calling `extern fn c_add` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:65:18]
+ 64 │ fn calls(buffer: &[u8]) -> u32 {
+ 65 │     let a: u32 = c_add(1, 2);
+    ·                  ─────┬─────
+    ·                       ╰── this calls an `extern fn`
+ 66 │     let b: u32 = c_sum(buffer);
+    ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_sum` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:66:18]
+ 65 │     let a: u32 = c_add(1, 2);
+ 66 │     let b: u32 = c_sum(buffer);
+    ·                  ──────┬──────
+    ·                        ╰── this calls an `extern fn`
+ 67 │     c_noop();
+    ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_noop` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:67:5]
+ 66 │     let b: u32 = c_sum(buffer);
+ 67 │     c_noop();
+    ·     ────┬───
+    ·         ╰── this calls an `extern fn`
+ 68 │     let c: bool = device::c_ready();
+    ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn device::c_ready` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:68:19]
+ 67 │     c_noop();
+ 68 │     let c: bool = device::c_ready();
+    ·                   ────────┬────────
+    ·                           ╰── this calls an `extern fn`
+ 69 │     a + b + c as u32
+    ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling the `#[naked]` function `naked_sum` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:73:18]
+ 72 │ fn naked_calls(reg: &Reg) -> u32 {
+ 73 │     let a: u32 = naked_sum(1, 2);
+    ·                  ───────┬───────
+    ·                         ╰── this calls a naked function
+ 74 │     naked_unsafe();
+    ╰────
+  help: the compiler checks nothing of what a `#[naked]` function does, since its body is one
+        `asm`: call it inside an `unsafe { }` block, after checking that it is sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn naked_unsafe` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:74:5]
+ 73 │     let a: u32 = naked_sum(1, 2);
+ 74 │     naked_unsafe();
+    ·     ───────┬──────
+    ·            ╰── this calls `unsafe fn naked_unsafe`
+ 75 │     reg.flush();
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling the `#[naked]` function `Reg::flush` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:75:9]
+ 74 │     naked_unsafe();
+ 75 │     reg.flush();
+    ·         ──┬──
+    ·           ╰── this calls a naked function
+ 76 │     a
+    ╰────
+  help: the compiler checks nothing of what a `#[naked]` function does, since its body is one
+        `asm`: call it inside an `unsafe { }` block, after checking that it is sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_noop` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:84:5]
+ 83 │     }
+ 84 │     c_noop();
+    ·     ────┬───
+    ·         ╰── this calls an `extern fn`
+ 85 │ }
+    ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_add` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:89:5]
+ 88 │ fn three_in_one() -> u32 {
+ 89 │     c_add(naked_sum(1, 2), c_count)
+    ·     ───────────────┬───────────────
+    ·                    ╰── this calls an `extern fn`
+ 90 │ }
+    ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling the `#[naked]` function `naked_sum` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:89:11]
+ 88 │ fn three_in_one() -> u32 {
+ 89 │     c_add(naked_sum(1, 2), c_count)
+    ·           ───────┬───────
+    ·                  ╰── this calls a naked function
+ 90 │ }
+    ╰────
+  help: the compiler checks nothing of what a `#[naked]` function does, since its body is one
+        `asm`: call it inside an `unsafe { }` block, after checking that it is sound (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:89:28]
+ 88 │ fn three_in_one() -> u32 {
+ 89 │     c_add(naked_sum(1, 2), c_count)
+    ·                            ───┬───
+    ·                               ╰── this reads an `extern static`
+ 90 │ }
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:93:21]
+ 92 │ fn statics() -> u32 {
+ 93 │     let read: u32 = c_count;
+    ·                     ───┬───
+    ·                        ╰── this reads an `extern static`
+ 94 │     c_count = 1;
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × writing `extern static c_count` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:94:5]
+ 93 │     let read: u32 = c_count;
+ 94 │     c_count = 1;
+    ·     ───┬───
+    ·        ╰── this writes an `extern static`
+ 95 │     c_count += 2;
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing `extern static c_count` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:95:5]
+ 94 │     c_count = 1;
+ 95 │     c_count += 2;
+    ·     ───┬───
+    ·        ╰── this reads and writes an `extern static`
+ 96 │     let element: u16 = c_table[1];
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_table` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:96:24]
+ 95 │     c_count += 2;
+ 96 │     let element: u16 = c_table[1];
+    ·                        ───┬───
+    ·                           ╰── this reads an `extern static`
+ 97 │     let field: u32 = c_pair.a;
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_pair` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:97:22]
+ 96 │     let element: u16 = c_table[1];
+ 97 │     let field: u32 = c_pair.a;
+    ·                      ───┬──
+    ·                         ╰── this reads an `extern static`
+ 98 │     c_pair.b = 5;
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × writing `extern static c_pair` needs an `unsafe` block
+    ╭─[unsafe_extern_errors.ers:98:5]
+ 97 │     let field: u32 = c_pair.a;
+ 98 │     c_pair.b = 5;
+    ·     ───┬──
+    ·        ╰── this writes an `extern static`
+ 99 │     read + element as u32 + field
+    ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:103:20]
+ 102 │ fn borrows() {
+ 103 │     let r: &u32 = &c_count;
+     ·                    ───┬───
+     ·                       ╰── this borrows an `extern static`
+ 104 │     let m: &mut u32 = &mut c_count;
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:104:28]
+ 103 │     let r: &u32 = &c_count;
+ 104 │     let m: &mut u32 = &mut c_count;
+     ·                            ───┬───
+     ·                               ╰── this borrows an `extern static`
+ 105 │     let t: &u16 = &c_table[3];
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing `extern static c_table` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:105:20]
+ 104 │     let m: &mut u32 = &mut c_count;
+ 105 │     let t: &u16 = &c_table[3];
+     ·                    ───┬───
+     ·                       ╰── this borrows an `extern static`
+ 106 │     let p: &mut u32 = &mut c_pair.a;
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing `extern static c_pair` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:106:28]
+ 105 │     let t: &u16 = &c_table[3];
+ 106 │     let p: &mut u32 = &mut c_pair.a;
+     ·                            ───┬──
+     ·                               ╰── this borrows an `extern static`
+ 107 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing `extern static c_reg` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:111:5]
+ 110 │ fn receivers() -> u32 {
+ 111 │     c_reg.get() + c_reg.take()
+     ·     ──┬──
+     ·       ╰── this borrows an `extern static`
+ 112 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_reg` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:111:19]
+ 110 │ fn receivers() -> u32 {
+ 111 │     c_reg.get() + c_reg.take()
+     ·                   ──┬──
+     ·                     ╰── this reads an `extern static`
+ 112 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:116:5]
+ 115 │ fn symbols() {
+ 116 │     asm("call {f}", f = sym naked_sum, clobber_abi("C"));
+     ·     ──────────────────────────┬─────────────────────────
+     ·                               ╰── this `asm`
+ 117 │     asm("call {f}", f = sym c_noop, clobber_abi("C"));
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:117:5]
+ 116 │     asm("call {f}", f = sym naked_sum, clobber_abi("C"));
+ 117 │     asm("call {f}", f = sym c_noop, clobber_abi("C"));
+     ·     ────────────────────────┬────────────────────────
+     ·                             ╰── this `asm`
+ 118 │ }
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × calling `extern fn c_add` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:121:5]
+ 120 │ unsafe fn in_an_unsafe_fn() -> u32 {
+ 121 │     c_add(1, 2) + c_count
+     ·     ─────┬─────
+     ·          ╰── this calls an `extern fn`
+ 122 │ }
+     ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119); the body of an `unsafe fn` is not an `unsafe` block, so it needs its own
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:121:19]
+ 120 │ unsafe fn in_an_unsafe_fn() -> u32 {
+ 121 │     c_add(1, 2) + c_count
+     ·                   ───┬───
+     ·                      ╰── this reads an `extern static`
+ 122 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119); the body of an `unsafe fn` is not an `unsafe` block, so it needs its
+        own
+ty::unsafe-required
+
+  × calling `extern fn c_noop` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:126:9]
+ 125 │     critical {
+ 126 │         c_noop();
+     ·         ────┬───
+     ·             ╰── this calls an `extern fn`
+ 127 │         c_count = 1;
+     ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × writing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:127:9]
+ 126 │         c_noop();
+ 127 │         c_count = 1;
+     ·         ───┬───
+     ·            ╰── this writes an `extern static`
+ 128 │     }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_add` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:133:21]
+ 132 │ // evaluator runs.
+ 133 │ const FROM_C: u32 = c_add(1, 2);
+     ·                     ─────┬─────
+     ·                          ╰── this calls an `extern fn`
+ 134 │ const FROM_STATIC: u16 = c_table[0];
+     ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_table` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:134:26]
+ 133 │ const FROM_C: u32 = c_add(1, 2);
+ 134 │ const FROM_STATIC: u16 = c_table[0];
+     ·                          ───┬───
+     ·                             ╰── this reads an `extern static`
+ 135 │ const BUFFER: [u8; c_len()] = [0; c_len()];
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_len` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:135:20]
+ 134 │ const FROM_STATIC: u16 = c_table[0];
+ 135 │ const BUFFER: [u8; c_len()] = [0; c_len()];
+     ·                    ───┬───
+     ·                       ╰── this calls an `extern fn`
+ 136 │ 
+     ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_len` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:135:35]
+ 134 │ const FROM_STATIC: u16 = c_table[0];
+ 135 │ const BUFFER: [u8; c_len()] = [0; c_len()];
+     ·                                   ───┬───
+     ·                                      ╰── this calls an `extern fn`
+ 136 │ 
+     ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_extern_errors.ers:139:25]
+ 138 │ fn only_addresses() -> usize {
+ 139 │     let a: *const u32 = unsafe { &raw const c_count };
+     ·                         ───┬──
+     ·                            ╰── nothing in it needs `unsafe`
+ 140 │     unsafe {
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_extern_errors.ers:140:5]
+ 139 │     let a: *const u32 = unsafe { &raw const c_count };
+ 140 │     unsafe {
+     ·     ───┬──
+     ·        ╰── nothing in it needs `unsafe`
+ 141 │         let b: *const u16 = &raw const c_table[1];
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unknown-method
+
+  × `u32` has no method `missing`
+     ╭─[unsafe_extern_errors.ers:152:13]
+ 151 │ fn operand_in_error(x: u32) {
+ 152 │     c_add(x.missing(), 1);
+     ·             ───┬───
+     ·                ╰── no such method
+ 153 │     naked_sum(1, x.missing());
+     ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unknown-method
+
+  × `u32` has no method `missing`
+     ╭─[unsafe_extern_errors.ers:153:20]
+ 152 │     c_add(x.missing(), 1);
+ 153 │     naked_sum(1, x.missing());
+     ·                    ───┬───
+     ·                       ╰── no such method
+ 154 │     c_count = x.missing();
+     ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unsafe-required
+
+  × writing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:154:5]
+ 153 │     naked_sum(1, x.missing());
+ 154 │     c_count = x.missing();
+     ·     ───┬───
+     ·        ╰── this writes an `extern static`
+ 155 │     unsafe {
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unknown-method
+
+  × `u32` has no method `missing`
+     ╭─[unsafe_extern_errors.ers:154:17]
+ 153 │     naked_sum(1, x.missing());
+ 154 │     c_count = x.missing();
+     ·                 ───┬───
+     ·                    ╰── no such method
+ 155 │     unsafe {
+     ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unknown-method
+
+  × `u32` has no method `missing`
+     ╭─[unsafe_extern_errors.ers:156:17]
+ 155 │     unsafe {
+ 156 │         c_add(x.missing(), 1);
+     ·                 ───┬───
+     ·                    ╰── no such method
+ 157 │         naked_sum(1, x.missing());
+     ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unknown-method
+
+  × `u32` has no method `missing`
+     ╭─[unsafe_extern_errors.ers:157:24]
+ 156 │         c_add(x.missing(), 1);
+ 157 │         naked_sum(1, x.missing());
+     ·                        ───┬───
+     ·                           ╰── no such method
+ 158 │         c_count = x.missing();
+     ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unknown-method
+
+  × `u32` has no method `missing`
+     ╭─[unsafe_extern_errors.ers:158:21]
+ 157 │         naked_sum(1, x.missing());
+ 158 │         c_count = x.missing();
+     ·                     ───┬───
+     ·                        ╰── no such method
+ 159 │     }
+     ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:183:44]
+ 182 │ fn bound_and_length() -> usize {
+ 183 │     let p: *const u16 = &raw const c_table[c_count as usize];
+     ·                                            ───┬───
+     ·                                               ╰── this reads an `extern static`
+ 184 │     len(c_slice)
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_slice` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:184:9]
+ 183 │     let p: *const u16 = &raw const c_table[c_count as usize];
+ 184 │     len(c_slice)
+     ·         ───┬───
+     ·            ╰── this reads an `extern static`
+ 185 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:192:5]
+ 191 │ fn asm_operands() {
+ 192 │     asm("nop {}", in(reg) c_count);
+     ·     ───────────────┬──────────────
+     ·                    ╰── this `asm`
+ 193 │     asm("nop {}", out(reg) c_count);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:192:27]
+ 191 │ fn asm_operands() {
+ 192 │     asm("nop {}", in(reg) c_count);
+     ·                           ───┬───
+     ·                              ╰── this reads an `extern static`
+ 193 │     asm("nop {}", out(reg) c_count);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:193:5]
+ 192 │     asm("nop {}", in(reg) c_count);
+ 193 │     asm("nop {}", out(reg) c_count);
+     ·     ───────────────┬───────────────
+     ·                    ╰── this `asm`
+ 194 │     asm("nop {}", lateout(reg) c_count);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:193:28]
+ 192 │     asm("nop {}", in(reg) c_count);
+ 193 │     asm("nop {}", out(reg) c_count);
+     ·                            ───┬───
+     ·                               ╰── this writes an `extern static`
+ 194 │     asm("nop {}", lateout(reg) c_count);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:194:5]
+ 193 │     asm("nop {}", out(reg) c_count);
+ 194 │     asm("nop {}", lateout(reg) c_count);
+     ·     ─────────────────┬─────────────────
+     ·                      ╰── this `asm`
+ 195 │     asm("nop {}", inout(reg) c_count);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:194:32]
+ 193 │     asm("nop {}", out(reg) c_count);
+ 194 │     asm("nop {}", lateout(reg) c_count);
+     ·                                ───┬───
+     ·                                   ╰── this writes an `extern static`
+ 195 │     asm("nop {}", inout(reg) c_count);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:195:5]
+ 194 │     asm("nop {}", lateout(reg) c_count);
+ 195 │     asm("nop {}", inout(reg) c_count);
+     ·     ────────────────┬────────────────
+     ·                     ╰── this `asm`
+ 196 │     asm("nop {}", inout(reg) 1 as u32 => c_count);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × reading and writing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:195:30]
+ 194 │     asm("nop {}", lateout(reg) c_count);
+ 195 │     asm("nop {}", inout(reg) c_count);
+     ·                              ───┬───
+     ·                                 ╰── this reads and writes an `extern static`
+ 196 │     asm("nop {}", inout(reg) 1 as u32 => c_count);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:196:5]
+ 195 │     asm("nop {}", inout(reg) c_count);
+ 196 │     asm("nop {}", inout(reg) 1 as u32 => c_count);
+     ·     ──────────────────────┬──────────────────────
+     ·                           ╰── this `asm`
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:196:42]
+ 195 │     asm("nop {}", inout(reg) c_count);
+ 196 │     asm("nop {}", inout(reg) 1 as u32 => c_count);
+     ·                                          ───┬───
+     ·                                             ╰── this writes an `extern static`
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:197:5]
+ 196 │     asm("nop {}", inout(reg) 1 as u32 => c_count);
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+     ·     ───────────────────┬──────────────────
+     ·                        ╰── this `asm`
+ 198 │     asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:197:30]
+ 196 │     asm("nop {}", inout(reg) 1 as u32 => c_count);
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+     ·                              ───┬───
+     ·                                 ╰── this reads an `extern static`
+ 198 │     asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:198:5]
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+ 198 │     asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+     ·     ───────────────────────────┬───────────────────────────
+     ·                                ╰── this `asm`
+ 199 │     asm("nop {}", out(reg) _);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing `extern static c_pair` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:198:31]
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+ 198 │     asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+     ·                               ───┬──
+     ·                                  ╰── this writes an `extern static`
+ 199 │     asm("nop {}", out(reg) _);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_table` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:198:49]
+ 197 │     asm("nop {}", inout(reg) c_count => _);
+ 198 │     asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+     ·                                                 ───┬───
+     ·                                                    ╰── this reads an `extern static`
+ 199 │     asm("nop {}", out(reg) _);
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:199:5]
+ 198 │     asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+ 199 │     asm("nop {}", out(reg) _);
+     ·     ────────────┬────────────
+     ·                 ╰── this `asm`
+ 200 │ }
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::asm-template
+
+  × an operand is not used in the template
+     ╭─[unsafe_extern_errors.ers:207:16]
+ 206 │ fn naked_operand() {
+ 207 │     asm("ret", in(reg) c_count, options(noreturn))
+     ·                ───────┬───────
+     ·                       ╰── no placeholder places it
+ 208 │ }
+     ╰────
+  help: write `{}`, `{N}` or `{name}` where its register, symbol or value goes; an operand with a
+        register of its own is exempt (ADR 0079)
+ty::naked-body
+
+  × the `asm` of a naked function takes only `sym` and `const` operands
+     ╭─[unsafe_extern_errors.ers:207:16]
+ 206 │ fn naked_operand() {
+ 207 │     asm("ret", in(reg) c_count, options(noreturn))
+     ·                ───────┬───────
+     ·                       ╰── not allowed here
+ 208 │ }
+     ╰────
+  help: a naked function has no variables: its parameters arrive where the C ABI puts them, and
+        the template reads them there; only symbols and compile-time values can be named (ADR
+        0079)
+ty::unsafe-required
+
+  × reading `extern static c_count` needs an `unsafe` block
+     ╭─[unsafe_extern_errors.ers:207:24]
+ 206 │ fn naked_operand() {
+ 207 │     asm("ret", in(reg) c_count, options(noreturn))
+     ·                        ───┬───
+     ·                           ╰── this reads an `extern static`
+ 208 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)

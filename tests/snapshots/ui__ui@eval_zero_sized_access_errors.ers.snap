@@ -8,11 +8,11 @@ eval::extern-static
 
   × `UNIT` is an `extern static`, defined outside the program, so it cannot be read or written at
   │ compile time
-    ╭─[eval_zero_sized_access_errors.ers:9:30]
+    ╭─[eval_zero_sized_access_errors.ers:9:39]
   8 │ 
-  9 │ const READ_EXTERN_UNIT: () = UNIT;
-    ·       ────────┬───────       ──┬─
-    ·               │                ╰── read here
+  9 │ const READ_EXTERN_UNIT: () = unsafe { UNIT };
+    ·       ────────┬───────                ──┬─
+    ·               │                         ╰── read here
     ·               ╰── while evaluating the constant `READ_EXTERN_UNIT`
  10 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
     ╰────
@@ -33,8 +33,8 @@ eval::extern-static
 
   × `UNIT_EXTERN_MUT` is an `extern static`, defined outside the program, so it cannot be read or
   │ written at compile time
-    ╭─[eval_zero_sized_access_errors.ers:15:5]
-  9 │ const READ_EXTERN_UNIT: () = UNIT;
+    ╭─[eval_zero_sized_access_errors.ers:15:14]
+  9 │ const READ_EXTERN_UNIT: () = unsafe { UNIT };
  10 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
     ·       ────────┬────────       ─────────┬─────────
     ·               │                        ╰── called here
@@ -43,9 +43,9 @@ eval::extern-static
  12 │ const WRITE_MUT_UNIT: () = write_mut_unit();
  13 │ 
  14 │ fn write_extern_unit() {
- 15 │     UNIT_EXTERN_MUT = ();
-    ·     ──────────┬─────────
-    ·               ╰── written here
+ 15 │     unsafe { UNIT_EXTERN_MUT = (); }
+    ·              ──────────┬─────────
+    ·                        ╰── written here
  16 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -60,7 +60,7 @@ eval::static-mut
     ·              ╰── while evaluating the constant `WRITE_MUT_UNIT`
  13 │ 
  14 │ fn write_extern_unit() {
- 15 │     UNIT_EXTERN_MUT = ();
+ 15 │     unsafe { UNIT_EXTERN_MUT = (); }
  16 │ }
  17 │ 
  18 │ fn write_mut_unit() {

@@ -139,35 +139,36 @@ fn entry_of(i: usize) -> &u8
     expr 101 local i 3021..3022: usize
     expr 102 int 4 3025..3026: usize
 fn limit() -> &u32
-    expr 103 & 3056..3062: &u32
-    expr 104 static LIMIT 3057..3062: u32
+    expr 103 unsafe 3056..3073: &u32
+    expr 104 & 3065..3071: &u32
+    expr 105 static LIMIT 3066..3071: u32
 extern fn lookup(s: &[u8]) -> &u8
 extern fn banner() -> &[u8]
 fn exported(s: &[u8]) -> &[u8]
-    expr 105 & 3179..3186: &[u8]
-    expr 106 subslice 3180..3186: [u8]
-    expr 107 local s 3180..3181: &[u8], dereferenced
-    expr 108 int 1 3182..3183: usize
+    expr 106 & 3190..3197: &[u8]
+    expr 107 subslice 3191..3197: [u8]
+    expr 108 local s 3191..3192: &[u8], dereferenced
+    expr 109 int 1 3193..3194: usize
 naked fn naked(r: &u32) -> &u32
-    expr 109 asm 3231..3260: !
+    expr 110 asm 3242..3271: !
 fn counter() -> &u32
-    expr 110 & 3367..3387: &u32
-    expr 111 deref 3368..3387: u32
-    expr 112 &raw const 3369..3387: *const u32
-    expr 113 static OWNED 3381..3386: u32
+    expr 111 & 3378..3398: &u32
+    expr 112 deref 3379..3398: u32
+    expr 113 &raw const 3380..3398: *const u32
+    expr 114 static OWNED 3392..3397: u32
 fn shared_counter() -> &u32
     let p: *const u32
-    expr 114 critical 3445..3475: *const u32
-    expr 115 &raw const 3456..3473: *const u32
-    expr 116 static SHARED 3467..3473: u32
-    expr 117 & 3481..3484: &u32
-    expr 118 deref 3482..3484: u32
-    expr 119 local p 3483..3484: *const u32
+    expr 115 critical 3456..3486: *const u32
+    expr 116 &raw const 3467..3484: *const u32
+    expr 117 static SHARED 3478..3484: u32
+    expr 118 & 3492..3495: &u32
+    expr 119 deref 3493..3495: u32
+    expr 120 local p 3494..3495: *const u32
 interrupt fn tick() -> () at MachineTimer
-    expr 120 critical 3538..3575: ()
-    expr 121 assign += 3557..3568: ()
-    expr 122 static SHARED 3557..3563: u32
-    expr 123 int 1 3567..3568: u32
+    expr 121 critical 3549..3586: ()
+    expr 122 assign += 3568..3579: ()
+    expr 123 static SHARED 3568..3574: u32
+    expr 124 int 1 3578..3579: u32
 fn uses(s: &[u8; 3]) -> u32
     let mut ring: Ring
     let p: Pair
@@ -177,138 +178,138 @@ fn uses(s: &[u8; 3]) -> u32
     let indexed: u8
     let a: u32
     let cfg: Config
-    expr 124 struct Ring 3697..3726: Ring
-    expr 125 repeat 3709..3715: [u8; 8]
-    expr 126 int 0 3710..3711: u8
-    expr 127 int 0 3723..3724: usize
-    expr 128 assign 3732..3749: ()
-    expr 129 deref 3732..3745: u8
-    expr 130 method Ring::slot (&mut self) 3733..3745: &mut u8
-    expr 131 local ring 3733..3737: Ring
-    expr 132 int 2 3743..3744: usize
-    expr 133 int 9 3748..3749: u8
-    expr 134 assign 3755..3781: ()
-    expr 135 deref 3755..3777: u8
-    expr 136 call 3756..3777: &mut u8
-    expr 137 &mut 3764..3773: &mut Ring
-    expr 138 local ring 3769..3773: Ring
-    expr 139 int 3 3775..3776: usize
-    expr 140 int 4 3780..3781: u8
-    expr 141 struct Pair 3801..3820: Pair
-    expr 142 int 1 3811..3812: u32
-    expr 143 int 2 3817..3818: u32
-    expr 144 method Ring::peek (&self) 3842..3853: &u8
-    expr 145 local ring 3842..3846: Ring
-    expr 146 binary + 3880..3905: u32
-    expr 147 deref 3880..3890: u32
-    expr 148 call 3881..3890: &u32
-    expr 149 & 3887..3889: &Pair
-    expr 150 local p 3888..3889: Pair
-    expr 151 as u32 3893..3905: u32
-    expr 152 deref 3893..3898: u8
-    expr 153 local held 3894..3898: &u8
-    expr 154 call 3929..3946: &u8
-    expr 155 call 3935..3945: &[u8]
-    expr 156 local s 3940..3941: &[u8; 3] as &[u8]
-    expr 157 int 1 3943..3944: usize
-    expr 158 index 3970..3983: u8
-    expr 159 call 3970..3980: &[u8], dereferenced
-    expr 160 local s 3975..3976: &[u8; 3] as &[u8]
-    expr 161 int 1 3978..3979: usize
-    expr 162 int 0 3981..3982: usize
-    expr 163 binary + 4002..4045: u32
-    expr 164 binary + 4002..4028: u32
-    expr 165 as u32 4002..4016: u32
-    expr 166 deref 4002..4009: u8
-    expr 167 local chosen 4003..4009: &u8
-    expr 168 field a 4019..4028: u32
-    expr 169 call 4019..4026: &Pair, dereferenced
-    expr 170 & 4023..4025: &Pair
-    expr 171 local p 4024..4025: Pair
-    expr 172 as u32 4031..4045: u32
-    expr 173 local indexed 4031..4038: u8
-    expr 174 struct Config 4069..4098: Config
-    expr 175 int 0 4084..4085: u32
-    expr 176 int 0 4095..4096: u8
-    expr 177 binary + 4104..4190: u32
-    expr 178 binary + 4104..4170: u32
-    expr 179 binary + 4104..4157: u32
-    expr 180 binary + 4104..4143: u32
-    expr 181 binary + 4104..4117: u32
-    expr 182 local from_call 4104..4113: u32
-    expr 183 local a 4116..4117: u32
-    expr 184 as u32 4120..4143: u32
-    expr 185 index 4120..4136: u8
-    expr 186 deref 4120..4133: [u8; 8]
-    expr 187 method Ring::buf (&self) 4122..4132: &[u8; 8]
-    expr 188 local ring 4122..4126: Ring
-    expr 189 int 2 4134..4135: usize
-    expr 190 deref 4146..4157: u32
-    expr 191 method Config::rate (&self) 4147..4157: &u32
-    expr 192 local cfg 4147..4150: Config
-    expr 193 deref 4160..4170: u32
-    expr 194 call 4161..4170: &u32
-    expr 195 deref 4173..4190: u32
-    expr 196 call 4174..4190: &u32
+    expr 125 struct Ring 3708..3737: Ring
+    expr 126 repeat 3720..3726: [u8; 8]
+    expr 127 int 0 3721..3722: u8
+    expr 128 int 0 3734..3735: usize
+    expr 129 assign 3743..3760: ()
+    expr 130 deref 3743..3756: u8
+    expr 131 method Ring::slot (&mut self) 3744..3756: &mut u8
+    expr 132 local ring 3744..3748: Ring
+    expr 133 int 2 3754..3755: usize
+    expr 134 int 9 3759..3760: u8
+    expr 135 assign 3766..3792: ()
+    expr 136 deref 3766..3788: u8
+    expr 137 call 3767..3788: &mut u8
+    expr 138 &mut 3775..3784: &mut Ring
+    expr 139 local ring 3780..3784: Ring
+    expr 140 int 3 3786..3787: usize
+    expr 141 int 4 3791..3792: u8
+    expr 142 struct Pair 3812..3831: Pair
+    expr 143 int 1 3822..3823: u32
+    expr 144 int 2 3828..3829: u32
+    expr 145 method Ring::peek (&self) 3853..3864: &u8
+    expr 146 local ring 3853..3857: Ring
+    expr 147 binary + 3891..3916: u32
+    expr 148 deref 3891..3901: u32
+    expr 149 call 3892..3901: &u32
+    expr 150 & 3898..3900: &Pair
+    expr 151 local p 3899..3900: Pair
+    expr 152 as u32 3904..3916: u32
+    expr 153 deref 3904..3909: u8
+    expr 154 local held 3905..3909: &u8
+    expr 155 call 3940..3957: &u8
+    expr 156 call 3946..3956: &[u8]
+    expr 157 local s 3951..3952: &[u8; 3] as &[u8]
+    expr 158 int 1 3954..3955: usize
+    expr 159 index 3981..3994: u8
+    expr 160 call 3981..3991: &[u8], dereferenced
+    expr 161 local s 3986..3987: &[u8; 3] as &[u8]
+    expr 162 int 1 3989..3990: usize
+    expr 163 int 0 3992..3993: usize
+    expr 164 binary + 4013..4056: u32
+    expr 165 binary + 4013..4039: u32
+    expr 166 as u32 4013..4027: u32
+    expr 167 deref 4013..4020: u8
+    expr 168 local chosen 4014..4020: &u8
+    expr 169 field a 4030..4039: u32
+    expr 170 call 4030..4037: &Pair, dereferenced
+    expr 171 & 4034..4036: &Pair
+    expr 172 local p 4035..4036: Pair
+    expr 173 as u32 4042..4056: u32
+    expr 174 local indexed 4042..4049: u8
+    expr 175 struct Config 4080..4109: Config
+    expr 176 int 0 4095..4096: u32
+    expr 177 int 0 4106..4107: u8
+    expr 178 binary + 4115..4201: u32
+    expr 179 binary + 4115..4181: u32
+    expr 180 binary + 4115..4168: u32
+    expr 181 binary + 4115..4154: u32
+    expr 182 binary + 4115..4128: u32
+    expr 183 local from_call 4115..4124: u32
+    expr 184 local a 4127..4128: u32
+    expr 185 as u32 4131..4154: u32
+    expr 186 index 4131..4147: u8
+    expr 187 deref 4131..4144: [u8; 8]
+    expr 188 method Ring::buf (&self) 4133..4143: &[u8; 8]
+    expr 189 local ring 4133..4137: Ring
+    expr 190 int 2 4145..4146: usize
+    expr 191 deref 4157..4168: u32
+    expr 192 method Config::rate (&self) 4158..4168: &u32
+    expr 193 local cfg 4158..4161: Config
+    expr 194 deref 4171..4181: u32
+    expr 195 call 4172..4181: &u32
+    expr 196 deref 4184..4201: u32
+    expr 197 call 4185..4201: &u32
 fn slot_of(r: &mut Ring, i: usize) -> &mut u8
-    expr 197 &mut 4246..4259: &mut u8
-    expr 198 index 4251..4259: u8
-    expr 199 field buf 4251..4256: [u8; 8]
-    expr 200 local r 4251..4252: &mut Ring, dereferenced
-    expr 201 local i 4257..4258: usize
+    expr 198 &mut 4257..4270: &mut u8
+    expr 199 index 4262..4270: u8
+    expr 200 field buf 4262..4267: [u8; 8]
+    expr 201 local r 4262..4263: &mut Ring, dereferenced
+    expr 202 local i 4268..4269: usize
 fn p_a(p: &Pair) -> &Pair
-    expr 202 local p 4295..4296: &Pair
+    expr 203 local p 4306..4307: &Pair
 fn chain(c: &mut Config) -> ()
-    expr 203 method Config::parity (&mut self) 4331..4355: &mut Config
-    expr 204 method Config::baud (&mut self) 4331..4345: &mut Config, dereferenced
-    expr 205 local c 4331..4332: &mut Config, dereferenced
-    expr 206 int 115200 4338..4344: u32
-    expr 207 int 2 4353..4354: u8
-    expr 208 method Config::parity (&mut self) 4361..4394: &mut Config
-    expr 209 method Config::baud (&mut self) 4361..4384: &mut Config, dereferenced
-    expr 210 method Config::baud (&mut self) 4361..4373: &mut Config, dereferenced
-    expr 211 local c 4361..4362: &mut Config, dereferenced
-    expr 212 int 9600 4368..4372: u32
-    expr 213 int 1200 4379..4383: u32
-    expr 214 int 0 4392..4393: u8
+    expr 204 method Config::parity (&mut self) 4342..4366: &mut Config
+    expr 205 method Config::baud (&mut self) 4342..4356: &mut Config, dereferenced
+    expr 206 local c 4342..4343: &mut Config, dereferenced
+    expr 207 int 115200 4349..4355: u32
+    expr 208 int 2 4364..4365: u8
+    expr 209 method Config::parity (&mut self) 4372..4405: &mut Config
+    expr 210 method Config::baud (&mut self) 4372..4395: &mut Config, dereferenced
+    expr 211 method Config::baud (&mut self) 4372..4384: &mut Config, dereferenced
+    expr 212 local c 4372..4373: &mut Config, dereferenced
+    expr 213 int 9600 4379..4383: u32
+    expr 214 int 1200 4390..4394: u32
+    expr 215 int 0 4403..4404: u8
 fn clusters(i: usize) -> u32
     let ctx: &mut Context
-    expr 215 method Plic::ctx (&mut self) 4458..4469: &mut Context
-    expr 216 peripheral PLIC 4458..4462: Plic
-    expr 217 local i 4467..4468: usize
-    expr 218 assign 4475..4492: ()
-    expr 219 register threshold 4475..4488: u32
-    expr 220 local ctx 4475..4478: &mut Context, dereferenced
-    expr 221 int 3 4491..4492: u32
-    expr 222 binary + 4498..4536: u32
-    expr 223 register claim 4498..4516: u32
-    expr 224 method Plic::first (&self) 4498..4510: &Context, dereferenced
-    expr 225 peripheral PLIC 4498..4502: Plic
-    expr 226 register claim 4519..4536: u32
-    expr 227 method Plic::ctx (&mut self) 4519..4530: &mut Context, dereferenced
-    expr 228 peripheral PLIC 4519..4523: Plic
-    expr 229 int 1 4528..4529: usize
+    expr 216 method Plic::ctx (&mut self) 4469..4480: &mut Context
+    expr 217 peripheral PLIC 4469..4473: Plic
+    expr 218 local i 4478..4479: usize
+    expr 219 assign 4486..4503: ()
+    expr 220 register threshold 4486..4499: u32
+    expr 221 local ctx 4486..4489: &mut Context, dereferenced
+    expr 222 int 3 4502..4503: u32
+    expr 223 binary + 4509..4547: u32
+    expr 224 register claim 4509..4527: u32
+    expr 225 method Plic::first (&self) 4509..4521: &Context, dereferenced
+    expr 226 peripheral PLIC 4509..4513: Plic
+    expr 227 register claim 4530..4547: u32
+    expr 228 method Plic::ctx (&mut self) 4530..4541: &mut Context, dereferenced
+    expr 229 peripheral PLIC 4530..4534: Plic
+    expr 230 int 1 4539..4540: usize
 fn set(r: &mut Ring) -> ()
-    expr 230 assign 4567..4585: ()
-    expr 231 deref 4567..4581: u8
-    expr 232 call 4568..4581: &mut u8
-    expr 233 local r 4576..4577: &mut Ring
-    expr 234 int 0 4579..4580: usize
-    expr 235 int 1 4584..4585: u8
-    expr 236 call 4591..4604: &mut u8
-    expr 237 local r 4599..4600: &mut Ring
-    expr 238 int 1 4602..4603: usize
+    expr 231 assign 4578..4596: ()
+    expr 232 deref 4578..4592: u8
+    expr 233 call 4579..4592: &mut u8
+    expr 234 local r 4587..4588: &mut Ring
+    expr 235 int 0 4590..4591: usize
+    expr 236 int 1 4595..4596: u8
+    expr 237 call 4602..4615: &mut u8
+    expr 238 local r 4610..4611: &mut Ring
+    expr 239 int 1 4613..4614: usize
 entry fn main() -> !
-    expr 239 loop 4636..4643: !
+    expr 240 loop 4647..4654: !
 panic fn on_panic() -> !
-    expr 240 loop 4678..4685: !
+    expr 241 loop 4689..4696: !
 comptime fn TABLE() -> [u8; 4]
-    expr 241 array 873..885: [u8; 4]
-    expr 242 int 1 874..875: u8
-    expr 243 int 2 877..878: u8
-    expr 244 int 3 880..881: u8
-    expr 245 int 4 883..884: u8
+    expr 242 array 873..885: [u8; 4]
+    expr 243 int 1 874..875: u8
+    expr 244 int 2 877..878: u8
+    expr 245 int 3 880..881: u8
+    expr 246 int 4 883..884: u8
 comptime fn OWNED() -> u32
-    expr 246 int 0 937..938: u32
+    expr 247 int 0 937..938: u32
 comptime fn SHARED() -> u32
-    expr 247 int 0 965..966: u32
+    expr 248 int 0 965..966: u32

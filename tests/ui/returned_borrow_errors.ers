@@ -73,7 +73,7 @@ fn static_mut() -> &u32 {
 }
 
 fn extern_static_mut() -> &u32 {
-    &OUTSIDE
+    unsafe { &OUTSIDE }
 }
 
 fn peripheral() -> &Uart {

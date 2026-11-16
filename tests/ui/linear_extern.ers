@@ -13,17 +13,17 @@ extern fn open() -> Transfer;
 // Accepted: handed to the foreign function.
 fn sends() {
     let t: Transfer = Transfer { channel: 1 };
-    send(t);
+    unsafe { send(t); }
 }
 
 // Accepted: the result of the foreign function is handed back to it.
 fn forwards() {
-    send(open());
+    unsafe { send(open()); }
 }
 
 // Rejected: the result is forgotten.
 fn forgets_the_result() {
-    open();
+    unsafe { open(); }
 }
 
 // Rejected: the foreign caller gave a transfer, and the function drops it.

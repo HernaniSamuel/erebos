@@ -65,7 +65,7 @@ pub mod timer {
         let p: *const super::uart::regs::Block = &raw const block;
         let size: usize = size_of(super::uart::Config) + align_of(crate::uart::regs::Block);
         let built: super::uart::Mode = super::uart::Mode::Run(SMALL);
-        let ticks: u32 = TICKS + source();
+        let ticks: u32 = unsafe { TICKS + source() };
         match m {
             super::uart::Mode::Off => crate::init(),
             crate::uart::Mode::Run(crate::timer::SMALL) => 1,

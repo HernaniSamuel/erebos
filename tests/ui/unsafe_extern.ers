@@ -1,0 +1,208 @@
+// emit: typeck
+// A call to an `extern fn` or a `#[naked]` function, and a read, write or
+// borrow of an `extern static` or of a part of one, are unsafe operations,
+// allowed directly inside an `unsafe` block (ADR 0119, operations 3 and 4).
+// The `extern fn` may take references (ADR 0105), the naked function may be
+// `#[export]`, `unsafe` or a method. Not unsafe, and accepted without a
+// block: `&raw const` and `&raw mut` of an `extern static` or of a part of
+// one, also in the initializer of a `static`, and a `sym` operand naming a
+// naked function or an `extern fn`, which is no call.
+extern fn c_add(a: u32, b: u32) -> u32;
+extern fn c_sum(s: &[u8]) -> u32;
+extern fn c_poke(p: &mut u32);
+extern fn c_noop();
+
+mod device {
+    pub extern fn c_ready() -> bool;
+    pub extern static c_base: u32;
+}
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+#[copy]
+struct Reg {
+    n: u32,
+}
+
+impl Reg {
+    fn get(&self) -> u32 {
+        self.n
+    }
+
+    fn set(&mut self, n: u32) {
+        self.n = n;
+    }
+
+    fn take(self) -> u32 {
+        self.n
+    }
+
+    #[naked]
+    fn flush(&self) {
+        asm("ret", options(noreturn))
+    }
+}
+
+#[naked]
+fn naked_sum(a: u32, b: u32) -> u32 {
+    asm("add a0, a0, a1", "ret", options(noreturn))
+}
+
+#[export]
+#[naked]
+fn naked_exported(a: u32) -> u32 {
+    asm("addi a0, a0, 1", "ret", options(noreturn))
+}
+
+// A naked body that names another naked function and an `extern fn` with
+// `sym` needs no block: that is no call.
+#[naked]
+fn naked_jumps() {
+    asm("j {f}", f = sym naked_sum, options(noreturn))
+}
+
+#[naked]
+fn naked_jumps_to_c() {
+    asm("j {f}", f = sym c_noop, options(noreturn))
+}
+
+#[naked]
+unsafe fn naked_unsafe() {
+    asm("ret", options(noreturn))
+}
+
+extern static c_table: [u16; 4];
+extern static mut c_count: u32;
+extern static mut c_pair: Pair;
+extern static mut c_reg: Reg;
+extern static mut c_matrix: [[u8; 2]; 3];
+
+static TABLE_THIRD: *const u16 = &raw const c_table[2];
+static PAIR_B: *mut u32 = &raw mut c_pair.b;
+
+fn calls(buffer: &[u8], slot: &mut u32) -> u32 {
+    let a: u32 = unsafe { c_add(1, 2) };
+    let b: u32 = unsafe { c_sum(buffer) };
+    unsafe {
+        c_poke(slot);
+        c_noop();
+    }
+    let c: bool = unsafe { device::c_ready() };
+    a + b + c as u32
+}
+
+fn naked_calls(reg: &Reg) -> u32 {
+    let a: u32 = unsafe { naked_sum(1, 2) };
+    let b: u32 = unsafe { naked_exported(3) };
+    unsafe {
+        naked_unsafe();
+        reg.flush();
+    }
+    a + b
+}
+
+// One block over several operations, and a block as a value.
+fn together(buffer: &[u8]) -> u32 {
+    unsafe { c_add(c_count, c_sum(buffer)) + naked_sum(1, 2) }
+}
+
+// The call is an operation, and its arguments are checked on their own.
+fn arguments() -> u32 {
+    unsafe { c_add(unsafe { naked_sum(1, 2) }, 3) }
+}
+
+fn statics() -> u32 {
+    let read: u32 = unsafe { c_count };
+    unsafe {
+        c_count = 1;
+        c_count += 2;
+    }
+    let element: u16 = unsafe { c_table[1] };
+    let field: u32 = unsafe { c_pair.a };
+    unsafe {
+        c_pair.b = 5;
+        c_pair.b += c_pair.a;
+        c_matrix[1][0] = 7;
+    }
+    let cell: u8 = unsafe { c_matrix[2][1] };
+    let base: u32 = unsafe { device::c_base };
+    read + element as u32 + field + cell as u32 + base
+}
+
+fn borrows() -> u32 {
+    let r: &u32 = unsafe { &c_count };
+    let m: &mut u32 = unsafe { &mut c_count };
+    let t: &u16 = unsafe { &c_table[3] };
+    let p: &mut u32 = unsafe { &mut c_pair.a };
+    *m = *r + *t as u32 + *p;
+    0
+}
+
+// A method whose receiver is borrowed or copied from an `extern static`.
+fn receivers() -> u32 {
+    unsafe {
+        c_reg.set(3);
+        c_reg.get() + c_reg.take()
+    }
+}
+
+// The address is taken, nothing is read or written.
+fn addresses() -> usize {
+    let a: *const u32 = &raw const c_count;
+    let b: *mut u32 = &raw mut c_count;
+    let c: *const u16 = &raw const c_table[1];
+    let d: *const [u16; 4] = &raw const c_table;
+    let e: *mut u32 = &raw mut c_pair.a;
+    let f: *mut u8 = &raw mut c_matrix[1][1];
+    let g: *const u32 = &raw const device::c_base;
+    a as usize + b as usize + c as usize + d as usize + e as usize + f as usize + g as usize
+}
+
+// A `sym` operand is a name, not a call.
+fn symbols() {
+    unsafe {
+        asm("call {f}", f = sym naked_sum, clobber_abi("C"));
+        asm("call {f}", f = sym c_noop, clobber_abi("C"));
+    }
+}
+
+// An `unsafe fn` body is not a block, so each operation has its own.
+unsafe fn in_an_unsafe_fn() -> u32 {
+    unsafe { c_add(1, 2) + c_count }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
+
+// The index of a place and the length of a slice are read like any other
+// operand: `&raw const c_table[c_count]` reads `c_count`, and `len` of an
+// `extern static` that is a slice reads it.
+extern static c_slice: *const [u16];
+
+fn bound_and_length() -> usize {
+    let p: *const u16 = unsafe { &raw const c_table[c_count as usize] };
+    unsafe { len(c_slice) }
+}
+
+// An `extern static` as an `asm` operand is touched as the operand says (`in`
+// reads, `out` and `lateout` write, `inout` does both); in a block, all are
+// accepted.
+fn asm_operands() {
+    unsafe {
+        asm("nop {}", in(reg) c_count);
+        asm("nop {}", out(reg) c_count);
+        asm("nop {}", lateout(reg) c_count);
+        asm("nop {}", inout(reg) c_count);
+        asm("nop {}", inout(reg) 1 as u32 => c_count);
+        asm("nop {}", inout(reg) c_count => _);
+        asm("nop {} {}", out(reg) c_pair.a, in(reg) c_table[1]);
+    }
+}

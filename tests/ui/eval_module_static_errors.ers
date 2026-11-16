@@ -10,7 +10,7 @@ mod m {
 
 const READ_MUT: u32 = m::COUNT;
 const WRITE_STATIC: u32 = write_static();
-const READ_EXTERN: u32 = m::c_value;
+const READ_EXTERN: u32 = unsafe { m::c_value };
 const TWO_PAST: *const u16 = &raw const (&raw const m::TABLE as *const u16)[5];
 const TOO_LONG: *const [u16] = slice(&raw const m::TABLE as *const u16, 5);
 

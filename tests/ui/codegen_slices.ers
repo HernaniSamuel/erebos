@@ -24,8 +24,8 @@ fn first(s: *const [u8]) -> *const u8 {
 }
 
 fn calls(buffer: *const [u8; 16]) -> u32 {
-    let regs: *mut volatile [u32] = window();
-    checksum(buffer) + len(regs) as u32
+    let regs: *mut volatile [u32] = unsafe { window() };
+    unsafe { checksum(buffer) + len(regs) as u32 }
 }
 
 entry fn main() -> ! { loop {} }

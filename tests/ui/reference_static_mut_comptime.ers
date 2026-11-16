@@ -22,7 +22,7 @@ fn write() -> u32 {
 }
 
 fn outer() -> u32 {
-    let r: &u32 = &OUTSIDE;
+    let r: &u32 = unsafe { &OUTSIDE };
     *r
 }
 

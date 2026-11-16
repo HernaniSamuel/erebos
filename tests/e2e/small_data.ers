@@ -24,8 +24,8 @@ fn exit(code: u32) -> ! {
 }
 
 entry fn main() -> ! {
-    let failures: u32 = c_check();
-    if failures != 0 || c_small_zero() != 5 {
+    let failures: u32 = unsafe { c_check() };
+    if failures != 0 || unsafe { c_small_zero() } != 5 {
         exit(1)
     }
     putc(b's'); putc(b'm'); putc(b'a'); putc(b'l'); putc(b'l'); putc(b' ');

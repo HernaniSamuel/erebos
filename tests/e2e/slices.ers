@@ -73,17 +73,17 @@ entry fn main() -> ! {
 
     let hundreds: [u8; 4] = [200, 100, 150, 50];
     print(&raw const b"sum ");
-    print_u32(c_sum(&raw const hundreds));
+    print_u32(unsafe { c_sum(&raw const hundreds) });
     putc(b'\n');
 
     print(&raw const b"tail ");
-    print(c_tail(&raw const b"hello\n"));
+    print(unsafe { c_tail(&raw const b"hello\n") });
 
     print(&raw const b"late ");
-    print(c_late(1, 0, 0, 1, 0, 1, 1, &raw const b"hello\n"));
+    print(unsafe { c_late(1, 0, 0, 1, 0, 1, 1, &raw const b"hello\n") });
 
     print(&raw const b"from c ");
-    print_u32(c_calls_erebos() as u32);
+    print_u32(unsafe { c_calls_erebos() } as u32);
     putc(b'\n');
     exit(0)
 }

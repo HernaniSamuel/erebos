@@ -22,7 +22,7 @@ fn print_u32(n: u32) {
 }
 
 entry fn main() -> ! {
-    let failed: u32 = c_check_aeabi();
+    let failed: u32 = unsafe { c_check_aeabi() };
     if failed == 0 {
         putc(b'o');
         putc(b'k');
@@ -35,7 +35,7 @@ entry fn main() -> ! {
         print_u32(failed);
     }
     putc(b' ');
-    print_u32(c_aeabi_checks());
+    print_u32(unsafe { c_aeabi_checks() });
     putc(b'\n');
     exit(failed)
 }

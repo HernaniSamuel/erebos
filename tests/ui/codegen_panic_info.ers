@@ -24,6 +24,6 @@ extern fn report(info: &core::PanicInfo);
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic(info: &core::PanicInfo) -> ! {
-    report(info);
+    unsafe { report(info); }
     loop {}
 }

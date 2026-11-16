@@ -7,7 +7,9 @@
 //! MIR does not keep. Nothing after type checking sees `unsafe`.
 
 use crate::diag::Diagnostic;
-use crate::hir::{AsmOperandKind, Block, Expr, ExprKind, Fn, FnKind, Stmt, Ty};
+use crate::hir::{
+    Asm, AsmOperandKind, Block, Expr, ExprKind, Fn, FnKind, ReceiverKind, StaticId, Stmt, Ty,
+};
 use crate::query::Queries;
 use crate::span::Span;
 
@@ -18,6 +20,26 @@ enum Operation {
     /// An `asm` expression outside the body of a `#[naked]` function
     /// (ADR 0119, operation 2).
     Asm,
+    /// A call to an `extern fn`, by its path (ADR 0119, operation 3).
+    CallsExternFn(String),
+    /// A call to a `#[naked]` function, by its path (ADR 0119, operation 3).
+    CallsNakedFn(String),
+    /// A read, write or borrow of an `extern static`, or of a part of one,
+    /// by its path (ADR 0119, operation 4).
+    ExternStatic(String, Access),
+}
+
+/// How the expression around a place touches it. A place that only has its
+/// address taken (`&raw const`, `&raw mut`) is not touched, and is visited
+/// with no `Access`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Access {
+    Read,
+    Write,
+    /// A compound assignment: both.
+    Update,
+    /// `&` and `&mut`, and a method call whose receiver is a reference.
+    Borrow,
 }
 
 impl Operation {
@@ -28,6 +50,21 @@ impl Operation {
                 format!("calling `unsafe fn {path}` needs an `unsafe` block")
             }
             Operation::Asm => "`asm` needs an `unsafe` block".to_owned(),
+            Operation::CallsExternFn(path) => {
+                format!("calling `extern fn {path}` needs an `unsafe` block")
+            }
+            Operation::CallsNakedFn(path) => {
+                format!("calling the `#[naked]` function `{path}` needs an `unsafe` block")
+            }
+            Operation::ExternStatic(path, how) => {
+                let verb = match how {
+                    Access::Read => "reading",
+                    Access::Write => "writing",
+                    Access::Update => "reading and writing",
+                    Access::Borrow => "borrowing",
+                };
+                format!("{verb} `extern static {path}` needs an `unsafe` block")
+            }
         }
     }
 
@@ -36,6 +73,17 @@ impl Operation {
         match self {
             Operation::CallsUnsafeFn(path) => format!("this calls `unsafe fn {path}`"),
             Operation::Asm => "this `asm`".to_owned(),
+            Operation::CallsExternFn(_) => "this calls an `extern fn`".to_owned(),
+            Operation::CallsNakedFn(_) => "this calls a naked function".to_owned(),
+            Operation::ExternStatic(_, how) => {
+                let verb = match how {
+                    Access::Read => "reads",
+                    Access::Write => "writes",
+                    Access::Update => "reads and writes",
+                    Access::Borrow => "borrows",
+                };
+                format!("this {verb} an `extern static`")
+            }
         }
     }
 
@@ -47,6 +95,15 @@ impl Operation {
             }
             Operation::Asm => {
                 "`asm` can write any register or any memory, and the compiler checks none of it: put it inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the body of a `#[naked]` function needs no block"
+            }
+            Operation::CallsExternFn(_) => {
+                "the compiler checks nothing of what an `extern fn` does, or of whether its declaration matches its definition: call it inside an `unsafe { }` block, after checking that it is sound (ADR 0119)"
+            }
+            Operation::CallsNakedFn(_) => {
+                "the compiler checks nothing of what a `#[naked]` function does, since its body is one `asm`: call it inside an `unsafe { }` block, after checking that it is sound (ADR 0119)"
+            }
+            Operation::ExternStatic(..) => {
+                "the compiler does not see what defines an `extern static`, or who else writes it: access it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs no block (ADR 0119)"
             }
         }
     }
@@ -90,8 +147,8 @@ pub(super) fn check(q: &mut Queries, f: &Fn, body: &Block) {
         let mut roots = Vec::new();
         block_exprs(body, &mut roots);
         for root in roots {
-            if matches!(root.kind, ExprKind::Asm(_)) {
-                pass.children(root);
+            if let ExprKind::Asm(asm) = &root.kind {
+                pass.asm_operands(asm);
             } else {
                 pass.expr(root);
             }
@@ -114,27 +171,135 @@ impl Unsafety<'_, '_> {
         }
     }
 
+    /// Visits `expr`, whose value is read.
     fn expr(&mut self, expr: &Expr) {
-        if let ExprKind::Unsafe(block) = &expr.kind {
-            // `unsafe` starts the expression.
-            let keyword = Span {
-                hi: expr.span.lo + "unsafe".len() as u32,
-                ..expr.span
-            };
-            self.open.push(Open {
-                keyword,
-                used: false,
-            });
-            self.block(block);
-            if let Some(closed) = self.open.pop()
-                && !closed.used
-            {
-                self.unused(closed.keyword);
+        self.visit(expr, Some(Access::Read));
+    }
+
+    /// Visits `expr`, a place touched as `access` says, or whose address
+    /// only is taken (`None`). Only the places that make up a place pass
+    /// the access on to what they are made of (a field, an index, a range
+    /// of a place); every other expression reads its operands.
+    fn visit(&mut self, expr: &Expr, access: Option<Access>) {
+        match &expr.kind {
+            ExprKind::Unsafe(block) => {
+                // `unsafe` starts the expression.
+                let keyword = Span {
+                    hi: expr.span.lo + "unsafe".len() as u32,
+                    ..expr.span
+                };
+                self.open.push(Open {
+                    keyword,
+                    used: false,
+                });
+                self.block(block);
+                if let Some(closed) = self.open.pop()
+                    && !closed.used
+                {
+                    self.unused(closed.keyword);
+                }
             }
-            return;
+            ExprKind::Static(id) => self.static_(expr, *id, access),
+            ExprKind::Field(base, ..) => self.visit(base, access),
+            ExprKind::Index(base, index, _) => {
+                self.visit(base, access);
+                self.expr(index);
+            }
+            ExprKind::Subslice { base, from, to, .. } => {
+                self.visit(base, access);
+                for bound in [from, to].into_iter().flatten() {
+                    self.expr(bound);
+                }
+            }
+            ExprKind::Assign(to, value) => {
+                self.visit(to, Some(Access::Write));
+                self.expr(value);
+            }
+            ExprKind::CompoundAssign(_, to, value, _) => {
+                self.visit(to, Some(Access::Update));
+                self.expr(value);
+            }
+            ExprKind::AddrOf { place, .. } => self.visit(place, None),
+            ExprKind::Asm(asm) => {
+                self.operation(expr);
+                self.asm_operands(asm);
+            }
+            ExprKind::Ref { place, .. } => self.visit(place, Some(Access::Borrow)),
+            ExprKind::MethodCall { receiver, args, .. } => {
+                self.operation(expr);
+                // The receiver is borrowed when the method takes `&self` or
+                // `&mut self`, and read otherwise.
+                let borrowed = self
+                    .q
+                    .tables
+                    .methods
+                    .get(&expr.id)
+                    .and_then(|&callee| self.q.hir.fn_(callee).owner)
+                    .and_then(|owner| owner.receiver)
+                    .is_some_and(|kind| matches!(kind, ReceiverKind::Ref | ReceiverKind::RefMut));
+                self.visit(
+                    receiver,
+                    Some(if borrowed {
+                        Access::Borrow
+                    } else {
+                        Access::Read
+                    }),
+                );
+                for arg in args {
+                    self.expr(arg);
+                }
+            }
+            _ => {
+                self.operation(expr);
+                self.children(expr);
+            }
         }
-        self.operation(expr);
-        self.children(expr);
+    }
+
+    /// The operands of an `asm`, each touched as it says (ADR 0079): `in` and
+    /// `const` are read, `out` and `lateout` places are written, `inout`
+    /// without `=>` is read and written, and with `=>` its value is read and
+    /// its place written. `sym` and `clobber_abi` hold no expression.
+    fn asm_operands(&mut self, asm: &Asm) {
+        for operand in &asm.operands {
+            match &operand.kind {
+                AsmOperandKind::In { expr, .. } | AsmOperandKind::Const(expr) => self.expr(expr),
+                AsmOperandKind::Out { place, .. } => {
+                    if let Some(place) = place {
+                        self.visit(place, Some(Access::Write));
+                    }
+                }
+                AsmOperandKind::InOut {
+                    expr, out: None, ..
+                } => {
+                    self.visit(expr, Some(Access::Update));
+                }
+                AsmOperandKind::InOut {
+                    expr,
+                    out: Some(out),
+                    ..
+                } => {
+                    self.expr(expr);
+                    if let Some(place) = out {
+                        self.visit(place, Some(Access::Write));
+                    }
+                }
+                AsmOperandKind::Sym(_) | AsmOperandKind::ClobberAbi(_) => {}
+            }
+        }
+    }
+
+    /// A use of the static `id`, written as `expr`: an unsafe operation if
+    /// it is an `extern static` and more than its address is taken.
+    fn static_(&mut self, expr: &Expr, id: StaticId, access: Option<Access>) {
+        let def = self.q.hir.static_(id);
+        let (Some(access), None) = (access, def.init) else {
+            return;
+        };
+        let operation = Operation::ExternStatic(def.path.clone(), access);
+        // A static whose type was reported (a reference) is in error itself.
+        let in_error = self.q.tables.expr_ty(expr.id) == Ty::Error;
+        self.report(operation, expr.span, in_error);
     }
 
     /// The expressions directly inside `expr`.
@@ -152,15 +317,10 @@ impl Unsafety<'_, '_> {
         let in_error = |e: &Expr| tables.expr_ty(e.id) == Ty::Error;
         let (operation, at, operand_in_error) = match &expr.kind {
             ExprKind::Call { callee, args } => {
-                let callee = self.q.hir.fn_(*callee);
-                if !callee.is_unsafe {
+                let Some(operation) = call_operation(self.q.hir.fn_(*callee)) else {
                     return;
-                }
-                (
-                    Operation::CallsUnsafeFn(callee.path.clone()),
-                    expr.span,
-                    args.iter().any(in_error),
-                )
+                };
+                (operation, expr.span, args.iter().any(in_error))
             }
             ExprKind::MethodCall {
                 receiver,
@@ -175,12 +335,11 @@ impl Unsafety<'_, '_> {
                     self.mark_used();
                     return;
                 };
-                let callee = self.q.hir.fn_(callee);
-                if !callee.is_unsafe {
+                let Some(operation) = call_operation(self.q.hir.fn_(callee)) else {
                     return;
-                }
+                };
                 (
-                    Operation::CallsUnsafeFn(callee.path.clone()),
+                    operation,
                     *name_span,
                     in_error(receiver) || args.iter().any(in_error),
                 )
@@ -196,8 +355,14 @@ impl Unsafety<'_, '_> {
             }
             _ => return,
         };
-        // An operand in error was reported: the operation counts as unsafe
-        // for the block around it, and is not reported on top of that.
+        self.report(operation, at, operand_in_error);
+    }
+
+    /// Reports `operation`, at `at`, unless an `unsafe` block is around it,
+    /// which it then marks used. An operand in error was reported: the
+    /// operation counts as unsafe for the block around it, and is not
+    /// reported on top of that.
+    fn report(&mut self, operation: Operation, at: Span, operand_in_error: bool) {
         if self.mark_used() || operand_in_error {
             return;
         }
@@ -239,6 +404,23 @@ impl Unsafety<'_, '_> {
                 "an `unsafe` block marks where the program relies on its own reasoning: remove it, or move into it what needs it (ADR 0119)",
             ),
         );
+    }
+}
+
+/// The unsafe operation a call to `callee` is, if it is one: the function is
+/// an `unsafe fn`, an `extern fn` (it has no body) or a `#[naked]` function
+/// (ADR 0119, operations 3 and 5). A function that is more than one of them
+/// is reported as the first of that list.
+fn call_operation(callee: &Fn) -> Option<Operation> {
+    let path = || callee.path.clone();
+    if callee.is_unsafe {
+        Some(Operation::CallsUnsafeFn(path()))
+    } else if callee.body.is_none() {
+        Some(Operation::CallsExternFn(path()))
+    } else if callee.kind == FnKind::Naked {
+        Some(Operation::CallsNakedFn(path()))
+    } else {
+        None
     }
 }
 
