@@ -193,6 +193,12 @@ instead of applying it; agents are held to it when they finish
 - Comments explain *why*, not *what*.
 - Prefer plain data and functions over traits and generics until there is a
   second concrete use case.
+- Every `unsafe` block and `unsafe fn` in `rt/` and `tests/boards/` carries a
+  `Sound:` or `Safety:` comment saying why the operation is sound or what the
+  caller must guarantee. Test programs are exempt.
+- `core::arch::enable_interrupts` is called in an `unsafe` block only from the
+  entry function, outside every `critical` block, or from an `unsafe fn` that
+  carries the same contract (ADR 0119).
 
 ## Development environment
 

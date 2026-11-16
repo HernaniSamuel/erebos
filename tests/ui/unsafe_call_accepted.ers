@@ -107,6 +107,17 @@ fn around(c: &mut Counter) -> u32 {
     v
 }
 
+// A call to an `#[export]` function that is not `unsafe` is a safe call: only
+// the `unsafe` ones need a block (ADR 0119).
+#[export]
+fn safe_exported(x: u32) -> u32 {
+    x + 3
+}
+
+fn calls_safe_exported() -> u32 {
+    safe_exported(1)
+}
+
 entry fn main() -> ! { loop {} }
 
 panic fn on_panic() -> ! { loop {} }

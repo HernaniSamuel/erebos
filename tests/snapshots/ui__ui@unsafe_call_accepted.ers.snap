@@ -142,7 +142,14 @@ fn around(c: &mut Counter) -> u32
     expr 112 int 1 2319..2320: u32
     expr 113 int 0 2342..2343: u32
     expr 114 local v 2356..2357: u32
+fn safe_exported(x: u32) -> u32
+    expr 115 binary + 2534..2539: u32
+    expr 116 local x 2534..2535: u32
+    expr 117 int 3 2538..2539: u32
+fn calls_safe_exported() -> u32
+    expr 118 call 2581..2597: u32
+    expr 119 int 1 2595..2596: u32
 entry fn main() -> !
-    expr 115 loop 2384..2391: !
+    expr 120 loop 2624..2631: !
 panic fn on_panic() -> !
-    expr 116 loop 2422..2429: !
+    expr 121 loop 2662..2669: !
