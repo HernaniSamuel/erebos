@@ -477,6 +477,10 @@ fn an_instruction_the_assembler_rejects_is_codegen_asm() {
                 "{name}: the label is not at the `asm`:\n{stderr}"
             );
             assert!(!stderr.contains("codegen::llvm"), "{name}:\n{stderr}");
+            // Code generation fails before the stack bound runs: this `asm`
+            // has no `nostack`, which the bound reports as
+            // `analysis::missing-stack` (ADR 0123) when it gets to run.
+            assert!(!stderr.contains("analysis::"), "{name}:\n{stderr}");
         }
     }
 }
@@ -507,6 +511,7 @@ fn a_bad_template_called_from_three_places_is_reported_once() {
                 "{name}:\n{stderr}"
             );
             assert!(stderr.contains(&asm_position(&source)), "{name}:\n{stderr}");
+            assert!(!stderr.contains("analysis::"), "{name}:\n{stderr}");
         }
     }
 }
@@ -555,6 +560,7 @@ panic fn on_panic() -> ! { loop {} }
             stderr.contains("shared_label") && !stderr.contains("main.ers:"),
             "{name} -O: the report has a label, or not the message:\n{stderr}"
         );
+        assert!(!stderr.contains("analysis::"), "{name} -O:\n{stderr}");
     }
 }
 
@@ -589,6 +595,7 @@ fn more_operands_than_registers_is_codegen_asm() {
         );
         assert!(stderr.contains(&asm_position(&source)), "{name}:\n{stderr}");
         assert!(!stderr.contains("codegen::llvm"), "{name}:\n{stderr}");
+        assert!(!stderr.contains("analysis::"), "{name}:\n{stderr}");
     }
 }
 

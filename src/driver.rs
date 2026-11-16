@@ -194,7 +194,21 @@ pub fn build(
             failures.into_iter().for_each(|diag| diags.push(diag));
             diag::render(&diags.into_vec(), &sources, color)
         })
-        .and_then(|_frames| {
+        .and_then(|frames| {
+            // The stack bound runs on the code that is flashed, after code
+            // generation measured it and before the link (ADR 0123): an error
+            // stops here, and the object is removed below.
+            let mut diags = Diagnostics::default();
+            analysis::bound(
+                &mir,
+                target,
+                &frames.bodies,
+                frames.default_handlers,
+                &mut diags,
+            );
+            if diags.has_errors() {
+                return Err(diag::render(&diags.into_vec(), &sources, color));
+            }
             fs::write(&script, link::linker_script(map, target))
                 .map_err(|e| format!("error: cannot write `{}`: {e}", script.display()))
         })

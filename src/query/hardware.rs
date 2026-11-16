@@ -348,6 +348,7 @@ impl Queries<'_> {
             data: map.data.region,
             stack: map.stack.region,
             stack_size: self.array_len(map.stack_size.0)?,
+            stack_span: map.stack.span,
         })
     }
 

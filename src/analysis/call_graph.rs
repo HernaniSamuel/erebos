@@ -114,6 +114,14 @@ impl Reach {
 
     /// The calls from a root to `body`, in order, as the search followed them.
     pub(super) fn path<'a, C: AsRef<[Call]>>(&self, calls: &'a [C], body: BodyId) -> Vec<&'a Call> {
+        (self.steps(body).into_iter())
+            .map(|(from, k)| &calls[from.0 as usize].as_ref()[k])
+            .collect()
+    }
+
+    /// The same path as the body that holds each call and the call's index in
+    /// that body's list.
+    pub(super) fn steps(&self, body: BodyId) -> Vec<(BodyId, usize)> {
         let mut path = Vec::new();
         let mut at = body;
         while let Some(Found {
@@ -121,7 +129,7 @@ impl Reach {
             ..
         }) = self.found[at.0 as usize]
         {
-            path.push(&calls[from.0 as usize].as_ref()[k]);
+            path.push((from, k));
             at = from;
         }
         path.reverse();
@@ -338,6 +346,25 @@ mod tests {
             );
             assert!(reach.path(&calls, BodyId(0)).is_empty());
         }
+    }
+
+    #[test]
+    fn the_steps_of_a_path_name_the_body_and_the_index_of_each_call() {
+        // 0 calls 1 then 2; 2 calls 3 then 4: 4 is reached by the second call
+        // of 2, which was reached by the second call of 0.
+        let calls = vec![
+            vec![call(1, false), call(2, false)],
+            Vec::new(),
+            vec![call(3, false), call(4, false)],
+            Vec::new(),
+            Vec::new(),
+        ];
+        let reach = Reach::search(&calls, &[BodyId(0)], Edges::Calls, false);
+        let steps: Vec<(u32, usize)> = (reach.steps(BodyId(4)).into_iter())
+            .map(|(from, k)| (from.0, k))
+            .collect();
+        assert_eq!(steps, [(0, 1), (2, 1)]);
+        assert!(reach.steps(BodyId(0)).is_empty());
     }
 
     /// The components with each one's bodies and whether it holds a cycle.

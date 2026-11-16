@@ -404,6 +404,7 @@ mod tests {
             data: 1,
             stack: 1,
             stack_size: 0x800,
+            stack_span: Span::new(file, 0, 0),
         }
     }
 

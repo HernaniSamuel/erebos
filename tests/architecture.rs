@@ -120,6 +120,7 @@ const WRAPPING_OPS: &[&str] = &["add", "sub", "mul", "shl", "trunc"];
 /// count, and say why in the step's `Decisions`. A count that drops is
 /// lowered here, so it cannot grow back.
 const PANICS: &[(&str, usize)] = &[
+    ("src/analysis/stack.rs", 1),
     ("src/codegen/asm.rs", 7),
     ("src/codegen/mod.rs", 83),
     ("src/codegen/vectors.rs", 3),

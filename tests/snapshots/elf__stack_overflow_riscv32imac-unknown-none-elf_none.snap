@@ -1,0 +1,26 @@
+---
+source: tests/elf.rs
+expression: error
+---
+analysis::stack-overflow
+
+  × the stack may need 2864 bytes, more than the 2848 declared
+   ╭─[bound_below.ers:6:5]
+ 5 │     data in RAM;
+ 6 │     stack in RAM { size: 2848 }
+   ·     ──────┬─────
+   ·           ╰── 2848 bytes declared here
+ 7 │ }
+   ╰────
+  help: declare a stack of at least 2864 bytes, or make the deepest path need less
+
+  the thread context needs 1296 bytes: `_start` (0) → `main` (800) → `make` (288) → `__divdi3`
+  (48, inserted) → `core::builtins::__erebos_udivmod64` (48) →
+  `core::builtins::__erebos_udivmoddi4` (112)
+  the maskable handler context needs 1232 bytes: exception entry (64) → `tick` (672) → `make`
+  (288) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) →
+  `core::builtins::__erebos_udivmoddi4` (112)
+  the fault context needs 336 bytes: exception entry (64) → default handler (0) → `on_panic` (0) →
+  `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) →
+  `core::builtins::__erebos_udivmoddi4` (112) + exception entry (64) → default handler (0) →
+  `on_panic` (0)

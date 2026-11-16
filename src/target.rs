@@ -68,6 +68,17 @@ pub struct Target {
     /// of the table of its own (ADR 0089): ARMv7-M's lines, `None` on RISC-V,
     /// whose interrupts all arrive at `MachineExternal`.
     pub external_vectors: Option<ExternalVectors>,
+    /// The bytes an exception's entry puts on the stack of the code it
+    /// preempts, before the handler's own frame (ADR 0123, "Contexts and the
+    /// total"): on riscv32 the 64 bytes the trap entry saves (ADR 0085, a test
+    /// ties the number to the entry's `#[stack(64)]`); on thumbv7m the 32 the
+    /// core stacks (eight words) plus the 4 it may add to align the stack to
+    /// 8 (`CCR.STKALIGN`, ADR 0085).
+    pub exception_frame: u64,
+    /// The word of the vector table of the non-maskable interrupt, which can
+    /// preempt any code and any handler once (ADR 0123): ARMv7-M's NMI; none
+    /// on RISC-V, whose unmaskable vectors are the synchronous exceptions.
+    pub nmi_word: Option<u32>,
 }
 
 /// Where the chip's interrupts are in the vector table of a target on which
@@ -203,6 +214,8 @@ pub static RISCV32IMAC: Target = Target {
     vectors: &RISCV32_VECTORS,
     table_words: 33,
     external_vectors: None,
+    exception_frame: 64,
+    nmi_word: None,
 };
 
 /// The variants of `Vector` in `rt/arch/riscv32.ers` (ADR 0084).
@@ -287,6 +300,8 @@ pub static THUMBV7M: Target = Target {
         first_word: 16,
         max: 496,
     }),
+    exception_frame: 36,
+    nmi_word: Some(2),
 };
 
 /// The variants of `Vector` in `rt/arch/armv7m.ers` (ADR 0084).
@@ -346,6 +361,24 @@ impl Target {
     /// the variant's name (ADR 0084).
     pub fn vector(&self, name: &str) -> Option<&'static Vector> {
         self.vectors.iter().find(|vector| vector.name == name)
+    }
+
+    /// Whether the word `word` of the vector table is entered by an event that
+    /// can be masked (ADR 0123): a variant of `Vector` by its kind, and a
+    /// word with no variant by what its place in the table is. On RISC-V the
+    /// words from 16 on are the interrupts and the word of any other cause;
+    /// on ARMv7-M the words from the first line on are the chip's interrupts
+    /// (ADR 0089). The words before those are exceptions, which cannot be masked.
+    pub fn maskable_word(&self, word: u32) -> bool {
+        if let Some(vector) = self.vectors.iter().find(|vector| vector.word == word) {
+            return vector.kind == VectorKind::Maskable;
+        }
+        match self.arch {
+            Arch::Riscv32 => word >= 16,
+            Arch::Armv7m => self
+                .external_vectors
+                .is_some_and(|lines| word >= lines.first_word),
+        }
     }
 }
 
@@ -521,6 +554,41 @@ mod tests {
         // last is exception 511, the highest the architecture has.
         assert_eq!(arm.first_word, THUMBV7M.table_words);
         assert_eq!(arm.first_word + arm.max - 1, 511);
+    }
+
+    /// The numbers the stack bound reads (ADR 0123): what an exception's entry
+    /// puts on the stack, the NMI, and which words of the table can be masked.
+    #[test]
+    fn the_exception_frames_the_nmi_and_the_maskable_words() {
+        assert_eq!(RISCV32IMAC.exception_frame, 64);
+        assert_eq!(THUMBV7M.exception_frame, 32 + 4);
+        assert_eq!(RISCV32IMAC.nmi_word, None);
+        let nmi = THUMBV7M.nmi_word.expect("ARMv7-M has an NMI");
+        let vector = THUMBV7M.vector("NMI").expect("listed");
+        assert_eq!((vector.word, vector.kind), (nmi, VectorKind::Unmaskable));
+
+        // The variants by their kind; the words with no variant by their place.
+        for target in TARGETS {
+            for vector in target.vectors {
+                assert_eq!(
+                    target.maskable_word(vector.word),
+                    vector.kind == VectorKind::Maskable,
+                    "{}: {}",
+                    target.name,
+                    vector.name
+                );
+            }
+        }
+        // riscv32: the exceptions, then the interrupts and any other cause.
+        assert!(!RISCV32IMAC.maskable_word(8));
+        assert!(RISCV32IMAC.maskable_word(16));
+        assert!(RISCV32IMAC.maskable_word(32));
+        // ARMv7-M: the system exceptions (SVCall, a reserved word), then the
+        // lines of the chip.
+        assert!(!THUMBV7M.maskable_word(11));
+        assert!(!THUMBV7M.maskable_word(13));
+        assert!(THUMBV7M.maskable_word(14) && THUMBV7M.maskable_word(15));
+        assert!(THUMBV7M.maskable_word(16) && THUMBV7M.maskable_word(40));
     }
 
     #[test]

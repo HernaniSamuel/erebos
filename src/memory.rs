@@ -21,6 +21,9 @@ pub struct MemoryMap {
     pub stack: usize,
     /// The stack's size in bytes, a multiple of the target's `stack_align`.
     pub stack_size: u64,
+    /// The `stack in RAM` placement in the source, where the stack bound
+    /// points when the stack is too small (ADR 0123).
+    pub stack_span: Span,
 }
 
 /// A region of a memory map: `[origin, origin + size)`.

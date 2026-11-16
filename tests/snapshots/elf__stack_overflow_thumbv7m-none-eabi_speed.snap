@@ -1,0 +1,29 @@
+---
+source: tests/elf.rs
+expression: error
+---
+analysis::stack-overflow
+
+  × the stack may need 656 bytes, more than the 640 declared
+   ╭─[bound_below.ers:6:5]
+ 5 │     data in RAM;
+ 6 │     stack in RAM { size: 640 }
+   ·     ──────┬─────
+   ·           ╰── 640 bytes declared here
+ 7 │ }
+   ╰────
+  help: declare a stack of at least 656 bytes, or make the deepest path need less
+
+  the thread context needs 140 bytes: `_start` (0) → `main` (0) → `copy` (24) → `__divdi3` (44,
+  inserted) → `core::builtins::__erebos_udivmod64` (36) → `core::builtins::__erebos_udivmoddi4`
+  (36)
+  the maskable handler context needs 176 bytes: exception entry (36) → `tick` (0) → `copy` (24) →
+  `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) →
+  `core::builtins::__erebos_udivmoddi4` (36)
+  the unmaskable handler context needs 152 bytes: exception entry (36) → default handler (0) →
+  `on_panic` (0) → `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) →
+  `core::builtins::__erebos_udivmoddi4` (36)
+  the fault context needs 188 bytes: exception entry (36) → default handler (0) → `on_panic` (0) →
+  `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) →
+  `core::builtins::__erebos_udivmoddi4` (36) + exception entry (36) → default handler (0) →
+  `on_panic` (0)

@@ -218,8 +218,9 @@ without a comparison.
 
 - **`analysis::stack-overflow`**: "the stack may need 2304 bytes, more than the
   2048 declared", at the `stack` placement, labeled "2048 bytes declared here".
-  One note per part that is not 0, each giving the part's bytes and its
-  deepest path with each body's cost: "the thread context needs 1460 bytes:
+  One note, with a line for each part that is not 0 (a `Diagnostic` has a
+  single note), each giving the part's bytes and its deepest path with each
+  body's cost: "the thread context needs 1460 bytes:
   `_start` (0) → `main` (48) → `fill` (1392) → `core::memcpy` (20, inserted)".
   The paths name bodies as the other analyses do (dots written `::`). A help:
   "declare a stack of at least 2304 bytes, or make the deepest path need less".
@@ -237,7 +238,9 @@ without a comparison.
   `analysis::stack-overflow` is not reported.
 - **Which path.** Among the targets of a body's edges with the largest depth,
   the first in the order of its edges (statements in order, then the
-  terminator; inserted calls last, in the order of `Mir::inserted`). Every
+  terminator; inserted calls last, in the order of `Mir::inserted`). An edge
+  whose target has depth 0 is never followed, so a path ends at the last body
+  that costs something. Every
   order comes from MIR, none from a hash map, so a program gives the same
   report on every run (ADR 0028).
 
@@ -246,7 +249,7 @@ without a comparison.
 `erebos build --emit=stack` prints:
 
 - the worst case, and the declared size when there is a `memory` block;
-- each part with its bytes and its deepest path, as in the notes above;
+- each part with its bytes and its deepest path, as in the note above;
 - one line per body that is not `comptime`, in MIR's order: its symbol, its
   frame, its `N` if any, its depth before a panic, and the bodies its edges
   reach, in their order, with "inserted calls" standing for the inserted

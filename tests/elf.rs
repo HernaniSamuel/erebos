@@ -625,6 +625,279 @@ fn no_memory_map() {
     }
 }
 
+/// The memory block of the programs of the stack bound (ADR 0123), with a
+/// stack of `stack` bytes.
+fn memory_with_stack(stack: u64) -> String {
+    format!(
+        "memory {{
+    region IMAGE {{ origin: 0x8000_0000, size: 0x0400_0000 }}
+    region RAM {{ origin: 0x8400_0000, size: 0x0400_0000 }}
+    code in IMAGE;
+    data in RAM;
+    stack in RAM {{ size: {stack} }}
+}}
+"
+    )
+}
+
+/// The mnemonic of a jump to a symbol, for `target`.
+fn jump(target: &Target) -> &'static str {
+    match target.arch {
+        Arch::Riscv32 => "j",
+        Arch::Armv7m => "b.w",
+    }
+}
+
+/// Builds `program` (after the memory block of `stack` bytes) as `name` for
+/// `target` at `opt`, and returns the diagnostics of the failure, or `None`
+/// if it built. A build that fails writes neither the executable nor the
+/// object and the linker script beside it.
+fn build_with_stack(
+    name: &str,
+    stack: u64,
+    program: &str,
+    target: &'static Target,
+    opt: OptLevel,
+) -> Option<String> {
+    // One directory for each build, so that the file keeps the name the
+    // diagnostics show.
+    let stem = format!("{name}-{}-{opt:?}", target.name);
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("elf")
+        .join(&stem);
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join(format!("{name}.ers"));
+    fs::write(&source, format!("{}\n{program}", memory_with_stack(stack))).unwrap();
+    let elf = work.join(format!("{name}.elf"));
+    let written = [
+        elf.clone(),
+        elf.with_extension("o"),
+        elf.with_extension("ld"),
+    ];
+    for path in &written {
+        let _ = fs::remove_file(path);
+    }
+    let result = driver::build(&source, &elf, &[], target, opt, false);
+    match &result {
+        Ok(()) => assert!(elf.exists(), "{stem}: no executable"),
+        Err(_) => {
+            for path in &written {
+                assert!(!path.exists(), "{stem}: `{}` was written", path.display());
+            }
+        }
+    }
+    result.err()
+}
+
+/// A check, a handler and an aggregate copy (so the inserted calls matter), on
+/// the handler's vector for `target`.
+fn stack_program(target: &Target) -> String {
+    let vector = match target.arch {
+        Arch::Riscv32 => "MachineTimer",
+        Arch::Armv7m => "SysTick",
+    };
+    format!(
+        "use core::arch::Vector;
+
+struct Block {{ words: [u32; 32] }}
+
+fn make(seed: u32) -> Block {{ Block {{ words: [seed; 32] }} }}
+fn copy(block: Block) -> Block {{ block }}
+fn sum(block: Block) -> u32 {{ block.words[3] + block.words[31] }}
+fn divide(a: u32, b: u32) -> u32 {{ a / b }}
+
+interrupt fn tick() at Vector::{vector} {{
+    let b: Block = make(1);
+    let s: u32 = sum(copy(b));
+}}
+
+entry fn main() -> ! {{
+    let b: Block = make(7);
+    let c: Block = copy(b);
+    let d: u32 = divide(sum(c), 2);
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+    )
+}
+
+/// The worst case a rejected build names: "the stack may need N bytes".
+fn bound_of(error: &str) -> u64 {
+    let after = error
+        .split("the stack may need ")
+        .nth(1)
+        .unwrap_or_else(|| panic!("no bound in:\n{error}"));
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().unwrap()
+}
+
+/// A program whose stack fits builds, and the same with a stack 16 bytes below
+/// its bound is `analysis::stack-overflow` (ADR 0123): the bound is the one a
+/// tiny stack's error names, rounded up to the stack's alignment. The frames
+/// differ between targets and levels, so each has its snapshot.
+#[test]
+fn the_stack_bound_accepts_a_stack_that_fits_and_rejects_one_below_it() {
+    for target in TARGETS {
+        let program = stack_program(target);
+        let align = target.stack_align;
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let name = format!("{} {opt:?}", target.name);
+            let tiny = build_with_stack("bound_tiny", 16, &program, target, opt)
+                .unwrap_or_else(|| panic!("{name}: 16 bytes of stack are enough"));
+            assert!(
+                tiny.starts_with("analysis::stack-overflow\n"),
+                "{name}\n{tiny}"
+            );
+            let fits = bound_of(&tiny).next_multiple_of(align.max(16));
+            assert_eq!(
+                build_with_stack("bound_fits", fits, &program, target, opt),
+                None,
+                "{name}: {fits} bytes hold the bound"
+            );
+            let below = fits - 16;
+            let error = build_with_stack("bound_below", below, &program, target, opt)
+                .unwrap_or_else(|| panic!("{name}: {below} bytes are below the bound"));
+            assert_eq!(error.matches("analysis::").count(), 1, "{name}\n{error}");
+            assert!(
+                error.contains(&format!("more than the {below} declared")),
+                "{name}\n{error}"
+            );
+            assert!(
+                error.contains(&format!("{below} bytes declared here")),
+                "{error}"
+            );
+            insta::assert_snapshot!(
+                format!(
+                    "stack_overflow_{}_{}",
+                    target.name,
+                    format!("{opt:?}").to_lowercase()
+                ),
+                error
+            );
+        }
+    }
+}
+
+/// A function the bound reaches that needs `#[stack(N)]` and has none is
+/// `analysis::missing-stack` (ADR 0122, 0123): a naked function, an `asm`
+/// without `nostack`, and an `extern fn`, one error each, in the order of the
+/// source, and nothing is written.
+#[test]
+fn a_function_that_needs_a_stack_declaration_and_has_none_is_rejected() {
+    let program = "\
+#[naked]
+fn stub() { asm(\"nop\", options(noreturn)) }
+fn pusher() { unsafe { asm(\"nop\"); } }
+extern fn external(x: u32) -> u32;
+#[naked]
+fn nobody_calls_this() { asm(\"nop\", options(noreturn)) }
+
+entry fn main() -> ! {
+    unsafe { stub(); }
+    pusher();
+    let y: u32 = unsafe { external(2) };
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
+";
+    for target in TARGETS {
+        let name = format!("missing {}", target.name);
+        let error = build_with_stack("missing_stack", 0x1_0000, program, target, OptLevel::None)
+            .unwrap_or_else(|| panic!("{name}: built"));
+        assert_eq!(
+            error.matches("analysis::missing-stack").count(),
+            3,
+            "{error}"
+        );
+        assert_eq!(error.matches("analysis::").count(), 3, "{error}");
+        let at = |text: &str| {
+            error
+                .find(text)
+                .unwrap_or_else(|| panic!("{name}: no `{text}`"))
+        };
+        assert!(
+            at("the stack of `stub` is not known: it is naked")
+                < at("the stack of `pusher` is not known: it holds `asm` without `nostack`")
+        );
+        assert!(
+            at("the stack of `pusher`")
+                < at("the stack of `external` is not known: it is an `extern fn`")
+        );
+        // A function nothing calls needs no number.
+        assert!(!error.contains("nobody_calls_this"), "{error}");
+        assert!(error.contains("#[stack(N)]"), "{error}");
+        insta::assert_snapshot!(format!("missing_stack_{}", target.name), error);
+    }
+    // Declared, the same program builds.
+    let declared = program
+        .replace("#[naked]\nfn stub", "#[naked]\n#[stack(0)]\nfn stub")
+        .replace(
+            "fn pusher() { unsafe { asm(\"nop\"); } }",
+            "fn pusher() { unsafe { asm(\"nop\", options(nostack)); } }",
+        )
+        .replace("extern fn external", "#[stack(0)]\nextern fn external");
+    for target in TARGETS {
+        let error = build_with_stack(
+            "declared_stack",
+            0x1_0000,
+            &declared,
+            target,
+            OptLevel::None,
+        );
+        // Nothing defines `external`: the link fails, after the bound passed.
+        let error = error.unwrap_or_else(|| panic!("{}: linked an undefined symbol", target.name));
+        assert!(error.contains("undefined symbol: external"), "{error}");
+        assert!(!error.contains("analysis::"), "{error}");
+    }
+}
+
+/// Two naked functions that name each other with `sym` are a cycle through
+/// assembly: `analysis::stack-cycle` (ADR 0123), with a label on each `sym`.
+#[test]
+fn a_cycle_through_sym_is_rejected() {
+    for target in TARGETS {
+        let jump = jump(target);
+        let program = format!(
+            "#[naked]
+#[stack(0)]
+fn ping() {{ asm(\"{jump} {{}}\", sym pong, options(noreturn)) }}
+#[naked]
+#[stack(0)]
+fn pong() {{ asm(\"{jump} {{}}\", sym ping, options(noreturn)) }}
+
+entry fn main() -> ! {{
+    unsafe {{ ping(); }}
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+        );
+        let name = format!("cycle {}", target.name);
+        let error = build_with_stack("cycle", 0x1_0000, &program, target, OptLevel::None)
+            .unwrap_or_else(|| panic!("{name}: built"));
+        assert_eq!(error.matches("analysis::").count(), 1, "{error}");
+        assert!(
+            error.contains(
+                "`ping` and `pong` reach each other through assembly, so the stack has no bound"
+            ),
+            "{error}"
+        );
+        assert!(
+            error.contains("`ping` names `pong` with `sym` here"),
+            "{error}"
+        );
+        assert!(
+            error.contains("`pong` names `ping` with `sym` here"),
+            "{error}"
+        );
+        insta::assert_snapshot!(format!("stack_cycle_{}", target.name), error);
+    }
+}
+
 /// Functions and statics of modules, named by their paths joined by dots,
 /// and an `#[export]` function, named by its own name (ADR 0051).
 const MODULES: &str = "\

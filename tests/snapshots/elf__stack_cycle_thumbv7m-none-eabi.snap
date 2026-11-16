@@ -1,0 +1,21 @@
+---
+source: tests/elf.rs
+expression: error
+---
+analysis::stack-cycle
+
+  × `ping` and `pong` reach each other through assembly, so the stack has no bound
+    ╭─[cycle.ers:11:13]
+ 10 │ #[stack(0)]
+ 11 │ fn ping() { asm("b.w {}", sym pong, options(noreturn)) }
+    ·             ─────────────────────┬────────────────────
+    ·                                  ╰── `ping` names `pong` with `sym` here
+ 12 │ #[naked]
+ 13 │ #[stack(0)]
+ 14 │ fn pong() { asm("b.w {}", sym ping, options(noreturn)) }
+    ·             ─────────────────────┬────────────────────
+    ·                                  ╰── `pong` names `ping` with `sym` here
+ 15 │ 
+    ╰────
+
+  the cycle: `ping` → `pong` → `ping`

@@ -1,0 +1,46 @@
+---
+source: tests/elf.rs
+expression: error
+---
+analysis::missing-stack
+
+  × the stack of `stub` is not known: it is naked
+    ╭─[missing_stack.ers:10:1]
+  9 │ #[naked]
+ 10 │ fn stub() { asm("nop", options(noreturn)) }
+    · ─────────────────────┬─────────────────────
+    ·                      ╰── its stack is not declared
+ 11 │ fn pusher() { unsafe { asm("nop"); } }
+    ╰────
+  help: declare it with `#[stack(N)]`, the bytes it uses that the compiler does not measure (ADR
+        0122)
+
+  the stack bound reaches it through `_start` → `main` → `stub`
+analysis::missing-stack
+
+  × the stack of `pusher` is not known: it holds `asm` without `nostack`
+    ╭─[missing_stack.ers:11:1]
+ 10 │ fn stub() { asm("nop", options(noreturn)) }
+ 11 │ fn pusher() { unsafe { asm("nop"); } }
+    · ───────────────────┬──────────────────
+    ·                    ╰── its stack is not declared
+ 12 │ extern fn external(x: u32) -> u32;
+    ╰────
+  help: declare it with `#[stack(N)]`, the bytes it uses that the compiler does not measure (ADR
+        0122)
+
+  the stack bound reaches it through `_start` → `main` → `pusher`
+analysis::missing-stack
+
+  × the stack of `external` is not known: it is an `extern fn`
+    ╭─[missing_stack.ers:12:1]
+ 11 │ fn pusher() { unsafe { asm("nop"); } }
+ 12 │ extern fn external(x: u32) -> u32;
+    · ─────────────────┬────────────────
+    ·                  ╰── its stack is not declared
+ 13 │ #[naked]
+    ╰────
+  help: declare it with `#[stack(N)]`, the bytes it uses that the compiler does not measure (ADR
+        0122)
+
+  the stack bound reaches it through `_start` → `main` → `external`

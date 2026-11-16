@@ -10,7 +10,9 @@
 //! analysis of linearity (ADR 0102, 0103); the second, the rule of shared
 //! statics and peripherals (ADR 0078, 0093, 0115), the conflicts of a call
 //! with what its callee reaches (ADR 0111, 0112) and the rule against
-//! recursion in code that runs on the target (ADR 0120).
+//! recursion in code that runs on the target (ADR 0120). The stack bound
+//! (ADR 0123) is a third kind: `bound`, which the driver runs after code
+//! generation, on the same MIR and the frames code generation measured.
 
 mod bits;
 mod borrows;
@@ -20,6 +22,9 @@ mod linear;
 mod moves;
 mod recursion;
 mod shared_statics;
+mod stack;
+
+pub use stack::{Context, Part, Report, Step, StepKind, bound};
 
 use crate::diag::Diagnostics;
 use crate::mir::{Body, Mir};
