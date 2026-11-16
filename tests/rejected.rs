@@ -1096,6 +1096,37 @@ fn injected_f(mut injected_t: InjLinear5) {
     injected_take(injected_t);
 }"
     ),
+    // The analyses of the whole program: an uncalled recursive function is
+    // rejected too, since every body compiled for the target is a root
+    // (ADR 0120).
+    s!(
+        "analysis::recursion",
+        Mir,
+        Items,
+        "fn injected_f(injected_n: u32) -> u32 {
+    if injected_n == 0 {
+        return 0;
+    }
+    injected_f(injected_n - 1)
+}"
+    ),
+    s!(
+        "analysis::recursion",
+        Mir,
+        Items,
+        "fn injected_even(injected_n: u32) -> bool {
+    if injected_n == 0 {
+        return true;
+    }
+    injected_odd(injected_n - 1)
+}
+fn injected_odd(injected_n: u32) -> bool {
+    if injected_n == 0 {
+        return false;
+    }
+    injected_even(injected_n - 1)
+}"
+    ),
     // Compile-time evaluation.
     s!(
         "eval::assertion-failed",

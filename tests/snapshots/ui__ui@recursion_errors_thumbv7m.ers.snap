@@ -1,0 +1,45 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/recursion_errors_thumbv7m.ers
+---
+--- errors ---
+analysis::recursion
+
+  × `fact` calls itself
+    ╭─[recursion_errors_thumbv7m.ers:10:9]
+  9 │     }
+ 10 │     n * fact(n - 1)
+    ·         ─────┬─────
+    ·              ╰── `fact` calls itself here
+ 11 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `fact` → `fact`
+analysis::recursion
+
+  × `even` and `odd` call each other
+    ╭─[recursion_errors_thumbv7m.ers:17:5]
+ 16 │     }
+ 17 │     odd(n - 1)
+    ·     ─────┬────
+    ·          ╰── `even` calls `odd` here
+ 18 │ }
+ 19 │ 
+ 20 │ fn odd(n: u32) -> bool {
+ 21 │     if n == 0 {
+ 22 │         return false;
+ 23 │     }
+ 24 │     even(n - 1)
+    ·     ─────┬─────
+    ·          ╰── `odd` calls `even` here
+ 25 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `even` → `odd` → `even`

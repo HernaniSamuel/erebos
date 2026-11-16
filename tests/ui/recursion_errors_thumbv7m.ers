@@ -1,0 +1,33 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// The rule against recursion (ADR 0120) on the second target: direct
+// recursion, and mutual recursion of two functions. The cases are those of
+// `recursion_errors.ers`, which runs on riscv32.
+fn fact(n: u32) -> u32 {
+    if n == 0 {
+        return 1;
+    }
+    n * fact(n - 1)
+}
+
+fn even(n: u32) -> bool {
+    if n == 0 {
+        return true;
+    }
+    odd(n - 1)
+}
+
+fn odd(n: u32) -> bool {
+    if n == 0 {
+        return false;
+    }
+    even(n - 1)
+}
+
+entry fn main() -> ! {
+    let a: u32 = fact(3);
+    let b: bool = even(4);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

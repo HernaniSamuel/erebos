@@ -29,6 +29,8 @@ pub struct Diagnostic {
     /// The first label is the primary one.
     pub labels: Vec<Label>,
     pub help: Option<String>,
+    /// A fact about the error that is no advice, shown after the help.
+    pub note: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +55,7 @@ impl Diagnostic {
             message: message.into(),
             labels: Vec::new(),
             help: None,
+            note: None,
         }
     }
 
@@ -66,6 +69,11 @@ impl Diagnostic {
 
     pub fn help(mut self, help: impl Into<String>) -> Self {
         self.help = Some(help.into());
+        self
+    }
+
+    pub fn note(mut self, note: impl Into<String>) -> Self {
+        self.note = Some(note.into());
         self
     }
 }
@@ -118,15 +126,19 @@ impl Diagnostics {
 
 /// Renders diagnostics as text. `color: false` gives stable output for tests.
 pub fn render(diags: &[Diagnostic], sources: &SourceMap, color: bool) -> String {
-    let theme = if color {
-        GraphicalTheme::unicode()
-    } else {
-        GraphicalTheme::unicode_nocolor()
-    };
-    let handler = GraphicalReportHandler::new_themed(theme).with_width(100);
-
     let mut out = String::new();
     for diag in diags {
+        let theme = if color {
+            GraphicalTheme::unicode()
+        } else {
+            GraphicalTheme::unicode_nocolor()
+        };
+        let mut handler = GraphicalReportHandler::new_themed(theme).with_width(100);
+        // `miette` has no note; its footer, shown after the help, is the
+        // nearest thing, and is set per diagnostic.
+        if let Some(note) = &diag.note {
+            handler = handler.with_footer(note.clone());
+        }
         let report = WithSource {
             diag,
             files: Files::new(diag, sources),
@@ -313,6 +325,30 @@ mod tests {
         assert!(out.contains("here"), "{out}");
         assert!(out.contains("try something else"), "{out}");
         assert!(out.contains("test.ers:1:4"), "{out}");
+    }
+
+    /// A note is shown after the help, and only on the diagnostic that has one.
+    #[test]
+    fn a_note_is_shown_after_the_help_of_its_own_diagnostic() {
+        let mut sources = SourceMap::default();
+        let file = sources.add(
+            "test.ers",
+            "fn main() {}
+",
+        );
+        let with = Diagnostic::error("test::example", "something is wrong")
+            .label(Span::new(file, 3, 7), "here")
+            .help("try something else")
+            .note("the cycle: a -> b");
+        let without =
+            Diagnostic::error("test::other", "another").label(Span::new(file, 3, 7), "here");
+
+        let out = render(&[with, without], &sources, false);
+
+        let help = out.find("try something else").expect(&out);
+        let note = out.find("the cycle: a -> b").expect(&out);
+        assert!(note > help, "{out}");
+        assert_eq!(out.matches("the cycle").count(), 1, "{out}");
     }
 
     #[test]

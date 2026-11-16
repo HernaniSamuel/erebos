@@ -8,8 +8,9 @@
 //! program (`check`), which the driver runs on the assembled MIR. The first are
 //! the analysis of moves (ADR 0097), the borrow check (ADR 0106, 0107) and the
 //! analysis of linearity (ADR 0102, 0103); the second, the rule of shared
-//! statics and peripherals (ADR 0078, 0093, 0115) and the conflicts of a call
-//! with what its callee reaches (ADR 0111, 0112).
+//! statics and peripherals (ADR 0078, 0093, 0115), the conflicts of a call
+//! with what its callee reaches (ADR 0111, 0112) and the rule against
+//! recursion in code that runs on the target (ADR 0120).
 
 mod bits;
 mod borrows;
@@ -17,6 +18,7 @@ mod call_borrows;
 mod call_graph;
 mod linear;
 mod moves;
+mod recursion;
 mod shared_statics;
 
 use crate::diag::Diagnostics;
@@ -41,4 +43,5 @@ pub fn check_body(body: &Body, diags: &mut Diagnostics) -> bool {
 pub fn check(mir: &Mir, diags: &mut Diagnostics) {
     shared_statics::check(mir, diags);
     call_borrows::check(mir, diags);
+    recursion::check(mir, diags);
 }

@@ -1,0 +1,85 @@
+// emit: mir
+// What the rule against recursion accepts (ADR 0120). A function that only
+// compile time calls may recurse, since the evaluator bounds its depth: here
+// one that a constant's or a static's initializer calls, one that an array
+// length (written without `comptime`) calls, one that a top-level `comptime`
+// block calls, and one that is called by a function that only a constant
+// calls (compile-time reach is transitive). A panic function that prints its
+// message through a function with a bounds check is no cycle: the check calls
+// the panic function, and that call is no edge of this graph. (A call to
+// itself in a block that cannot be reached is no edge either, but MIR keeps
+// no such block, so a unit test of the scan covers it.) Once a function that
+// runs on the target calls any of these, it is an error:
+// `recursion_errors.ers`. (A `comptime` expression inside a function is not
+// here: its body is run and dropped, never part of the MIR the rule reads.)
+
+// Only a constant's initializer calls it.
+fn sum_to(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    n + sum_to(n - 1)
+}
+
+const SUM: u32 = sum_to(4);
+
+// Only a top-level `comptime` block calls it.
+fn power(base: u32, exponent: u32) -> u32 {
+    if exponent == 0 {
+        return 1;
+    }
+    base * power(base, exponent - 1)
+}
+
+comptime {
+    assert(power(2, 3) == 8);
+}
+
+// A function calls the recursive one, and only a constant calls that function.
+fn digits(n: u32) -> u32 {
+    if n < 10 {
+        return 1;
+    }
+    1 + digits(n / 10)
+}
+
+fn count_digits(n: u32) -> u32 {
+    digits(n)
+}
+
+const DIGITS: u32 = count_digits(12345);
+
+// Only a static's initializer calls it.
+fn triangle(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    n + triangle(n - 1)
+}
+
+static TRIANGLE: u32 = triangle(3);
+
+// Only an array length and a repeat count call it, written without the
+// `comptime` keyword (a `comptime` expression is never exempt).
+fn width(n: usize) -> usize {
+    if n == 0 {
+        return 1;
+    }
+    width(n - 1)
+}
+
+static BUFFER: [u8; width(3)] = [0; width(3)];
+
+// The check of `message[0]` calls the panic function, which is no edge.
+fn first_byte(message: &[u8]) -> u8 {
+    message[0]
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    let first: u8 = unsafe { first_byte(&*info.message) };
+    loop {}
+}

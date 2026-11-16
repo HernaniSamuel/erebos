@@ -580,23 +580,16 @@ impl Gen {
 {consts}
 mod board;
 
-fn print_u64(n: u64) {{
-    if n >= 10 {{
-        print_u64(n / 10);
-    }}
-    board::putc(b'0' + (n % 10) as u8);
-}}
-
 fn check(id: u32, at_compile_time: u64, at_run_time: u64) -> u32 {{
     if at_compile_time == at_run_time {{
         return 0;
     }}
     board::putc(b'#');
-    print_u64(id as u64);
+    board::print_u64(id as u64);
     board::putc(b' ');
-    print_u64(at_compile_time);
+    board::print_u64(at_compile_time);
     board::putc(b' ');
-    print_u64(at_run_time);
+    board::print_u64(at_run_time);
     board::putc(b'\\n');
     id
 }}

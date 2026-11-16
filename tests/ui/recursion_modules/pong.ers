@@ -1,0 +1,5 @@
+use super::ping;
+
+pub fn answer(n: u32) -> u32 {
+    ping::start(n)
+}

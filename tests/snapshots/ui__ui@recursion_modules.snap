@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/recursion_modules/main.ers
+---
+--- errors ---
+analysis::recursion
+
+  × `ping::start` and `pong::answer` call each other
+   ╭─[ping.ers:7:5]
+ 6 │     }
+ 7 │     pong::answer(n - 1)
+   ·     ─────────┬─────────
+   ·              ╰── `ping::start` calls `pong::answer` here
+ 8 │ }
+   ╰────
+   ╭─[pong.ers:4:5]
+ 3 │ pub fn answer(n: u32) -> u32 {
+ 4 │     ping::start(n)
+   ·     ───────┬──────
+   ·            ╰── `pong::answer` calls `ping::start` here
+ 5 │ }
+   ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `ping::start` → `pong::answer` → `ping::start`

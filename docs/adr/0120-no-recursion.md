@@ -87,6 +87,17 @@ A body can be both: a constant calls `f` and `entry` calls `f` too. `f` is
 then no root (point 3), but `entry` is, and reaches it, so `f` is run-time
 code and its cycle is an error.
 
+**What compile time reaches is what MIR shows.** The bodies of constants,
+statics, array lengths (written without the `comptime` keyword) and the
+top-level `comptime { }` item are in the program's MIR, marked `comptime`, so
+what they call is compile-time only. A `comptime` expression is never exempt,
+inside a function body or inside an array length: the evaluator runs it and
+drops its body (`Queries::comptime_value`), so MIR holds no body for it and the
+rule cannot see its calls. A function that only such an expression calls is
+therefore a run-time root, and a cycle through it is an error (decided with the
+user on 2026-11-16, while building the check). The rule is stricter than needed
+there, which a later ADR can relax, as M6 may when it reopens the question.
+
 This rule makes every function compiled for the target a root unless
 compile time reaches it. Three cases follow, each for a function that
 compile time does not reach:
@@ -169,9 +180,13 @@ roadmap, as was done for `unsafe` (ADR 0119).
   - a cycle the rule does not see (below) is still a cycle to them.
 
   `docs/reference.md`, which said that functions may recurse, is rewritten.
-- A recursive function that only compile time calls stays legal. Its run-time
-  version is still emitted, but nothing on the target calls it, unless C or
-  assembly does (the fourth opening below).
+- A recursive function that only compile time calls stays legal when the
+  calls are in a constant, a static, an array length written without the
+  `comptime` keyword, or a top-level `comptime { }` item. One that only a
+  `comptime` expression calls, inside a function or inside an array length, is
+  rejected ("What runs on the target"); M6 may reopen this. Its
+  run-time version is still emitted, but nothing on the target calls it,
+  unless C or assembly does (the fourth opening below).
 - **Left to M5.11.** The worst-case stack depth must still bound four things
   this rule does not:
   - a check that fails inside the panic function, or in what it calls,

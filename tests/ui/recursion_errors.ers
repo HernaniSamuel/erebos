@@ -1,0 +1,160 @@
+// emit: mir
+// Recursion in code that runs on the target (ADR 0120): one error for each
+// strongly connected component of the run-time call graph that holds a cycle,
+// with a label on each call of the cycle and the whole cycle in a note. Each
+// function below is one case: direct recursion; mutual recursion of two and of
+// three; a cycle through a method call; a recursive function that nothing
+// calls (every function compiled for the target is a root); one that a
+// constant calls and `entry` calls too (so it is run-time code); a function
+// that calls itself twice and a mutual recursion whose first function calls
+// the second twice (the label is on the first call only); a handler and the
+// panic function that call a recursive function; and a recursive function that
+// only a `comptime` expression inside a function calls, which is rejected
+// because the evaluator drops that body and MIR shows no compile-time caller
+// (the limit of ADR 0120). The accepted cases are in `recursion_accepted.ers`.
+use core::arch::Vector;
+
+// Direct recursion, called from `entry`.
+fn fact(n: u32) -> u32 {
+    if n == 0 {
+        return 1;
+    }
+    n * fact(n - 1)
+}
+
+// Mutual recursion of two functions.
+fn even(n: u32) -> bool {
+    if n == 0 {
+        return true;
+    }
+    odd(n - 1)
+}
+
+fn odd(n: u32) -> bool {
+    if n == 0 {
+        return false;
+    }
+    even(n - 1)
+}
+
+// A cycle of three.
+fn first(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    second(n - 1)
+}
+
+fn second(n: u32) -> u32 {
+    third(n)
+}
+
+fn third(n: u32) -> u32 {
+    first(n)
+}
+
+// A cycle through a method call (ADR 0114): `step` calls `through_method`,
+// which calls `step` as `c.step()`.
+struct Counter {
+    n: u32,
+}
+
+impl Counter {
+    fn step(&self) -> u32 {
+        through_method(self)
+    }
+}
+
+fn through_method(c: &Counter) -> u32 {
+    if c.n == 0 {
+        return 0;
+    }
+    c.step()
+}
+
+// Recursive, and called by nothing: still compiled for the target.
+fn never_called(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    never_called(n - 1)
+}
+
+// A constant calls it, and so does `entry`: it is not only compile-time code.
+fn also_at_run_time(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    also_at_run_time(n - 1)
+}
+
+const TABLE: u32 = also_at_run_time(3);
+
+// Two calls to itself: one label, on the first.
+fn twice(n: u32) -> u32 {
+    if n < 2 {
+        return n;
+    }
+    twice(n - 1) + twice(n - 2)
+}
+
+// The first function calls the second twice: one label for that call.
+fn ping(n: u32) -> u32 {
+    if n < 2 {
+        return n;
+    }
+    pong(n - 1) + pong(n - 2)
+}
+
+fn pong(n: u32) -> u32 {
+    ping(n)
+}
+
+// A handler that calls a recursive function.
+fn from_handler(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    from_handler(n - 1)
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    let x: u32 = from_handler(2);
+}
+
+// The panic function calls a recursive function.
+fn from_panic(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    from_panic(n - 1)
+}
+
+// Only a `comptime` expression inside a function calls it: still an error.
+fn only_in_comptime(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    only_in_comptime(n - 1)
+}
+
+fn uses_comptime() -> u32 {
+    comptime only_in_comptime(2)
+}
+
+entry fn main() -> ! {
+    let a: u32 = fact(3);
+    let b: bool = even(4);
+    let c: u32 = first(3);
+    let d: u32 = through_method(&Counter { n: 2 });
+    let e: u32 = also_at_run_time(2);
+    let f: u32 = twice(4);
+    let g: u32 = ping(4);
+    let h: u32 = uses_comptime();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    let x: u32 = from_panic(2);
+    loop {}
+}

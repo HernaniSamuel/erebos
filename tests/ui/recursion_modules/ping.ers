@@ -1,0 +1,8 @@
+use super::pong;
+
+pub fn start(n: u32) -> u32 {
+    if n == 0 {
+        return 0;
+    }
+    pong::answer(n - 1)
+}

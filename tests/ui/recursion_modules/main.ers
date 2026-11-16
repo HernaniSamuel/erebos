@@ -1,0 +1,13 @@
+// emit: mir
+// A cycle across two files (ADR 0049, 0120): the call in this file and the
+// call in `ping.ers` each show in the snippet of their file, and the names are
+// written as paths with `::`.
+mod ping;
+mod pong;
+
+entry fn main() -> ! {
+    let n: u32 = ping::start(4);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

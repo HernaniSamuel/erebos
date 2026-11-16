@@ -1,0 +1,208 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/recursion_errors.ers
+---
+--- errors ---
+analysis::recursion
+
+  × `fact` calls itself
+    ╭─[recursion_errors.ers:22:9]
+ 21 │     }
+ 22 │     n * fact(n - 1)
+    ·         ─────┬─────
+    ·              ╰── `fact` calls itself here
+ 23 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `fact` → `fact`
+analysis::recursion
+
+  × `even` and `odd` call each other
+    ╭─[recursion_errors.ers:30:5]
+ 29 │     }
+ 30 │     odd(n - 1)
+    ·     ─────┬────
+    ·          ╰── `even` calls `odd` here
+ 31 │ }
+ 32 │ 
+ 33 │ fn odd(n: u32) -> bool {
+ 34 │     if n == 0 {
+ 35 │         return false;
+ 36 │     }
+ 37 │     even(n - 1)
+    ·     ─────┬─────
+    ·          ╰── `odd` calls `even` here
+ 38 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `even` → `odd` → `even`
+analysis::recursion
+
+  × `first`, `second` and `third` call each other in a cycle
+    ╭─[recursion_errors.ers:45:5]
+ 44 │     }
+ 45 │     second(n - 1)
+    ·     ──────┬──────
+    ·           ╰── `first` calls `second` here
+ 46 │ }
+ 47 │ 
+ 48 │ fn second(n: u32) -> u32 {
+ 49 │     third(n)
+    ·     ────┬───
+    ·         ╰── `second` calls `third` here
+ 50 │ }
+ 51 │ 
+ 52 │ fn third(n: u32) -> u32 {
+ 53 │     first(n)
+    ·     ────┬───
+    ·         ╰── `third` calls `first` here
+ 54 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `first` → `second` → `third` → `first`
+analysis::recursion
+
+  × `Counter::step` and `through_method` call each other
+    ╭─[recursion_errors.ers:64:9]
+ 63 │     fn step(&self) -> u32 {
+ 64 │         through_method(self)
+    ·         ──────────┬─────────
+    ·                   ╰── `Counter::step` calls `through_method` here
+ 65 │     }
+ 66 │ }
+ 67 │ 
+ 68 │ fn through_method(c: &Counter) -> u32 {
+ 69 │     if c.n == 0 {
+ 70 │         return 0;
+ 71 │     }
+ 72 │     c.step()
+    ·     ────┬───
+    ·         ╰── `through_method` calls `Counter::step` here
+ 73 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `Counter::step` → `through_method` → `Counter::step`
+analysis::recursion
+
+  × `never_called` calls itself
+    ╭─[recursion_errors.ers:80:5]
+ 79 │     }
+ 80 │     never_called(n - 1)
+    ·     ─────────┬─────────
+    ·              ╰── `never_called` calls itself here
+ 81 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `never_called` → `never_called`
+analysis::recursion
+
+  × `also_at_run_time` calls itself
+    ╭─[recursion_errors.ers:88:5]
+ 87 │     }
+ 88 │     also_at_run_time(n - 1)
+    ·     ───────────┬───────────
+    ·                ╰── `also_at_run_time` calls itself here
+ 89 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `also_at_run_time` → `also_at_run_time`
+analysis::recursion
+
+  × `twice` calls itself
+    ╭─[recursion_errors.ers:98:5]
+ 97 │     }
+ 98 │     twice(n - 1) + twice(n - 2)
+    ·     ──────┬─────
+    ·           ╰── `twice` calls itself here
+ 99 │ }
+    ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `twice` → `twice`
+analysis::recursion
+
+  × `ping` and `pong` call each other
+     ╭─[recursion_errors.ers:106:5]
+ 105 │     }
+ 106 │     pong(n - 1) + pong(n - 2)
+     ·     ─────┬─────
+     ·          ╰── `ping` calls `pong` here
+ 107 │ }
+ 108 │ 
+ 109 │ fn pong(n: u32) -> u32 {
+ 110 │     ping(n)
+     ·     ───┬───
+     ·        ╰── `pong` calls `ping` here
+ 111 │ }
+     ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `ping` → `pong` → `ping`
+analysis::recursion
+
+  × `from_handler` calls itself
+     ╭─[recursion_errors.ers:118:5]
+ 117 │     }
+ 118 │     from_handler(n - 1)
+     ·     ─────────┬─────────
+     ·              ╰── `from_handler` calls itself here
+ 119 │ }
+     ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `from_handler` → `from_handler`
+analysis::recursion
+
+  × `from_panic` calls itself
+     ╭─[recursion_errors.ers:130:5]
+ 129 │     }
+ 130 │     from_panic(n - 1)
+     ·     ────────┬────────
+     ·             ╰── `from_panic` calls itself here
+ 131 │ }
+     ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `from_panic` → `from_panic`
+analysis::recursion
+
+  × `only_in_comptime` calls itself
+     ╭─[recursion_errors.ers:138:5]
+ 137 │     }
+ 138 │     only_in_comptime(n - 1)
+     ·     ───────────┬───────────
+     ·                ╰── `only_in_comptime` calls itself here
+ 139 │ }
+     ╰────
+  help: a function that runs on the target may not reach itself, so that its stack has a bound;
+        write the recursion as a loop, keeping what it needs in a fixed-size array if it needs a
+        stack
+
+  the cycle: `only_in_comptime` → `only_in_comptime`
