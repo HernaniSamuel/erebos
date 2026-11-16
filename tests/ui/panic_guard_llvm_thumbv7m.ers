@@ -1,0 +1,18 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// The guard of `panic_guard_llvm.ers` (ADR 0121) in a panic function that takes
+// `&core::PanicInfo`, on thumbv7m: the guard is the same, and the parameter is
+// used in the body after it. The checks pass the panic function the address of
+// their `PanicInfo` as before (`element`).
+extern fn report(info: &core::PanicInfo);
+
+fn element(a: [u8; 4], i: usize) -> u8 {
+    a[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: &core::PanicInfo) -> ! {
+    unsafe { report(info); }
+    loop {}
+}

@@ -121,7 +121,7 @@ const WRAPPING_OPS: &[&str] = &["add", "sub", "mul", "shl", "trunc"];
 /// lowered here, so it cannot grow back.
 const PANICS: &[(&str, usize)] = &[
     ("src/codegen/asm.rs", 7),
-    ("src/codegen/mod.rs", 72),
+    ("src/codegen/mod.rs", 83),
     ("src/codegen/vectors.rs", 3),
     ("src/diag.rs", 2),
     ("src/eval.rs", 28),

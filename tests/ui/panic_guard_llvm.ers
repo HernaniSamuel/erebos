@@ -1,0 +1,15 @@
+// emit: llvm-ir
+// opt: both
+// The panic function begins with the guard that stops a second panic (ADR 0121):
+// a volatile read of `__erebos_panicking`, an `i8` that is 0 until the first
+// panic, a block that branches to itself when it is not 0, and otherwise a
+// volatile write of 1 and the body. The flag is zero-initialized and private to
+// the object. The panic function is `noinline`, so that one copy of it, with one
+// guard, exists. Here it takes no parameter; `divide` shows that nothing else
+// changes: a check calls the panic function directly, as before.
+fn divide(a: u32, b: u32) -> u32 {
+    a / b
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

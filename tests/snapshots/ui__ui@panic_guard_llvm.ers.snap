@@ -1,0 +1,114 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/panic_guard_llvm.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+@__erebos_panicking = internal global i8 0, align 1
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @divide(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = udiv i32 %0, %1
+  ret i32 %3
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noinline noreturn nounwind null_pointer_is_valid
+define void @on_panic() #2 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second = icmp ne i8 %panicking, 0
+  br i1 %second, label %spin, label %first
+
+spin:                                             ; preds = %spin, %guard
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
+  br label %bb0
+
+bb0:                                              ; preds = %first
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { noinline noreturn nounwind null_pointer_is_valid }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+@__erebos_panicking = internal global i8 0, align 1
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define i32 @divide(i32 %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  tail call void @on_panic()
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = udiv i32 %0, %1
+  ret i32 %3
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none)
+define void @on_panic() local_unnamed_addr #2 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second.not = icmp eq i8 %panicking, 0
+  br i1 %second.not, label %first, label %spin
+
+spin:                                             ; preds = %guard, %spin
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %first
+  br label %bb1
+}
+
+attributes #0 = { nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none) }
+attributes #1 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #2 = { nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none) }

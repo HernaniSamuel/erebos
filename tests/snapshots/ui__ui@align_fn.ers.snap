@@ -9,6 +9,8 @@ source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
 target triple = "riscv32-unknown-none-elf"
 
+@__erebos_panicking = internal global i8 0, align 1
+
 ; Function Attrs: nounwind null_pointer_is_valid
 define i32 @plain(i32 %0) #0 align 64 {
 bb0:
@@ -40,7 +42,7 @@ bb0:
 ; Function Attrs: naked noinline nounwind null_pointer_is_valid
 define void @naked_ret() #1 align 16 {
 bb0:
-  call void asm sideeffect alignstack "ret", "~{memory}"() #3
+  call void asm sideeffect alignstack "ret", "~{memory}"() #4
   unreachable
 }
 
@@ -61,9 +63,21 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @on_panic() #2 align 128 {
-bb0:
+; Function Attrs: noinline noreturn nounwind null_pointer_is_valid
+define void @on_panic() #3 align 128 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second = icmp ne i8 %panicking, 0
+  br i1 %second, label %spin, label %first
+
+spin:                                             ; preds = %spin, %guard
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
+  br label %bb0
+
+bb0:                                              ; preds = %first
   br label %bb1
 
 bb1:                                              ; preds = %bb1, %bb0
@@ -73,12 +87,15 @@ bb1:                                              ; preds = %bb1, %bb0
 attributes #0 = { nounwind null_pointer_is_valid }
 attributes #1 = { naked noinline nounwind null_pointer_is_valid }
 attributes #2 = { noreturn nounwind null_pointer_is_valid }
-attributes #3 = { nounwind }
+attributes #3 = { noinline noreturn nounwind null_pointer_is_valid }
+attributes #4 = { nounwind }
 --- llvm-ir -O ---
 ; ModuleID = 'erebos'
 source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
 target triple = "riscv32-unknown-none-elf"
+
+@__erebos_panicking = internal global i8 0, align 1
 
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
 define i32 @plain(i32 %0) local_unnamed_addr #0 align 64 {
@@ -125,17 +142,26 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+; Function Attrs: nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none)
 define void @on_panic() local_unnamed_addr #3 align 128 {
-bb0:
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second.not = icmp eq i8 %panicking, 0
+  br i1 %second.not, label %first, label %spin
+
+spin:                                             ; preds = %guard, %spin
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
   br label %bb1
 
-bb1:                                              ; preds = %bb1, %bb0
+bb1:                                              ; preds = %bb1, %first
   br label %bb1
 }
 
 attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
 attributes #1 = { naked noinline nounwind null_pointer_is_valid }
 attributes #2 = { noreturn nounwind null_pointer_is_valid }
-attributes #3 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #3 = { nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none) }
 attributes #4 = { nounwind }

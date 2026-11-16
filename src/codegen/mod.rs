@@ -161,6 +161,11 @@ fn lower<'ctx>(
         .zip(&abis)
         .map(|((_, body), abi)| (!body.comptime).then(|| declare(context, &module, body, abi)))
         .collect();
+    // One copy of the panic function exists, with one guard and one frame
+    // (ADR 0121).
+    if let Some(panic) = fns[mir.panic.0 as usize] {
+        add_attribute(context, panic, AttributeLoc::Function, "noinline");
+    }
     // Statics keep their names: they are declared before the private data,
     // and come before the byte strings in `mir.statics`; LLVM renames
     // those instead if a name is taken (ADR 0030). Initial values may
@@ -227,6 +232,10 @@ fn lower<'ctx>(
         .expect("the pass pipelines are valid");
     module
 }
+
+/// The flag the panic function's guard reads and sets (ADR 0121). Names that
+/// start with `__` belong to the compiler and `core` (ADR 0020).
+const PANICKING: &str = "__erebos_panicking";
 
 fn int_type(context: &Context, int: IntTy) -> IntType<'_> {
     match int.bits() {
@@ -755,7 +764,16 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             return;
         }
         // Stack slots go first in the start block, which nothing jumps to.
-        self.builder.position_at_end(self.blocks[0]);
+        // The panic function's start block is the guard's (ADR 0121): its
+        // slots stay in the block LLVM promotes them from, and the body's
+        // first block comes after the guard.
+        let guarded = self.function == self.function(self.panic);
+        let start = if guarded {
+            self.context.prepend_basic_block(self.blocks[0], "guard")
+        } else {
+            self.blocks[0]
+        };
+        self.builder.position_at_end(start);
         self.slots = self
             .body
             .locals()
@@ -808,6 +826,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 PassMode::Ignore | PassMode::Indirect | PassMode::ByVal { .. } => {}
             }
         }
+        if guarded {
+            self.guard(start);
+        }
 
         for (bb, data) in self.body.blocks() {
             self.builder.position_at_end(self.blocks[bb.0 as usize]);
@@ -816,6 +837,59 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             }
             self.terminator(data.terminator);
         }
+    }
+
+    /// The guard that ends the start block `start` of the panic function
+    /// (ADR 0121): it reads the flag `__erebos_panicking`, and the function
+    /// spins when it is set; otherwise it sets the flag and the body runs.
+    /// The accesses are volatile, so that a handler that preempts the panic
+    /// function sees the flag set; the spin is a block that branches to
+    /// itself, which stays because no Erebos function has `mustprogress`.
+    fn guard(&self, start: LlvmBlock<'ctx>) {
+        let byte = self.context.i8_type();
+        // In `.bss` (zero-initialized) and private to the object.
+        let flag = self.module.add_global(byte, None, PANICKING);
+        flag.set_linkage(Linkage::Internal);
+        flag.set_initializer(&byte.const_zero());
+        flag.set_alignment(1);
+        let spin = self.context.insert_basic_block_after(start, "spin");
+        let first = self.context.insert_basic_block_after(spin, "first");
+
+        let set = self
+            .builder
+            .build_load(byte, flag.as_pointer_value(), "panicking")
+            .expect("builder is positioned");
+        let load = set.as_instruction_value().expect("loads are instructions");
+        load.set_volatile(true).expect("loads can be volatile");
+        load.set_alignment(1).expect("loads have an alignment");
+        let panicking = self
+            .builder
+            .build_int_compare(
+                IntPredicate::NE,
+                set.into_int_value(),
+                byte.const_zero(),
+                "second",
+            )
+            .expect("builder is positioned");
+        self.builder
+            .build_conditional_branch(panicking, spin, first)
+            .expect("builder is positioned");
+
+        self.builder.position_at_end(spin);
+        self.builder
+            .build_unconditional_branch(spin)
+            .expect("builder is positioned");
+
+        self.builder.position_at_end(first);
+        let store = self
+            .builder
+            .build_store(flag.as_pointer_value(), byte.const_int(1, false))
+            .expect("builder is positioned");
+        store.set_volatile(true).expect("stores can be volatile");
+        store.set_alignment(1).expect("stores have an alignment");
+        self.builder
+            .build_unconditional_branch(self.blocks[0])
+            .expect("builder is positioned");
     }
 
     /// A function of the program; only those run at compile time have no

@@ -50,6 +50,7 @@ module asm "\09.word __erebos_unhandled"
 module asm "\09.size __erebos_trap_table, 132"
 
 @TICKS = global [4 x i8] zeroinitializer, align 4
+@__erebos_panicking = internal global i8 0, align 1
 @llvm.compiler.used = appending global [5 x ptr] [ptr @timer, ptr @crash, ptr @drivers.software, ptr @external, ptr @__erebos_unhandled], section "llvm.metadata"
 
 ; Function Attrs: nounwind null_pointer_is_valid
@@ -93,9 +94,21 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @on_panic() #1 {
-bb0:
+; Function Attrs: noinline noreturn nounwind null_pointer_is_valid
+define void @on_panic() #2 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second = icmp ne i8 %panicking, 0
+  br i1 %second, label %spin, label %first
+
+spin:                                             ; preds = %spin, %guard
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
+  br label %bb0
+
+bb0:                                              ; preds = %first
   br label %bb1
 
 bb1:                                              ; preds = %bb1, %bb0
@@ -111,6 +124,7 @@ bb0:
 
 attributes #0 = { nounwind null_pointer_is_valid }
 attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { noinline noreturn nounwind null_pointer_is_valid }
 --- llvm-ir -O ---
 ; ModuleID = 'erebos'
 source_filename = "erebos"
@@ -158,6 +172,7 @@ module asm "\09.word __erebos_unhandled"
 module asm "\09.size __erebos_trap_table, 132"
 
 @TICKS = local_unnamed_addr global [4 x i8] zeroinitializer, align 4
+@__erebos_panicking = internal global i8 0, align 1
 @llvm.compiler.used = appending global [5 x ptr] [ptr @__erebos_unhandled, ptr @crash, ptr @drivers.software, ptr @external, ptr @timer], section "llvm.metadata"
 
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
@@ -201,24 +216,33 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
-define void @on_panic() local_unnamed_addr #1 {
-bb0:
+; Function Attrs: nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none)
+define void @on_panic() local_unnamed_addr #3 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second.not = icmp eq i8 %panicking, 0
+  br i1 %second.not, label %first, label %spin
+
+spin:                                             ; preds = %guard, %spin
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
   br label %bb1
 
-bb1:                                              ; preds = %bb1, %bb0
+bb1:                                              ; preds = %bb1, %first
   br label %bb1
 }
 
-; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
-define void @__erebos_unhandled() #1 {
+; Function Attrs: nofree norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @__erebos_unhandled() #4 {
 bb0:
-  br label %bb1.i
-
-bb1.i:                                            ; preds = %bb1.i, %bb0
-  br label %bb1.i
+  tail call void @on_panic()
+  unreachable
 }
 
 attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
 attributes #1 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
 attributes #2 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
+attributes #3 = { nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none) }
+attributes #4 = { nofree norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none) }

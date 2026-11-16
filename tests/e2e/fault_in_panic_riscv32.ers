@@ -1,19 +1,52 @@
-// A fault in the panic function enters the trap entry again, on the same stack,
-// and reaches the panic function again (ADR 0085, 0088): on riscv32 nothing
-// guards against that recursion, and the first fault would loop for ever if
-// the program did not tell the second pass apart. The panic function records
-// that it ran, faults, and finds the record the second time. On thumbv7m a fault
-// in a default handler of HardFault is a lockup instead (ADR 0088).
+// A fault reaches the panic function through the trap entry and the default
+// handler (ADR 0085, 0088), and a check that fails inside the panic function
+// does not enter it again (ADR 0121). The first panic comes from a fault: the
+// entry function executes an illegal instruction. The panic function prints
+// `first`, arms the machine timer of the CLINT, enables interrupts (a trap
+// cleared `MIE`) and fails a check. The second panic reaches the guard and spins
+// with interrupts enabled, so the timer's handler runs, finds the panic function
+// past its first check, prints `stopped` and exits with 1. A second fault would
+// spin with `MIE` clear, which nothing could end (ADR 0121). On thumbv7m a
+// fault in a default handler of HardFault is a lockup instead (ADR 0088).
 // takes-exceptions: yes
 // targets: riscv32imac-unknown-none-elf
 // expect-output: first
-// expect-output: second
+// expect-output: stopped
 // expect-exit: 1
 
 mod board;
-use board::{exit, putc};
+use board::{exit, print, print_u32};
+use core::arch::Vector;
 
-static mut ENTERED: bool = false;
+// QEMU `virt`'s CLINT, as in `interrupt_clint.ers`: the time counter and the
+// compare value of hart 0, of which only the low words are used.
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+
+// 1000 counts of the timer, 100 microseconds.
+const PERIOD: u32 = 1000;
+// `mie.MTIE`: the machine timer interrupt is enabled.
+const MTIE: u32 = 0x80;
+
+// Set by the panic function when it is about to fail its own check.
+static mut SECOND: bool = false;
+
+fn arm() {
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    if SECOND {
+        print(&b"stopped\n");
+        exit(1)
+    }
+    arm();
+}
+
+fn divide(a: u32, b: u32) -> u32 {
+    a + a / b
+}
 
 entry fn main() -> ! {
     unsafe { asm("unimp"); }
@@ -21,12 +54,12 @@ entry fn main() -> ! {
 }
 
 panic fn on_panic() -> ! {
-    if ENTERED {
-        putc(b's'); putc(b'e'); putc(b'c'); putc(b'o'); putc(b'n'); putc(b'd'); putc(b'\n');
-        exit(1)
-    }
-    ENTERED = true;
-    putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b'\n');
-    unsafe { asm("unimp"); }
+    print(&b"first\n");
+    unsafe { *MTIMECMP_HIGH = 0; }
+    arm();
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
+    unsafe { core::arch::enable_interrupts(); }
+    critical { SECOND = true; }
+    print_u32(divide(1, 0));
     exit(3)
 }

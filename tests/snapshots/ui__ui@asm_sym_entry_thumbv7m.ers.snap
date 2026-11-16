@@ -9,19 +9,20 @@ source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
 
+@__erebos_panicking = internal global i8 0, align 1
 @llvm.compiler.used = appending global [1 x ptr] [ptr @app.main], section "llvm.metadata"
 
 ; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @jump() #0 {
 bb0:
-  call void asm sideeffect alignstack "b app.main", "~{memory},~{cc}"() #2
+  call void asm sideeffect alignstack "b app.main", "~{memory},~{cc}"() #3
   unreachable
 }
 
 ; Function Attrs: naked noinline noreturn nounwind null_pointer_is_valid
 define void @naked_jump() #1 {
 bb0:
-  call void asm sideeffect alignstack "movw r0, :lower16:app.main\0Amovt r0, :upper16:app.main\0Abx r0", "~{memory},~{cc}"() #2
+  call void asm sideeffect alignstack "movw r0, :lower16:app.main\0Amovt r0, :upper16:app.main\0Abx r0", "~{memory},~{cc}"() #3
   unreachable
 }
 
@@ -32,9 +33,21 @@ bb0:
   unreachable
 }
 
-; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @on_panic() #0 {
-bb0:
+; Function Attrs: noinline noreturn nounwind null_pointer_is_valid
+define void @on_panic() #2 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second = icmp ne i8 %panicking, 0
+  br i1 %second, label %spin, label %first
+
+spin:                                             ; preds = %spin, %guard
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
+  br label %bb0
+
+bb0:                                              ; preds = %first
   br label %bb1
 
 bb1:                                              ; preds = %bb1, %bb0
@@ -43,4 +56,5 @@ bb1:                                              ; preds = %bb1, %bb0
 
 attributes #0 = { noreturn nounwind null_pointer_is_valid }
 attributes #1 = { naked noinline noreturn nounwind null_pointer_is_valid }
-attributes #2 = { nounwind }
+attributes #2 = { noinline noreturn nounwind null_pointer_is_valid }
+attributes #3 = { nounwind }

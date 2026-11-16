@@ -9,6 +9,8 @@ source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
 
+@__erebos_panicking = internal global i8 0, align 1
+
 ; Function Attrs: nounwind null_pointer_is_valid
 define zeroext i8 @read([2 x i32] %0, i32 %1) #0 {
 bb0:
@@ -147,9 +149,21 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @on_panic() #1 {
-bb0:
+; Function Attrs: noinline noreturn nounwind null_pointer_is_valid
+define void @on_panic() #2 {
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second = icmp ne i8 %panicking, 0
+  br i1 %second, label %spin, label %first
+
+spin:                                             ; preds = %spin, %guard
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
+  br label %bb0
+
+bb0:                                              ; preds = %first
   br label %bb1
 
 bb1:                                              ; preds = %bb1, %bb0
@@ -157,23 +171,26 @@ bb1:                                              ; preds = %bb1, %bb0
 }
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #3
 
 attributes #0 = { nounwind null_pointer_is_valid }
 attributes #1 = { noreturn nounwind null_pointer_is_valid }
-attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+attributes #2 = { noinline noreturn nounwind null_pointer_is_valid }
+attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 --- llvm-ir -O ---
 ; ModuleID = 'erebos'
 source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
 
-; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+@__erebos_panicking = internal global i8 0, align 1
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
 define zeroext i8 @read([2 x i32] %0, i32 %1) local_unnamed_addr #0 {
 bb0:
   %.fca.1.extract = extractvalue [2 x i32] %0, 1
   %2 = icmp ult i32 %1, %.fca.1.extract
-  br i1 %2, label %bb1, label %bb1.i
+  br i1 %2, label %bb1, label %bb2
 
 bb1:                                              ; preds = %bb0
   %.fca.0.extract = extractvalue [2 x i32] %0, 0
@@ -182,16 +199,17 @@ bb1:                                              ; preds = %bb0
   %5 = load i8, ptr %4, align 1
   ret i8 %5
 
-bb1.i:                                            ; preds = %bb0, %bb1.i
-  br label %bb1.i
+bb2:                                              ; preds = %bb0
+  tail call void @on_panic()
+  unreachable
 }
 
-; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(write, inaccessiblemem: none, target_mem0: none, target_mem1: none)
-define void @write([2 x i32] %0, i32 %1, i32 %2) local_unnamed_addr #1 {
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @write([2 x i32] %0, i32 %1, i32 %2) local_unnamed_addr #0 {
 bb0:
   %.fca.1.extract = extractvalue [2 x i32] %0, 1
   %3 = icmp ult i32 %1, %.fca.1.extract
-  br i1 %3, label %bb1, label %bb1.i
+  br i1 %3, label %bb1, label %bb2
 
 bb1:                                              ; preds = %bb0
   %.fca.0.extract = extractvalue [2 x i32] %0, 0
@@ -200,26 +218,28 @@ bb1:                                              ; preds = %bb0
   store i32 %2, ptr %5, align 4
   ret void
 
-bb1.i:                                            ; preds = %bb0, %bb1.i
-  br label %bb1.i
+bb2:                                              ; preds = %bb0
+  tail call void @on_panic()
+  unreachable
 }
 
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
-define i32 @length([2 x i32] %0) local_unnamed_addr #2 {
+define i32 @length([2 x i32] %0) local_unnamed_addr #1 {
 bb0:
   %.fca.1.extract = extractvalue [2 x i32] %0, 1
   ret i32 %.fca.1.extract
 }
 
-; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
 define zeroext i8 @reborrow([2 x i32] %0, i32 %1) local_unnamed_addr #0 {
 bb0:
   %.fca.1.extract.i = extractvalue [2 x i32] %0, 1
   %2 = icmp ult i32 %1, %.fca.1.extract.i
-  br i1 %2, label %read.exit, label %bb1.i.i
+  br i1 %2, label %read.exit, label %bb2.i
 
-bb1.i.i:                                          ; preds = %bb0, %bb1.i.i
-  br label %bb1.i.i
+bb2.i:                                            ; preds = %bb0
+  tail call void @on_panic()
+  unreachable
 
 read.exit:                                        ; preds = %bb0
   %.fca.0.extract.i = extractvalue [2 x i32] %0, 0
@@ -229,25 +249,27 @@ read.exit:                                        ; preds = %bb0
   ret i8 %5
 }
 
-; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(write, inaccessiblemem: none, target_mem0: none, target_mem1: none)
-define void @lend([2 x i32] %0) local_unnamed_addr #1 {
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @lend([2 x i32] %0) local_unnamed_addr #0 {
 bb0:
   %.fca.1.extract.i = extractvalue [2 x i32] %0, 1
   %.not = icmp eq i32 %.fca.1.extract.i, 0
-  br i1 %.not, label %bb1.i.i, label %write.exit
+  br i1 %.not, label %bb2.i, label %write.exit
 
-bb1.i.i:                                          ; preds = %bb0, %bb1.i.i
-  br label %bb1.i.i
+bb2.i:                                            ; preds = %bb0
+  tail call void @on_panic()
+  unreachable
 
 write.exit:                                       ; preds = %bb0
   %.fca.0.extract.i = extractvalue [2 x i32] %0, 0
   %1 = inttoptr i32 %.fca.0.extract.i to ptr
   store i32 1, ptr %1, align 4
   %.not13 = icmp eq i32 %.fca.1.extract.i, 1
-  br i1 %.not13, label %bb1.i.i10, label %write.exit12
+  br i1 %.not13, label %bb2.i10, label %write.exit12
 
-bb1.i.i10:                                        ; preds = %write.exit, %bb1.i.i10
-  br label %bb1.i.i10
+bb2.i10:                                          ; preds = %write.exit
+  tail call void @on_panic()
+  unreachable
 
 write.exit12:                                     ; preds = %write.exit
   %2 = getelementptr i8, ptr %1, i32 4
@@ -256,7 +278,7 @@ write.exit12:                                     ; preds = %write.exit
 }
 
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(argmem: write)
-define void @cast(ptr writeonly sret({ ptr, i32 }) align 4 captures(none) initializes((0, 8)) %0, [2 x i32] %1) local_unnamed_addr #3 {
+define void @cast(ptr writeonly sret({ ptr, i32 }) align 4 captures(none) initializes((0, 8)) %0, [2 x i32] %1) local_unnamed_addr #2 {
 bb0:
   %.fca.0.extract = extractvalue [2 x i32] %1, 0
   %.fca.1.extract = extractvalue [2 x i32] %1, 1
@@ -267,7 +289,7 @@ bb0:
 }
 
 ; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
-define void @main() local_unnamed_addr #4 {
+define void @main() local_unnamed_addr #3 {
 bb0:
   br label %bb1
 
@@ -275,17 +297,26 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+; Function Attrs: nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none)
 define void @on_panic() local_unnamed_addr #4 {
-bb0:
+guard:
+  %panicking = load volatile i8, ptr @__erebos_panicking, align 1
+  %second.not = icmp eq i8 %panicking, 0
+  br i1 %second.not, label %first, label %spin
+
+spin:                                             ; preds = %guard, %spin
+  br label %spin
+
+first:                                            ; preds = %guard
+  store volatile i8 1, ptr @__erebos_panicking, align 1
   br label %bb1
 
-bb1:                                              ; preds = %bb1, %bb0
+bb1:                                              ; preds = %bb1, %first
   br label %bb1
 }
 
-attributes #0 = { nofree norecurse nosync nounwind null_pointer_is_valid memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
-attributes #1 = { nofree norecurse nosync nounwind null_pointer_is_valid memory(write, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
-attributes #2 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
-attributes #3 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(argmem: write) }
-attributes #4 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #0 = { nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none) }
+attributes #1 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #2 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(argmem: write) }
+attributes #3 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #4 = { nofree noinline norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, argmem: none, target_mem0: none, target_mem1: none) }

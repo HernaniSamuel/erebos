@@ -1,0 +1,64 @@
+// A check that fails inside the panic function does not enter it again (ADR
+// 0121): the guard at its start sees that the panic function has run, and spins.
+// The entry function arms the machine timer of the CLINT, as `interrupt_clint.ers`
+// does, enables interrupts and fails a check. The panic function prints `first`,
+// says that it is about to fail, and fails a check of its own. The second panic
+// spins with interrupts enabled, so the timer's handler runs, finds the panic
+// function past its first check, prints `stopped` and exits with 1. Without the
+// guard, the program would print `first` again. Before then the handler only
+// re-arms the timer, so that the output does not depend on when it fires.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: first
+// expect-output: stopped
+// expect-exit: 1
+
+mod board;
+use board::{exit, print, print_u32};
+use core::arch::Vector;
+
+// QEMU `virt`'s CLINT, as in `interrupt_clint.ers`: the time counter and the
+// compare value of hart 0, of which only the low words are used.
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+
+// 1000 counts of the timer, 100 microseconds.
+const PERIOD: u32 = 1000;
+// `mie.MTIE`: the machine timer interrupt is enabled.
+const MTIE: u32 = 0x80;
+
+// Set by the panic function when it is about to fail its own check.
+static mut SECOND: bool = false;
+
+fn arm() {
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    if SECOND {
+        print(&b"stopped\n");
+        exit(1)
+    }
+    arm();
+}
+
+fn divide(a: u32, b: u32) -> u32 {
+    a + a / b
+}
+
+entry fn main() -> ! {
+    unsafe { *MTIMECMP_HIGH = 0; }
+    arm();
+    unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
+    unsafe { core::arch::enable_interrupts(); }
+    print_u32(divide(10, 0));
+    exit(2)
+}
+
+panic fn on_panic() -> ! {
+    print(&b"first\n");
+    critical { SECOND = true; }
+    print_u32(divide(1, 0));
+    exit(3)
+}
