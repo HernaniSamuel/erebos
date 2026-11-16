@@ -10,7 +10,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** ✅ | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
-| **M5** ✅ | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118). |
+| **M5** ✅ | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118); `unsafe` for what the checks do not cover (ADR 0119). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
 
 ## M2 steps
@@ -112,7 +112,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.6** ✅ Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** ✅ Fewer raw pointers | `assert` takes a `&[u8]` message and the panic function a `&core::PanicInfo` (ADR 0116); `core` and the tests moved to references where they can; what stays raw, measured (ADR 0117) | the e2e programs with references, the same output |
 | **M5.8** ✅ Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
-| **M5.9** `unsafe` | `unsafe { }` and `unsafe fn`; accesses through raw pointers, `asm`, `extern fn` calls, `extern static` accesses and calls to an `unsafe fn` need `unsafe`; `enable_interrupts` an `unsafe fn` (ADR 0119); every program migrated, with a count | the e2e programs with `unsafe`, the same output, and a safe interface built on `unsafe`, on both targets |
+| **M5.9** ✅ `unsafe` | `unsafe { }` and `unsafe fn`; accesses through raw pointers, `asm`, `extern fn` calls, `extern static` accesses and calls to an `unsafe fn` need `unsafe`; `enable_interrupts` an `unsafe fn` (ADR 0119); every program migrated, with a count | the e2e programs with `unsafe`, the same output, and a safe interface built on `unsafe`, on both targets |
 
 Decisions already agreed for the later steps (ADR 0094 holds them):
 
@@ -167,7 +167,9 @@ Agreed as useful, not yet scheduled:
   environment, so the borrow checker has nothing to check in it. Not
   decided. The step that adds them must settle the rule of ADR 0078 (a call
   through a pointer reaches every function whose address is taken, unless
-  its type says more), the Thumb bit 0 in their value on thumbv7m (ADR
+  its type says more), whether a pointer to an `unsafe fn` says so in its type
+  (a call through an `unsafe` one is unsafe operation 5, ADR 0119), the Thumb
+  bit 0 in their value on thumbv7m (ADR
   0074), and whether a pointer to a function that may run only in some
   context can be told from one that may run in any (the effect system
   below). Dynamic dispatch is a struct of them (M6).
@@ -419,7 +421,7 @@ ADRs:
     so a pointer from a `const` is a raw pointer, and the way out).
   - Not in M4: priorities and nesting (ADR 0078, "What later steps may
     add"); function pointers.
-- **M5** (M5.1 to M5.8). The model is ADR 0094: affine by default and
+- **M5** (M5.1 to M5.9). The model is ADR 0094: affine by default and
   linear opt-in, `#[copy]` opt-in, second-class references, the analyses
   of one body before evaluation, no `const` of a non-copy type and no move
   out of a static. ADR 0095 is the validator of M5.1. Left to each step:
@@ -549,6 +551,14 @@ ADRs:
     cluster on thumbv7m is the CMSDK dual timer, declared by its program, and
     the programs on QEMU are one portable program and one per target for what
     needs a device. The counts are under "After M5" below.
+  - M5.9: settled by ADR 0119 (`unsafe { }` and `unsafe fn`; five unsafe
+    operations: an access through a raw pointer, `asm`, a call to an `extern
+    fn` or a `#[naked]` function, an access to an `extern static` and a call to
+    an `unsafe fn`; `static mut` stays safe, as ADR 0093 checks it; an unused
+    block is an error; `enable_interrupts` an `unsafe fn` with a convention for
+    its callers; checked in type checking by `src/ty/unsafety.rs`). Its plan is
+    `.claude/plans/M5.9.md`. The count of blocks and `unsafe fn`s is under
+    "After M5" below.
   - Not in M5: references stored in structs (ADR 0094); function
     pointers; priorities and several cores, to which ADR 0094 says how it
     extends.
@@ -607,14 +617,17 @@ ADRs:
     registers (6): reasons 3 and 5 of ADR 0117. A review of a program's soundness
     starts from these 860 blocks and 18 functions (a search for `unsafe`
     finds them, C and naked functions included).
-  - Marking the dereference of a raw pointer, since the language has no
+  - Marking the dereference of a raw pointer, since the language had no
     `unsafe` (ADR 0030): moved here from M5, as ADR 0117 says, whatever the
-    counts. The question is whether what remains is rare and local enough to
+    counts. The question was whether what remains is rare and local enough to
     be marked. What remains is mostly not rare: 729 lines in 77 files, but
     the sites in the programs that exist to test raw pointers (reasons 1, 9:
     201 of 351) are the point of those tests, and reasons 3 to 5 (123 sites)
-    are `core`'s memory functions, the boards' registers and `asm`. The user
-    decided (2026-11-15) to mark it before M6, as step M5.9 (ADR 0119).
+    are `core`'s memory functions, the boards' registers and `asm`. Settled:
+    the user decided (2026-11-15) to mark it before M6, and ADR 0119
+    (Accepted) built it as M5.9, for the dereference of a raw pointer and for
+    four more operations the checks do not cover. The count above is what
+    marks the language now.
   - Returning a reference tied to the one reference parameter (deferred
     ideas): of the 59 candidate sites (reasons 2, 6, 7, 8) that M5.7 counted,
     53 were reason 8 without `PanicInfo`'s fields, 89.8 percent, which was
@@ -670,6 +683,12 @@ ADRs:
   - ADR 0027 writes return types Zig-style (`fn max(comptime T: type,
     a: T, b: T) T`); by ADR 0015 a function without `->` returns `()`, so
     the M6 ADR writes `-> T`.
+  - `unsafe` in generic bodies (ADR 0119, Consequences). A generic body is
+    checked per instantiation (ADR 0027), so whether `*x` is an unsafe
+    operation can depend on the type argument (a raw pointer in one
+    instantiation, a reference in another). Two questions: whether an `unsafe`
+    block is `ty::unused-unsafe` only when no instantiation uses it, and
+    whether a function's `unsafe` can depend on a `comptime` parameter.
 
 Documentation owed:
 
@@ -1484,8 +1503,46 @@ Documentation owed:
   error that joins two calls repeats its "used later" label (both in
   `docs/open-findings.md`); ADR 0095's status line does not name P5 (the user's,
   from M5.7).
-- **Next: M5.9** (`unsafe`, ADR 0119, plan `.claude/plans/M5.9.md`), then
-  **M6** (types as values and `comptime` parameters: generics in the Zig
+- **M5.9 done.** `unsafe` marks the operations that the checks of M5 cannot
+  cover (ADR 0119). `unsafe { }` is an expression, typed and evaluated as its
+  block, with the same MIR; `unsafe fn` declares a function whose callers must
+  uphold a condition, with a body that is not an `unsafe` block. Five
+  operations need an `unsafe` block, each `ty::unsafe-required`, one per
+  operation, at the operation: an access through a raw pointer (read, write or
+  borrow of `*p`, `p[i]`, `(*p).f`, `(*s)[i]`, a volatile pointer or a pointer
+  to a peripheral type, and a method whose receiver borrows such a place),
+  `asm` outside a naked body, a call to an `extern fn` or a `#[naked]`
+  function, a read, write or borrow of an `extern static`, and a call to an
+  `unsafe fn`. `&raw`, casts, comparisons, `slice` and `len`, a `static mut`,
+  peripherals and a `sym` operand stay safe. A block with no operation directly
+  inside it is `ty::unused-unsafe` (a nested one with a label at the block
+  around it), so every `unsafe` is a mark of something real; `unsafe` before
+  `extern fn`, the entry, panic and interrupt functions, `impl` and any other
+  item is `parser::misplaced-unsafe`, and an `unsafe` block around a naked
+  body is `ty::naked-body`. The rule applies to every body, those run at
+  compile time included, and coverage is lexical. The pass is
+  `src/ty/unsafety.rs`, after a body is typed; nothing after type checking sees
+  `unsafe`. In `core`, `memcpy`, `memmove`, `memset` and the twelve
+  `__aeabi_mem*` are `unsafe fn`, and so is `enable_interrupts` on both
+  targets, called in an `unsafe` block only from the entry function outside
+  `critical`, or from an `unsafe fn` with the same contract (a review rule, not
+  checked). Every program was migrated: `rt/`, the boards, the programs of
+  `tests/e2e/` (with the same output on both targets at both levels), the ui
+  tests, the snippets of `tests/rejected.rs`, the programs embedded in the Rust
+  tests and the generated programs of ADR 0068. The count is under "After M5":
+  860 `unsafe` blocks and 18 `unsafe fn`s in `rt/`, `tests/boards/` and
+  `tests/e2e/`, 1049 operations. `tests/rejected.rs` removes the `unsafe` of
+  every outer block of the programs of `tests/e2e/`, one at a time, and each
+  must be rejected with `ty::unsafe-required` (over 1,300 removals, counting a
+  program once per target; a second oracle for `ty::unused-unsafe`); `tests/e2e/unsafe_boundary.ers` builds a safe
+  interface (a ring over a static buffer, a fill through an `unsafe fn`) on
+  both targets at both levels. `PANICS` is unchanged. Left open, for the
+  planner: unsafe attributes, `unsafe` on types and `impl`, an `extern fn`
+  declared safe, and a check of `enable_interrupts` against `critical` and
+  handlers (which would make it safe again) are not scheduled (ADR 0119, "What
+  stays out"); generic bodies and function pointers owe what ADR 0119's
+  Consequences list, under "M6" and in the deferred ideas.
+- **Next: M6** (types as values and `comptime` parameters: generics in the Zig
   model, monomorphized, ADR 0027), after M5 (moves, ownership, references,
   returned references, methods and `unsafe`), whose steps and model are above.
   What M6 must settle is listed under "M6" in the pending decisions.

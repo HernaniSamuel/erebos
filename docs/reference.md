@@ -1,4 +1,4 @@
-# Erebos language reference (M5.8)
+# Erebos language reference (M5.9)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -87,9 +87,10 @@ block.
   of it be named `llvm`.
 - **Keywords:** `align_of as asm break comptime const continue crate critical
   else entry enum extern false fn if impl interrupt let loop match mod mut
-  offset_of panic pub return self Self size_of static struct super true use
-  volatile while`. `self` and `Self` name the receiver and the type of an
+  offset_of panic pub return self Self size_of static struct super true unsafe
+  use volatile while`. `self` and `Self` name the receiver and the type of an
   `impl` (see "Functions of a type and methods"); `impl` starts an item.
+  `unsafe` starts a block or marks a function (see "`unsafe`").
   `raw` is a keyword only right after `&`. `memory`, and the words inside a `memory`
   block (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
   keywords: they are recognized only in their place (see "Memory maps"),
@@ -253,7 +254,11 @@ fn add(a: u32, mut b: u32) -> u32 {
   `uart.init`, and a function of a type by the path of its type and its
   name, `uart.Uart16550.putc` (ADR 0051, 0113, see "Symbols").
 - `#[naked]` makes a function whose body is one `asm` expression and has no
-  code of the compiler's around it (ADR 0079, see "Inline assembly").
+  code of the compiler's around it (ADR 0079, see "Inline assembly"); calling
+  one needs an `unsafe` block (ADR 0119).
+- `unsafe fn` declares a function whose callers must uphold a condition the
+  compiler does not check; calling one needs an `unsafe` block (ADR 0119, see
+  "`unsafe`").
 - `#[align(N)]` before a function with a body, `N` a power of two, says that
   its first instruction is at a multiple of `N` (ADR 0087, see "Layout").
 
@@ -315,9 +320,13 @@ extern fn c_checksum(data: *const u8, n: usize) -> u32;
 
 declares a function defined outside the program, in C, assembly or a
 vendor library, which the linker finds; `erebos build --link file.o` adds
-the object file. It is called like any function. Its parameters cannot be
+the object file. It is called like any function, in an `unsafe` block: **every
+call to an `extern fn` is an unsafe operation**, whatever its signature, since
+the compiler does not see what the callee does (ADR 0119, see "`unsafe`").
+Its parameters cannot be
 `mut`, and nothing checks the declaration against the definition: as in C,
-a mismatch is undefined. Its symbol is its own name, in any module; a C
+a mismatch is undefined. An `extern fn` cannot be declared `unsafe` (every
+call is already unsafe): `unsafe extern fn` is `parser::misplaced-unsafe`. Its symbol is its own name, in any module; a C
 function is declared in one module and brought into the others with `use`
 (see "Symbols").
 
@@ -332,7 +341,7 @@ x + y;                   // expression statement
 A block `{ ... }` is an expression (ADR 0015). Its value is its final
 expression without `;`; with no such expression it has type `()`, or `!` if
 it cannot reach its end. A block-like expression (`if`, `match`, `while`,
-`loop`, `critical`, `{ }`) may stand as a statement without `;`, but must then have
+`loop`, `critical`, `unsafe { }`, `{ }`) may stand as a statement without `;`, but must then have
 type `()`. A statement that starts with one ends with it: `if c { } - 1`
 is not a subtraction.
 
@@ -394,7 +403,9 @@ buf[i] = buf[0];
 `&raw const place` and `&raw mut place` give a `*const T` or `*mut T` to a
 place: a variable, a static, a peripheral, a byte string, `*pointer`,
 `a[i]`, `p[i]`, `(*s)[i]`, a range `a[x..y]` or a field (a range, like
-`*s` for a slice `s`, gives a slice; see "Slices"). `&raw mut` needs a mutable place:
+`*s` for a slice `s`, gives a slice; see "Slices"). `&raw` of a place reached
+through a raw pointer, or of an `extern static`, only computes an address and
+needs no `unsafe` block (ADR 0119, see "`unsafe`"). `&raw mut` needs a mutable place:
 not a variable without `mut`, a `static`, an `extern static` without
 `mut`, a byte string, part of a temporary, nor anything reached through a
 `*const` pointer (`ty::address-of-immutable`). A peripheral is not `mut`,
@@ -718,7 +729,11 @@ that its definition matches. It is a place like a static, read where the
 read is written. Without `mut`, it cannot be assigned nor have a `*mut`
 address taken, and it promises that its value never changes, which the
 compiler may rely on: a global that other code changes must be declared
-`extern static mut`.
+`extern static mut`. Since the compiler sees no definition, **reading,
+writing or borrowing an `extern static`, or a part of one, needs an `unsafe`
+block** (ADR 0026, 0119, see "`unsafe`"); `&raw const` and `&raw mut` of one
+do not, which is how a linker symbol is named. A `static` and a `static mut`
+are safe to use: the checks of ADR 0093 cover the second.
 `#[align(N)]` does not apply (`resolve::misplaced-attribute`): the
 definition decides the alignment. A symbol of unknown size, as C's
 `extern const uint8_t t[];`, is declared with a sized type
@@ -760,13 +775,18 @@ references").
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        putc((*s)[i]);
+        unsafe { putc((*s)[i]); }
         i += 1;
     }
 }
 
 print(&raw const b"hello\n");
 ```
+
+Making a slice, `slice(p, n)`, and taking its length, `len(s)`, are safe. The
+access to its elements through a raw slice, `(*s)[i]`, and a borrow of `*s` or
+of a range of it are unsafe operations: each needs an `unsafe` block (ADR
+0119, see "`unsafe`"). `&raw const (*s)[i]` is an address and needs none.
 
 **Making a slice.**
 
@@ -778,7 +798,8 @@ print(&raw const b"hello\n");
 - `slice(p, n)`, built in, is the slice of `n` elements (a `usize`)
   starting at `p`: a `*const T` gives a `*const [T]` and a `*mut T` a
   `*mut [T]`, with the same volatility. Nothing is checked; the program
-  vouches for it, as for a pointer made from an integer. Nothing ties `n`
+  vouches for it, as for a pointer made from an integer, when it reads or
+  writes through the slice. Nothing ties `n`
   to the length of another slice: the checked way to take part of a slice or
   of an array is a range in an index (see "Sub-slices").
 
@@ -2351,7 +2372,8 @@ peripherals and clusters" and "Volatile references").
   not followed: `p.f` is `ty::no-fields`, with the help `(*p).f`, `p[i]` steps
   over whole pointees (see "Pointers"), and `s[i]` on a raw slice is
   `ty::slice-pointer-index`; the dereference of a pointer stays written, as it
-  is the one access the compiler does not check. With `p: *const [u8; 4]` the
+  is the one access the compiler does not check, and it needs an `unsafe` block
+  (see "`unsafe`"). With `p: *const [u8; 4]` the
   place `p[1]` is the next array after `*p`, while with `r: &[u8; 4]`, `r[1]`
   is an element of `*r`. `*e` on a value that is neither a pointer nor a
   reference is `ty::deref-non-pointer`. `(*r)[i]` with `r: &[T; N]` is
@@ -2380,8 +2402,8 @@ fn places(p: *mut Pair, mut v: Pair, arr: [u32; 4]) {
     let c: &u32 = &arr[2];              // an element
     let d: &u32 = &LIMIT;               // a static without `mut`
     let e: &[u8; 2] = &b"ok";           // a byte string
-    let f: &Pair = &*p;                 // through a raw pointer
-    let g: &mut u32 = &mut (*p).b;
+    let f: &Pair = unsafe { &*p };      // through a raw pointer: needs `unsafe`
+    let g: &mut u32 = unsafe { &mut (*p).b };
     let h: &mut u32 = &mut v.b;
 }
 
@@ -2401,7 +2423,11 @@ a reference made through a volatile one is volatile). A place of type `[T]`
 can be borrowed too, `&*s` for a slice `s` or a sub-slice `&a[2..5]`, and
 gives a reference to a slice (see "Slices behind references"). A reference
 made through a raw pointer is the program's word, as `slice(p, n)` is: the
-borrow check follows nothing through a raw pointer.
+borrow check follows nothing through a raw pointer. The borrow of a place
+through a raw pointer, `&*p`, `&mut (*p).b`, `&p[i]`, and the borrow of an
+`extern static` or of a part of one, are unsafe operations: each is written in
+an `unsafe` block (`ty::unsafe-required` otherwise, ADR 0119, see "`unsafe`").
+`&raw const` and `&raw mut` of the same places need none.
 
 - `&mut place` needs a place that can be written, by the rules of `&raw mut`:
   not a variable or parameter without `mut`, a `static`, an `extern static`
@@ -2597,8 +2623,10 @@ fn next(d: &mut volatile Desc) {
 }
 
 fn pass(p: *mut volatile Ring) -> u32 {
-    next(&mut (*p).desc[1]);            // a `&mut volatile Desc`
-    head(&*p)
+    unsafe {
+        next(&mut (*p).desc[1]);        // a `&mut volatile Desc`
+        head(&*p)
+    }
 }
 ```
 
@@ -2797,7 +2825,7 @@ fn demo(raw: *mut [u8]) -> u32 {
     let a: u32 = sum(&buf);                 // `&[u8; 8]` becomes `&[u8]`
     let b: u32 = sum(&b"hello");            // so does a byte string
     let c: u32 = sum(&buf[2..6]);           // a sub-slice
-    let whole: &[u8] = &*raw;               // from a raw slice that is not volatile
+    let whole: &[u8] = unsafe { &*raw };    // from a raw slice that is not volatile
     a + b + c + sum(whole)
 }
 ```
@@ -2817,7 +2845,8 @@ debug type is not emitted.
 - **From a place of type `[T]`.** `&*s` and `&mut *s` borrow the slice `s`
   points to or refers to, whole. Through a raw slice the reference is the
   program's word, as `&*p` is for a thin pointer, and the borrow check follows
-  nothing; through a volatile one it is a volatile reference to a slice
+  nothing; the borrow goes through a raw pointer, so it needs an `unsafe`
+  block (ADR 0119, see "`unsafe`"); through a volatile one it is a volatile reference to a slice
   (ADR 0110). Through a reference it is a reborrow. `&mut *s` needs a
   `*mut [T]` or a `&mut [T]` (`ty::mut-borrow-of-immutable` otherwise).
   `&a[2..5]` and `&mut a[2..5]` borrow a sub-slice (see "Sub-slices").
@@ -3134,19 +3163,21 @@ A `return` of a reference out of a `critical` block is
 
 **A reference made through a raw pointer** may be returned, `&*p`, as the
 program's word, as it may be made and lent anywhere: the borrow check follows
-nothing through a raw pointer. Its reach is wider than one body, since the
-signature grants the meaning once, for every caller. `fn counter() -> &u32 {
-&*(&raw const COUNT) }`, with `COUNT` a `static mut`, has no reference
-parameter, so each call's result is read-only static data that holds nothing.
-It compiles when one context owns `COUNT`; when a handler also reaches it, the
-thread's `&raw const COUNT` outside `critical` is `analysis::unprotected-static`.
-The shared form takes the pointer inside a block and leaves it as a raw
-pointer, since no reference leaves `critical`:
+nothing through a raw pointer. The borrow `&*p` goes through a raw pointer, so
+it is an unsafe operation and is written in an `unsafe` block (ADR 0119, see
+"`unsafe`"); the rules of this section are unchanged. Its reach is wider than
+one body, since the signature grants the meaning once, for every caller. `fn
+counter() -> &u32 { unsafe { &*(&raw const COUNT) } }`, with `COUNT` a `static
+mut`, has no reference parameter, so each call's result is read-only static
+data that holds nothing. It compiles when one context owns `COUNT`; when a
+handler also reaches it, the thread's `&raw const COUNT` outside `critical` is
+`analysis::unprotected-static`. The shared form takes the pointer inside a block
+and leaves it as a raw pointer, since no reference leaves `critical`:
 
 ```
 fn counter() -> &u32 {
     let p: *const u32 = critical { &raw const COUNT };
-    &*p
+    unsafe { &*p }
 }
 ```
 
@@ -3160,7 +3191,8 @@ write `COUNT`: that is the program's word, given once in `counter`.
   values. One with no reference parameter that returns a `&T` promises
   read-only data for the whole run, as an `extern static` without `mut` does;
   a program that cannot promise that returns a raw pointer and writes `&*p` at
-  the call.
+  the call. Calling an `extern fn` is itself an unsafe operation (ADR 0119), so
+  the call and the `&*p` are in `unsafe` blocks.
 - An **`#[export]`** function may return one; its body is checked as any body,
   and C receives a pointer or the C struct of a slice (see "Slices behind
   references").
@@ -3516,7 +3548,7 @@ consumes a linear value). Paths that do not return use nothing after them, so no
 borrow is in use there. `critical` blocks change nothing: a borrow taken inside
 one is checked like any other. A `sym` operand naming a `static mut` or an
 `extern static mut` counts as a write of the whole static, since assembly may do
-anything with the address (`let r: &mut u32 = &mut COUNT; asm(..., sym COUNT);
+anything with the address (`let r: &mut u32 = &mut COUNT; unsafe { asm(..., sym COUNT); }
 *r = 1;` is `analysis::borrow-conflict`); a `sym` of a `static` without `mut`
 is no access. Elements of one array cannot be borrowed `&mut`
 together, nor two sub-slices of it; a program that needs two borrows the array
@@ -3852,7 +3884,9 @@ functions with its type, and its callers write `Ring::new()` and `r.push(1)`
 instead of naming the module and the function. A function of a type is a
 function: MIR, compile-time evaluation, code generation and the C ABI see one
 whose first parameter is the receiver, as if it were written `fn push(r: &mut
-Ring, b: u8)`.
+Ring, b: u8)`. It may be an `unsafe fn` (`pub unsafe fn`), and a call to it,
+written `Ring::f(..)` or `r.f(..)`, is an unsafe operation (ADR 0119, see
+"`unsafe`"); `unsafe` before the `impl` itself is `parser::misplaced-unsafe`.
 
 **`impl` blocks.**
 
@@ -4773,6 +4807,12 @@ run at compile time: an evaluation that needs it reports nothing more.
 - `*p` reads or, as an assignment target, writes through `p`. Writing needs
   `*mut`. `*r` does the same through a reference, and writing needs `&mut`
   (see "References").
+- **An access through a raw pointer is an unsafe operation** (ADR 0119): `*p`,
+  `p[i]`, `(*p).f`, `(*s)[i]` and a range of `*s` that is read, written or
+  borrowed, through a thin pointer, a slice, a volatile pointer or a pointer to
+  a peripheral type, needs an `unsafe` block (see "`unsafe`"). Computing an
+  address does not: `&raw const p[i]`, a cast, a comparison, `slice(p, n)` and
+  `len(s)` are safe, and so is `*r` through a reference.
 - A thin pointer is a plain address (`p as usize` is its address); a slice
   is an address and a length. Converting an integer to a pointer does not
   make it valid to dereference; alignment, existence and permissions are
@@ -4864,6 +4904,8 @@ hardware (`fence iorw, iorw` on riscv32, `dmb sy` on thumbv7m). Both are
   of a `critical` block (see "`critical` blocks").
 - `critical { ... }` runs its block with interrupts masked and has the
   block's value and type; see "Interrupts".
+- `unsafe { ... }` is a block that may hold unsafe operations, with the
+  block's value and type; see "`unsafe`".
 - `return` or `return value` leaves the function.
 - `break`, `continue` and `return` have type `!`.
 - `e?` gives the value of an `Option` or a `Result`, or returns its
@@ -4895,6 +4937,191 @@ it returns from the function, nothing after it runs: in `f(a()?, b())`,
 the places of the outputs run left to right before the code, and the outputs
 are stored after it, left to right (ADR 0079, see "Inline assembly").
 
+## `unsafe` (ADR 0119)
+
+Erebos checks moves, linear values, references and borrows, and shared statics.
+Each check holds for what it can see, and each ends at a few operations whose
+correctness the program vouches for. `unsafe` marks them, so that a function's
+text shows whether it relies on the checks or steps outside them, and a review
+starts from a search for `unsafe`.
+
+```
+// Writes `n` bytes of `c` from `dest`.
+// Safety: `dest` points to `n` bytes the caller may write.
+pub unsafe fn fill(dest: *mut u8, c: u8, n: usize) {
+    let mut i: usize = 0;
+    while i < n {
+        // Sound: `i < n`, and the caller vouches for `n` bytes at `dest`.
+        unsafe { dest[i] = c; }
+        i += 1;
+    }
+}
+
+fn clear(buf: &mut [u8; 8]) {
+    // Sound: `buf` is 8 bytes, and 8 are written.
+    unsafe { fill(&raw mut (*buf)[0], 0, 8); }
+}
+```
+
+### The unsafe operations
+
+An **unsafe operation** is one of five. Each is allowed only directly inside an
+`unsafe` block; anywhere else it is `ty::unsafe-required`, one error per
+operation, at the operation, whose message names it and whose label says what
+it does:
+
+1. **An access through a raw pointer.** Reading, writing or borrowing (`&`,
+   `&mut`) a place reached through a raw pointer: `*p`, `p[i]`, `(*p).f`,
+   `(*s)[i]` and a range of `*s`, through a thin pointer, a slice, a volatile
+   pointer or a pointer to a peripheral type (`(*u).thr`), and a method call
+   whose receiver borrows such a place. The message says "reading", "writing",
+   "reading and writing" (`+=`) or "borrowing" "through a raw pointer", and the
+   label "this dereferences a raw pointer". A place reached through a
+   reference is not one: `*r`, `r.f` and `r[i]` are safe.
+2. **`asm`**, except the body of a `#[naked]` function (see "Naked
+   functions"). The label is "this `asm`".
+3. **A call to a function whose body the compiler does not check**: an
+   `extern fn`, whatever its signature (a reference parameter included), or a
+   `#[naked]` function. The labels are "this calls an `extern fn`" and "this
+   calls a naked function".
+4. **A read, write or borrow of an `extern static`** or `extern static mut`, or
+   of a part of one (`c_pair.b = 5` is one write, at `c_pair`). The label is
+   "this reads an `extern static`", or "writes" or "borrows"; the message says
+   "reading and writing" for `+=`. An operand of an `asm` is touched as its
+   kind says: `in` and `const` read, `out` and `lateout` write, `inout` both.
+5. **A call to an `unsafe fn`**, as a free function, a function of a type or a
+   method (`x.f()`), at run time or at compile time, an `#[export]` one
+   included. The label is "this calls `unsafe fn PATH`". A function that is
+   several of these (`#[naked] unsafe fn`) is one error, as an `unsafe fn`.
+
+An expression that is two unsafe operations gives two errors: `*f_extern()`
+with a raw result is a call and a dereference. The error of a call points at
+the call, or at the method's name for `x.f()`; the error of an access at the
+dereference (`(*pair)` with its parentheses) or at the whole index `p[i]`.
+
+**What is not unsafe**, because none of it reads or writes memory the program
+has not proven it may: `&raw const` and `&raw mut` of any place, one through a
+raw pointer and an `extern static` included (the offset of `&raw const p[i]`
+wraps and has no `inbounds`, as arithmetic does); casts between pointers and
+integers and from references to raw pointers; comparing pointers; `slice(p, n)`
+and `len(s)`; a `static mut`, which the checks of "Shared statics" cover;
+peripherals and their registers (ADR 0058); a `sym` operand, also of a naked
+function or an `extern fn`, which names a symbol and calls nothing; and a call
+to an `#[export]` function that is neither `unsafe` nor `#[naked]`. Returning
+`&*p`, which "Returning a reference" allows, borrows through a raw pointer and
+needs `unsafe`; its rules are unchanged. `unsafe { &raw const c_count }`, a
+block that holds only `&raw` of an `extern static`, is `ty::unused-unsafe`.
+
+### `unsafe { }`
+
+```
+let x: u32 = unsafe { *p };
+unsafe {
+    (*regs).ctrl = 1;
+}
+```
+
+`unsafe` followed by a block is an expression, typed and evaluated as the
+block is. As a statement it needs no `;`, as `critical` does not, and as an
+arm of a `match` it needs no `,`. It may hold `return`, `break` and
+`continue`, and may be nested in, or hold, `critical`, `loop` and any other
+block. It allows unsafe operations and **changes nothing else**: every check of
+the language (types, moves, linear values, the borrow check, shared statics,
+`critical`) holds inside it as outside, a reference may leave it, and it
+generates the same MIR as a plain block. Like any block it is a value, not a
+place: `unsafe { *p } = 1;` is `parser::unexpected-token`, `(unsafe { *p }) =
+1` is `ty::not-assignable`, and `unsafe { *p = 1; }` is the form that writes.
+`unsafe` followed by anything else in an expression is
+`parser::misplaced-unsafe`.
+
+- **Every `unsafe` block is used.** A block is used when an unsafe operation is
+  directly inside it: inside it and not inside an `unsafe` block nested in it.
+  A block that is not used is `ty::unused-unsafe`, at its `unsafe` keyword,
+  with the label "nothing in it needs `unsafe`"; a nested one gets a second
+  label, "inside this `unsafe` block", at the block around it. Two nested
+  blocks with no operation are two errors. There are no warnings in the
+  compiler: the error keeps every `unsafe` in a program a mark of something
+  real.
+- **Coverage is lexical.** An operation is covered by the `unsafe` blocks
+  around it in the source, wherever it is evaluated. The operand of
+  `comptime(..)`, an `asm` `const` operand included, is an expression of the
+  body it is written in, typed with it and evaluated from it, so it is checked
+  once, under the blocks around it.
+- **The same in every body.** The rule applies to each body on its own, with
+  no `unsafe` block around it: a function, a function of a type, a handler, the
+  entry and panic functions, and every body that runs at compile time (a
+  `const` or `static` initializer, a `comptime` block or item, an enum's
+  discriminant, a bit-field struct's bits and defaults, an array's length, a
+  repeat count, `#[align]`, a value of the `memory` block, a register's offset,
+  a peripheral's address). At compile time the evaluator still checks every
+  access it makes and stops on one it cannot make (`eval::invalid-access`,
+  `eval::extern-call` and the others); `unsafe` is required there too, so that
+  a function means the same at both times.
+- **Expressions already in error.** An operation whose operand or callee has an
+  erroneous type (an error was already reported for it) counts as unsafe when
+  deciding whether a block is used, and is never reported as
+  `ty::unsafe-required`: an error is not followed by others it caused. The
+  value written by an assignment is not an operand of the write: in `*p = e`
+  with `e` in error, the write is still reported outside a block.
+
+### `unsafe fn`
+
+`unsafe fn` declares a function whose callers must uphold a condition the
+compiler does not check; a call to it is unsafe operation 5. The keyword goes
+after `pub` and before `fn`: `pub unsafe fn`, `#[export] pub unsafe fn`.
+It is allowed on a function with a body, at module level or in an `impl`,
+`#[export]` and `#[naked]` functions included (a C caller is not affected; an
+Erebos caller needs `unsafe`).
+
+- **The body is not an `unsafe` block.** An unsafe operation inside an `unsafe
+  fn` needs its own `unsafe` block, and the help of its `ty::unsafe-required`
+  says so. The two meanings stay apart: `unsafe fn` is a contract with the
+  caller, `unsafe { }` the place where the body relies on its own reasoning.
+- An `unsafe fn` whose body has no unsafe operation is not an error: its
+  contract may be about state the compiler does not see.
+- Elsewhere `unsafe` is `parser::misplaced-unsafe`, with a help per case:
+  before `extern fn` (every call to one is already unsafe), `entry fn`, `panic
+  fn` and `interrupt fn` (no Erebos code calls them, so no caller can uphold a
+  contract), `impl` (the keyword goes on each function), and any item that is
+  not a function. `unsafe fn f();` with no body is
+  `parser::unexpected-token`, as `fn f();` is.
+- In `core`, `memcpy`, `memmove`, `memset` and the twelve `__aeabi_mem*`
+  functions are `unsafe fn`, and so is `enable_interrupts` (see "`core`" and
+  "Enabling, waiting and testing").
+
+### Naked functions
+
+The body of a `#[naked]` function stays exactly one `asm` expression, with no
+`unsafe` block around it: a block there is `ty::naked-body`, with a help saying
+that `#[naked]` is the mark. The mark is at the calls instead: a call to a
+naked function from Erebos code is unsafe operation 3, as a call to an `extern
+fn` is, since in both the compiler checks nothing of what the callee does.
+
+### The convention for `enable_interrupts`
+
+`core::arch::enable_interrupts()` is an `unsafe fn` whose contract is that it
+is not called inside a `critical` block or an `interrupt fn`, directly or
+through callers: inside one it would unmask interrupts while the check of
+shared statics still treats the rest of the block, or the handler, as masked.
+Nothing rejects such a call. The convention in `core`, the boards and the
+tests is that it is called in an `unsafe` block only from the entry function,
+outside every `critical` block in it; any other function that calls it is an
+`unsafe fn` with the same contract, which its callers carry up to the entry
+function. It is checked when a change is reviewed. In `core` and the boards,
+each `unsafe fn` says its contract in a comment above it (`Safety: ...`) and
+each `unsafe` block is preceded by a comment saying why it is sound; the test
+programs are not under that rule.
+
+### What `unsafe` is not
+
+`unsafe` changes no other check and nothing after type checking sees it: MIR
+building lowers an `unsafe` block as a block, and the analyses, the evaluator
+and code generation do not change. There are no unsafe attributes, no `unsafe`
+on types or `impl` blocks, no `extern fn` declared safe, and no check of
+`enable_interrupts` against `critical` and handlers. Generic bodies and
+function pointers come with their milestones; a pointer to an `unsafe`
+function will say so in its type.
+
 ## Inline assembly (ADR 0079, 0082)
 
 Some instructions have no expression in the language: a control register
@@ -4904,14 +5131,22 @@ operands that carry values in and out of registers:
 
 ```
 let mut cause: u32 = 0;
-asm("csrr {}, mcause", out(reg) cause, options(nomem, nostack));
+unsafe { asm("csrr {}, mcause", out(reg) cause, options(nomem, nostack)); }
 
 let mut x: u32 = 5;
-asm("add {x}, {x}, {y}", x = inout(reg) x, y = in(reg) 3 as u32,
-    options(pure, nomem, nostack));
+unsafe {
+    asm("add {x}, {x}, {y}", x = inout(reg) x, y = in(reg) 3 as u32,
+        options(pure, nomem, nostack));
+}
 
-asm("wfi", options(nomem, nostack));
+unsafe { asm("wfi", options(nomem, nostack)); }
 ```
+
+**An `asm` is an unsafe operation** (ADR 0119): it can write any register or
+any memory, which the compiler cannot check, so it is written in an `unsafe`
+block (see "`unsafe`"). The one exception is the body of a `#[naked]` function
+(see "Naked functions"). The examples below leave the block out where they show
+only the syntax of `asm`.
 
 The template is assembly for one target, so a program that holds `asm`
 builds for the targets whose instructions it uses (the tests say it with `//
@@ -5104,7 +5339,15 @@ statement or as the tail of the block, with `noreturn` and only `sym` and
 parameters and the return type say how C calls it, by the C ABI of the target,
 and the template finds the arguments where the ABI puts them; the body
 cannot name a parameter, and a run-time variable in a `const` operand is
-`ty::not-comptime`. A naked function is called like any other and is the one
+`ty::not-comptime`. The `asm` of the body needs no `unsafe` block, and an
+`unsafe` block around it is `ty::naked-body`, whose help says that `#[naked]`
+is the mark (ADR 0119). **A call to a naked function from Erebos code is an
+unsafe operation**, as a call to an `extern fn` is, since the compiler checks
+nothing of what the callee does: it is written in an `unsafe` block. Calls
+that are not Erebos calls are unchanged: the ones LLVM generates
+(`__aeabi_uldivmod`), the hardware's jump to `_start`, and a `sym` operand of
+another `asm`, which is no call. A naked function is called like any other
+(from an `unsafe` block) and is the one
 way to write a function with a convention no signature has. `#[naked]` goes on
 a function with a body, and combines with `#[export]`; on an `extern fn`,
 the entry function, the panic function, an interrupt handler or any other
@@ -5119,7 +5362,9 @@ item it is
 naked function and of `core::arch`'s fences included, is `eval::asm`, with
 the `asm` as the first label (inside `core`'s file for the fences). A
 function that holds `asm` is still type checked and can be called at run
-time.
+time. The rule of `unsafe` holds at compile time too: an `asm` written in a
+`comptime` block or a `const` initializer needs its `unsafe` block, and
+`eval::asm` is what the evaluation then reports (ADR 0119).
 
 The compiler checks operands, registers, types and placeholders; LLVM's
 assembler reads the instructions when the object is built, so `--emit=typeck`,
@@ -5354,7 +5599,7 @@ pub fn config(baud: u32) -> Config {
   private item is visible in the module that declares it and in that
   module's descendants; a `pub` item wherever its module is.
 - `pub` comes after the attributes and before the item's keywords: `pub
-  fn`, `pub extern fn`, `pub static mut`, `pub extern static`, `pub
+  fn`, `pub unsafe fn`, `pub extern fn`, `pub static mut`, `pub extern static`, `pub
   struct`, `pub enum`, `pub const`, `pub peripheral`, `pub mod`, `pub
   use`, `pub panic fn`, `#[export] pub fn`, and before a function of an `impl`
   (below). On a `comptime` or `memory` block, which has no name, on an `impl`
@@ -5746,7 +5991,8 @@ words of a vector table come first, 16 or more, see "Targets"). It does, in orde
 6. jump to the entry function, through `sym entry` (see "Inline assembly").
 
 The entry function enables interrupts when it is ready, with
-`core::arch::enable_interrupts()` (see "Interrupts"). Nothing else runs
+`core::arch::enable_interrupts()`, an `unsafe fn` (see "Interrupts" and
+"Enabling, waiting and testing"). Nothing else runs
 before it: there are no constructors and no order of initialization. The
 loops work a word at a time between symbols the linker script defines
 (`__bss_start`, `__bss_end`, `__data_start`, `__data_end`, `__data_load`),
@@ -5944,7 +6190,7 @@ needs one machine says it in a header, `// targets: <name>`, and runs only
 there. A program that holds one target's assembly, or names an item of
 `core::arch` specific to one target, lists only that target (ADR 0079,
 amending 0077). On `mps2-an385` the board stops QEMU through semihosting,
-with `asm("bkpt 0xab", ...)` in Erebos and no C file (the harness still links
+with `unsafe { asm("bkpt 0xab", ...); }` in Erebos and no C file (the harness still links
 a board's C file when a board has one). C files of the tests are compiled
 with `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3 -mfloat-abi=soft
 -ffreestanding` for thumbv7m. The ui tests take `// target: <name>`, riscv32
@@ -5972,7 +6218,7 @@ interrupt fn crash() -> ! at Vector::HardFault {
 
 entry fn main() -> ! {
     // ... set up SysTick ...
-    core::arch::enable_interrupts();
+    unsafe { core::arch::enable_interrupts(); }
     loop {
         let ticks: u32 = critical { TICKS };
         if ticks >= 5 {
@@ -6285,7 +6531,21 @@ protection it was taken in (`ty::reference-position`, see "References to a
 `_start` masks interrupts first (see "Startup and memory"), so the entry
 function starts masked on both targets, and a program calls
 `core::arch::enable_interrupts()` when what its handlers use is set up (see
-"`core`" for the three portable items). Each source of interrupts has its own
+"`core`" for the portable items). `enable_interrupts` is an `unsafe fn`
+(ADR 0086, 0119): the call is written in an `unsafe` block, and its contract
+is that it is not called inside a `critical` block or an `interrupt fn`,
+directly or through any depth of callers. Inside one it would unmask
+interrupts while the check of shared statics (see "Shared statics") still
+treats the rest of the block, or the handler, as masked, and nothing rejects
+the call. A function can establish the contract for itself only when nothing
+calls it, so the convention of `core`, the boards and the tests is that
+`enable_interrupts` is called in an `unsafe` block only from the entry
+function, outside every `critical` block in it; any other function that calls
+it is itself an `unsafe fn` with the same contract, which its callers carry up
+to the entry function. The compiler does not check the convention; it is
+checked when a change is reviewed. The other functions of `core::arch`
+(`wait_for_interrupt`, `interrupts_enabled`, the fences and the `nvic_*`
+functions) are safe to call. Each source of interrupts has its own
 enable, which is the program's: `mie` on riscv32, the peripheral's control
 register on thumbv7m (SysTick's `TICKINT`), and, for the chip's interrupts,
 the controller's (see below). There is no function that masks:
@@ -6328,7 +6588,7 @@ name nothing on riscv32: `resolve::unknown-function`):
 
 ```
 core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
-core::arch::enable_interrupts();
+unsafe { core::arch::enable_interrupts(); }
 ```
 
 - They take the number, the variant's value converted with `as u32`: `core`
@@ -6369,8 +6629,11 @@ entry fn main() -> ! {
     PLIC.priority[UART_SOURCE as usize] = 1;
     PLIC.enable[0].sources[0] = 1 << UART_SOURCE;
     PLIC.ctx[0].threshold = 0;
-    asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
-    core::arch::enable_interrupts();
+    unsafe {
+        asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
+    }
+    // In the entry function, outside every `critical` block.
+    unsafe { core::arch::enable_interrupts(); }
     // ...
 }
 
@@ -6721,8 +6984,10 @@ peripheral UART0: Uart16550 at UART_BASE;
 peripheral UART1: Uart16550 at UART_BASE + 0x100;
 
 fn putc(u: *mut Uart16550, byte: u8) {
-    while (*u).lsr & 0x20 == 0 {}
-    (*u).thr = byte;
+    unsafe {
+        while (*u).lsr & 0x20 == 0 {}
+        (*u).thr = byte;
+    }
 }
 
 fn hello() {
@@ -6876,7 +7141,9 @@ pointer to the type serves both.
 
 **Accesses.** A register is reached from a peripheral, `UART0.thr`, or
 through a pointer to a peripheral type, `(*u).thr`. Either is a place of
-the register's type:
+the register's type. A register of a peripheral is safe to touch; one reached
+through a raw pointer needs an `unsafe` block, as any access through one
+does (ADR 0119, see "`unsafe`"):
 
 - **Each read is one volatile load of the register's width at its address,
   the device's plus its offset, and each write one volatile store**, with
@@ -6935,7 +7202,7 @@ peripheral PlicContext {
 peripheral PLIC: Plic at 0x0C00_0000;
 
 fn route(c: *mut PlicContext, level: u32) {
-    (*c).threshold = level;
+    unsafe { (*c).threshold = level; }
 }
 
 fn setup(source: usize) {
@@ -7912,6 +8179,12 @@ the compiler binary, and compiled and checked with every program.
     `thumbv7m-none-eabi` (ADR 0074); and the 64-bit division functions,
     `__udivdi3`, `__umoddi3`, `__divdi3` and `__moddi3`, private, since
     programs write `/` and `%`.
+  - `memcpy`, `memmove`, `memset` and the twelve EABI functions are
+    **`unsafe fn`** (ADR 0119, see "`unsafe`"): each writes through pointers
+    it cannot check, so a call from Erebos needs an `unsafe` block, and C and
+    the code LLVM generates call them as before. They are the only functions
+    of `core` that take a raw pointer; every other function of `core` has a
+    safe signature, with its `asm` and its accesses inside `unsafe` blocks.
   - The EABI functions are `__aeabi_memcpy`, `__aeabi_memmove`,
     `__aeabi_memset` and `__aeabi_memclr`, each also with the suffixes `4`
     and `8`, which promise a destination (and a source) aligned to 4 or
@@ -7984,7 +8257,8 @@ the compiler binary, and compiled and checked with every program.
     source of interrupts has its own enable, which is the program's (ADR
     0086). An `unsafe fn` (ADR 0119): the call needs an `unsafe` block, and
     its contract is that the caller is not inside a `critical` block or an
-    `interrupt fn`, directly or through callers.
+    `interrupt fn`, directly or through callers (see "Enabling, waiting and
+    testing").
   - `pub fn wait_for_interrupt()`: runs `wfi`, a compiler fence too. It may
     return for no reason, so it belongs in a loop.
   - `pub fn interrupts_enabled() -> bool`: the mask state and nothing else:
@@ -7996,8 +8270,10 @@ the compiler binary, and compiled and checked with every program.
   `cpsid i`), so the entry function starts with `interrupts_enabled()` false
   (ADR 0086).
 
-  Each is an `asm` with `options(nostack, preserves_flags)` and no option
-  about memory, and calling any of them at compile time is `eval::asm`. Finer
+  Each is an `asm` in an `unsafe` block, with `options(nostack,
+  preserves_flags)` and no option about memory; the function is safe to call
+  (`enable_interrupts` excepted), and calling any of them at compile time is
+  `eval::asm`. Finer
   fences (`fence w,o`, `dmb st`, `dsb`, `isb`) are not portable: a program
   that needs one writes its `asm`, and `core::arch` may gain target-specific
   ones with the step that needs them. See "Volatile accesses" for the hand-off
@@ -8479,9 +8755,9 @@ Every error has a stable code, shown with the message.
 | `ty::asm-operand-type` | an operand of `asm` that is not an integer of at most 32 bits or a thin pointer, an output into a bit field, the two sides of an `inout ... =>` of different types |
 | `ty::asm-sym` | `sym` naming something other than a function or a static: a constant, a struct, a module, an enum, a variant, a peripheral |
 | `ty::asm-options` | options of `asm` that contradict each other or the operands (`nomem` with `readonly`; `pure` without an output or without `nomem` or `readonly`; `noreturn` with an output), an option or `clobber_abi` given twice, an ABI other than `"C"` |
-| `ty::naked-body` | the body of a `#[naked]` function that is not exactly one `asm` expression with `noreturn` and only `sym` and `const` operands |
-| `ty::unsafe-required` | a call to an `unsafe fn` outside an `unsafe` block, at run time or at compile time; the body of an `unsafe fn` is not a block (ADR 0119) |
-| `ty::unused-unsafe` | an `unsafe` block with no unsafe operation directly inside it, not inside an `unsafe` block nested in it (ADR 0119) |
+| `ty::naked-body` | the body of a `#[naked]` function that is not exactly one `asm` expression with `noreturn` and only `sym` and `const` operands; an `unsafe` block around the `asm` is one of these cases, whose help says that `#[naked]` is the mark (ADR 0119) |
+| `ty::unsafe-required` | an unsafe operation outside an `unsafe` block: a read, write or borrow of a place reached through a raw pointer, an `asm` outside a naked body, a call to an `extern fn`, to a `#[naked]` function or to an `unsafe fn`, or a read, write or borrow of an `extern static`; one error per operation, at the operation, in the body of an `unsafe fn` and in code run at compile time too, where the help says that the body of an `unsafe fn` is not an `unsafe` block (ADR 0119, see "`unsafe`") |
+| `ty::unused-unsafe` | an `unsafe` block with no unsafe operation directly inside it, not inside an `unsafe` block nested in it; at its `unsafe`, and for a nested block with a label at the block around it (ADR 0119) |
 | `eval::panic` | compile-time code reached the panic function: a zero divisor, an index or a range out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, a value that does not fit the bit field it is written to, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
