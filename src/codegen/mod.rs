@@ -5,6 +5,7 @@ mod asm;
 mod diagnostics;
 mod vectors;
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use inkwell::AddressSpace;
@@ -86,38 +87,131 @@ pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String,
     Err(asm::diagnose(errors, mir, &machine, target.arch))
 }
 
-/// Writes the object file at `path`. A build whose LLVM reported an error
-/// fails, and its object is discarded, even when LLVM went on to write one
-/// (ADR 0082); an error of the assembler is `codegen::asm` (ADR 0079).
+/// What code generation measured of an object: the frames (ADR 0123), as
+/// plain numbers, for the stack bound.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Frames {
+    /// The frame of each body, in bytes, indexed by the body's id. A body
+    /// with no frame, one that LLVM inlined everywhere and removed, a body
+    /// run only at compile time and an `extern fn` have 0.
+    pub bodies: Vec<u64>,
+    /// The largest frame among the default handlers (ADR 0085), which MIR
+    /// does not show; 0 without any.
+    pub default_handlers: u64,
+}
+
+/// Writes the object file at `path` and returns its frames. A build whose
+/// LLVM reported an error fails, and its object is discarded, even when LLVM
+/// went on to write one (ADR 0082); an error of the assembler is
+/// `codegen::asm` (ADR 0079).
 pub fn emit_object(
     mir: &Mir,
     target: &Target,
     opt: OptLevel,
     path: &Path,
-) -> Result<(), Vec<Diagnostic>> {
+) -> Result<Frames, Vec<Diagnostic>> {
+    compile(mir, target, opt, Some(path))
+}
+
+/// Compiles the object in memory and returns its frames, for `--emit=stack`
+/// (ADR 0123): what `emit_object` returns, without a file.
+pub fn emit_frames(mir: &Mir, target: &Target, opt: OptLevel) -> Result<Frames, Vec<Diagnostic>> {
+    compile(mir, target, opt, None)
+}
+
+/// Compiles an object, to the file `path` or to memory, with LLVM reporting
+/// the frame of every function it defines (ADR 0123).
+fn compile(
+    mir: &Mir,
+    target: &Target,
+    opt: OptLevel,
+    path: Option<&Path>,
+) -> Result<Frames, Vec<Diagnostic>> {
     let machine = target_machine(target, opt).map_err(llvm_error)?;
     let collector = Collector::default();
     let context = Context::create();
     collector.install(&context);
     let module = lower(&context, mir, target, &machine, opt);
-    let written = machine.write_to_file(&module, FileType::Object, path);
+    ask_for_frames(&context, &module);
+    let written = match path {
+        Some(path) => machine
+            .write_to_file(&module, FileType::Object, path)
+            .map_err(|e| format!("cannot write `{}`: {e}", path.display())),
+        None => machine
+            .write_to_memory_buffer(&module, FileType::Object)
+            .map(drop)
+            .map_err(|e| format!("cannot generate the object: {e}")),
+    };
     let errors = collector.take();
+    let reported = collector.take_frames();
     let mut failures = if errors.is_empty() {
         Vec::new()
     } else {
         asm::diagnose(errors, mir, &machine, target.arch)
     };
-    if let Err(e) = written {
-        failures.extend(llvm_error(format!(
-            "cannot write `{}`: {e}",
-            path.display()
-        )));
+    if let Err(message) = written {
+        failures.extend(llvm_error(message));
     }
+    // The frames of an object that failed say nothing worth checking.
     if failures.is_empty() {
-        return Ok(());
+        match frames_of(mir, reported) {
+            Ok(frames) => return Ok(frames),
+            Err(found) => failures = found,
+        }
     }
-    asm::discard(path);
+    if let Some(path) = path {
+        asm::discard(path);
+    }
     Err(failures)
+}
+
+/// Sets `"warn-stack-size"="0"` on every function the module defines, so that
+/// LLVM reports each frame to the diagnostic handler (ADR 0123). It runs
+/// after the passes, so that it also reaches a function they made, which
+/// `frames_of` then refuses; the IR of `--emit=llvm-ir` does not have it.
+fn ask_for_frames(context: &Context, module: &Module) {
+    let attribute = context.create_string_attribute("warn-stack-size", "0");
+    for function in module.get_functions() {
+        if function.count_basic_blocks() > 0 {
+            function.add_attribute(AttributeLoc::Function, attribute);
+        }
+    }
+}
+
+/// The frames the warnings `reported` give, as `(function, bytes)`: each to
+/// the body or the default handler it names (ADR 0123). A name that is
+/// neither is a function LLVM made, which the bound cannot place, and an
+/// error.
+fn frames_of(mir: &Mir, reported: Vec<(String, u64)>) -> Result<Frames, Vec<Diagnostic>> {
+    let bodies: HashMap<&str, usize> = mir
+        .bodies()
+        .filter(|(_, body)| !body.comptime)
+        .map(|(id, body)| (body.name.as_str(), id.0 as usize))
+        .collect();
+    let defaults = vectors::symbols(mir);
+    let mut frames = Frames {
+        bodies: vec![0; mir.bodies().count()],
+        default_handlers: 0,
+    };
+    let mut unknown: Vec<Diagnostic> = Vec::new();
+    for (name, bytes) in reported {
+        if let Some(&body) = bodies.get(name.as_str()) {
+            if let Some(frame) = frames.bodies.get_mut(body) {
+                *frame = (*frame).max(bytes);
+            }
+        } else if defaults.contains(&name.as_str()) {
+            frames.default_handlers = frames.default_handlers.max(bytes);
+        } else {
+            unknown.extend(llvm_error(format!(
+                "LLVM made the function `{name}`, which the stack bound does not know"
+            )));
+        }
+    }
+    if unknown.is_empty() {
+        Ok(frames)
+    } else {
+        Err(unknown)
+    }
 }
 
 fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, String> {
@@ -1919,6 +2013,142 @@ memory {
             driver::build(&input, &output, &[], without_div64(), opt, false)
                 .unwrap_or_else(|e| panic!("{opt:?}: {e}"));
         }
+    }
+
+    /// A program with a function whose frame holds a 40-byte array
+    /// (`buffer`), one without a frame (`leaf`), a naked one (`stub`, whose
+    /// template is `ret`, given per target) and a handler, so that the
+    /// vector table has default handlers. The functions are not inlined
+    /// away for the test: they are `#[export]`, which keeps them defined.
+    fn frames_program(ret: &str, vector: &str) -> &'static str {
+        Box::leak(
+            format!(
+                "\
+use core::arch::Vector;
+extern fn sink(s: &[u8]);
+#[export]
+fn leaf(a: u32) -> u32 {{ a + 1 }}
+#[export]
+fn buffer(k: u8) {{
+    let a: [u8; 40] = [k; 40];
+    unsafe {{ sink(&a); }}
+}}
+#[naked]
+#[export]
+fn stub() -> ! {{ asm(\"{ret}\", options(noreturn)); }}
+interrupt fn tick() at Vector::{vector} {{ loop {{}} }}
+entry fn main() -> ! {{ buffer(leaf(1) as u8); loop {{}} }}
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+            )
+            .into_boxed_str(),
+        )
+    }
+
+    fn frame_named(mir: &crate::mir::Mir, frames: &super::Frames, name: &str) -> u64 {
+        let (id, _) = mir
+            .bodies()
+            .find(|(_, body)| body.name == name)
+            .unwrap_or_else(|| panic!("no body named {name}"));
+        frames.bodies[id.0 as usize]
+    }
+
+    /// A function with a 40-byte array local reports a frame of at least 40,
+    /// a leaf without locals and a naked function report none (ADR 0123), on
+    /// both targets at both levels. The program has a handler, so that the
+    /// table's default handlers are compiled too, and none is a name the
+    /// bound does not know.
+    #[test]
+    fn frames_are_measured_per_function() {
+        let programs = [
+            (&RISCV32IMAC, frames_program("ret", "MachineTimer")),
+            (&THUMBV7M, frames_program("bx lr", "SysTick")),
+        ];
+        for (target, source) in programs {
+            let mir = crate::driver::whole_mir_of(target, source).expect("the program compiles");
+            for opt in [OptLevel::None, OptLevel::Speed] {
+                let frames = super::emit_frames(&mir, target, opt)
+                    .unwrap_or_else(|e| panic!("{} at {opt:?}: {e:?}", target.name));
+                let at = format!("{} at {opt:?}: {frames:?}", target.name);
+                assert_eq!(frames.bodies.len(), mir.bodies().count(), "{at}");
+                assert!(frame_named(&mir, &frames, "buffer") >= 40, "{at}");
+                assert_eq!(frame_named(&mir, &frames, "leaf"), 0, "{at}");
+                assert_eq!(frame_named(&mir, &frames, "stub"), 0, "{at}");
+            }
+        }
+    }
+
+    /// The same compilation writes the object file, and gives the same
+    /// frames as the one in memory.
+    #[test]
+    fn an_object_file_and_a_buffer_give_the_same_frames() {
+        let source = frames_program("ret", "MachineTimer");
+        let mir = crate::driver::whole_mir_of(&RISCV32IMAC, source).expect("the program compiles");
+        let path = std::env::temp_dir().join("erebos-codegen-frames.o");
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let on_disk = super::emit_object(&mir, &RISCV32IMAC, opt, &path)
+                .unwrap_or_else(|e| panic!("{opt:?}: {e:?}"));
+            let in_memory = super::emit_frames(&mir, &RISCV32IMAC, opt)
+                .unwrap_or_else(|e| panic!("{opt:?}: {e:?}"));
+            assert_eq!(on_disk, in_memory, "{opt:?}");
+            assert!(path.exists());
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// `--emit=llvm-ir` does not ask for frames: the attribute is not in the
+    /// text (ADR 0123).
+    #[test]
+    fn the_ir_does_not_ask_for_frames() {
+        let ir = ir_of(
+            frames_program("ret", "MachineTimer"),
+            &RISCV32IMAC,
+            OptLevel::None,
+        );
+        assert!(!ir.contains("warn-stack-size"), "{ir}");
+    }
+
+    /// A default handler's frame is the one of the handlers, not a body's:
+    /// the symbols of the table are known to `frames_of`.
+    #[test]
+    fn default_handlers_are_known_and_a_name_llvm_made_is_reported() {
+        let source = frames_program("bx lr", "SysTick");
+        let mir = crate::driver::whole_mir_of(&THUMBV7M, source).expect("the program compiles");
+        let defaults = super::vectors::symbols(&mir);
+        assert!(!defaults.is_empty(), "the table has default handlers");
+        let buffer = mir
+            .bodies()
+            .position(|(_, body)| body.name == "buffer")
+            .expect("`buffer` is a body");
+
+        let reported = vec![
+            ("buffer".to_owned(), 48),
+            (defaults[0].to_owned(), 8),
+            (defaults[defaults.len() - 1].to_owned(), 16),
+            ("buffer".to_owned(), 40),
+        ];
+        let frames = super::frames_of(&mir, reported).expect("the names are known");
+        assert_eq!(frames.bodies[buffer], 48);
+        assert_eq!(frames.default_handlers, 16);
+        assert_eq!(frames.bodies.iter().filter(|&&bytes| bytes != 0).count(), 1);
+
+        // A copy LLVM made is not attributed to its original, whatever its
+        // suffix; each is its own error, in the order reported.
+        let reported = vec![
+            ("buffer".to_owned(), 48),
+            ("buffer.1".to_owned(), 16),
+            ("uart.init".to_owned(), 8),
+        ];
+        let errors = super::frames_of(&mir, reported).expect_err("two names are unknown");
+        let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
+        assert_eq!(
+            messages,
+            [
+                "LLVM made the function `buffer.1`, which the stack bound does not know",
+                "LLVM made the function `uart.init`, which the stack bound does not know",
+            ]
+        );
+        assert!(errors.iter().all(|e| e.code == "codegen::llvm"));
     }
 
     /// A struct returned through memory, by a call with an argument of a

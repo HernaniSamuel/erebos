@@ -31,8 +31,9 @@ pub enum Severity {
 }
 
 /// The errors LLVM reported to the contexts it is installed on, as their
-/// text. Warnings, remarks and notes are dropped: the compiler reports none
-/// of them (ADR 0082).
+/// text, and the frame sizes it reported as warnings (ADR 0123). The other
+/// warnings, remarks and notes are dropped: the compiler reports none of
+/// them (ADR 0082).
 ///
 /// It is shared with LLVM by address, so it must be declared before the
 /// `Context` it is installed on: locals are dropped in reverse order, and
@@ -42,6 +43,7 @@ pub enum Severity {
 #[derive(Default)]
 pub struct Collector {
     errors: RefCell<Vec<String>>,
+    frames: RefCell<Vec<(String, u64)>>,
 }
 
 impl Collector {
@@ -61,6 +63,27 @@ impl Collector {
     pub fn take(&self) -> Vec<String> {
         self.errors.take()
     }
+
+    /// The frame sizes reported so far, as `(function, bytes)` in the order
+    /// LLVM reported them; the collector is left without them.
+    pub fn take_frames(&self) -> Vec<(String, u64)> {
+        self.frames.take()
+    }
+}
+
+/// The text of the warning with which LLVM reports a frame, when a function
+/// carries `"warn-stack-size"="0"`: `stack frame size (48) exceeds limit (0)
+/// in function 'f'`, which LLVM 22 may start with a location
+/// (`<unknown>:0:0: `).
+const FRAME_WARNING: &str = "stack frame size (";
+
+/// The function and the bytes a frame warning gives (see [`FRAME_WARNING`]),
+/// or `None` for any other text.
+pub(super) fn frame_of(text: &str) -> Option<(String, u64)> {
+    let (_, rest) = text.split_once(FRAME_WARNING)?;
+    let (size, rest) = rest.split_once(") exceeds limit (0) in function '")?;
+    let name = rest.trim_end().strip_suffix('\'')?;
+    Some((name.to_owned(), size.parse().ok()?))
 }
 
 /// The function LLVM calls with each diagnostic. It must not panic, since
@@ -72,7 +95,7 @@ impl Collector {
 extern "C" fn handle(info: LLVMDiagnosticInfoRef, data: *mut c_void) {
     // SAFETY: `info` is the diagnostic LLVM is reporting.
     let severity = severity(unsafe { LLVMGetDiagInfoSeverity(info) });
-    if severity != Severity::Error || data.is_null() {
+    if !matches!(severity, Severity::Error | Severity::Warning) || data.is_null() {
         return;
     }
     // SAFETY: `info` is the diagnostic LLVM is reporting.
@@ -92,6 +115,26 @@ extern "C" fn handle(info: LLVMDiagnosticInfoRef, data: *mut c_void) {
     // SAFETY: `data` is the collector `install` gave, alive until after the
     // context; only a shared reference is made.
     let collector = unsafe { &*data.cast::<Collector>() };
+    if severity == Severity::Warning {
+        if !message.contains(FRAME_WARNING) {
+            return;
+        }
+        // A warning about a frame that this cannot read would leave the
+        // function with a frame of 0 in the bound: it is an error instead.
+        match frame_of(&message) {
+            Some(frame) => {
+                if let Ok(mut frames) = collector.frames.try_borrow_mut() {
+                    frames.push(frame);
+                }
+            }
+            None => {
+                if let Ok(mut errors) = collector.errors.try_borrow_mut() {
+                    errors.push(format!("cannot read the frame size in `{message}`"));
+                }
+            }
+        }
+        return;
+    }
     if let Ok(mut errors) = collector.errors.try_borrow_mut() {
         errors.push(message);
     }
@@ -144,6 +187,68 @@ mod tests {
         assert_eq!(assemble(&good, &good_context, "nop"), Vec::<String>::new());
         // Taking the errors empties the collector.
         assert!(bad.take().is_empty());
+    }
+
+    /// The warning is read as LLVM 22 writes it, with and without the
+    /// location it starts with when it has one; any other text is not a
+    /// frame.
+    #[test]
+    fn the_frame_warning_is_read() {
+        let plain = "stack frame size (48) exceeds limit (0) in function 'f'";
+        assert_eq!(frame_of(plain), Some(("f".to_owned(), 48)));
+        let located = format!("<unknown>:0:0: {plain}");
+        assert_eq!(frame_of(&located), Some(("f".to_owned(), 48)));
+        // Names hold dots (ADR 0051), and a trailing newline is allowed.
+        assert_eq!(
+            frame_of("stack frame size (1024) exceeds limit (0) in function 'uart.init.go'\n"),
+            Some(("uart.init.go".to_owned(), 1024))
+        );
+        for other in [
+            "",
+            "stack frame size (x) exceeds limit (0) in function 'f'",
+            "stack frame size (48) exceeds limit (0) in function f",
+            "stack frame size (48) exceeds limit (64) in function 'f'",
+            "<inline asm>:1:1: error: invalid instruction",
+        ] {
+            assert_eq!(frame_of(other), None, "{other:?}");
+        }
+    }
+
+    /// A function with `"warn-stack-size"="0"` reaches the collector as a
+    /// frame, not as an error, and taking the frames empties the collector.
+    #[test]
+    fn a_frame_warning_reaches_the_collector_as_a_frame() {
+        let collector = Collector::default();
+        let context = Context::create();
+        collector.install(&context);
+        let machine = target_machine(&RISCV32IMAC, OptLevel::None).unwrap();
+        let module = context.create_module("m");
+        module.set_triple(&machine.get_triple());
+        let void = context.void_type().fn_type(&[], false);
+        let function = module.add_function("f", void, None);
+        let builder = context.create_builder();
+        builder.position_at_end(context.append_basic_block(function, "bb0"));
+        let slot = builder
+            .build_alloca(context.i8_type().array_type(40), "")
+            .unwrap();
+        builder
+            .build_store(slot, context.i8_type().array_type(40).const_zero())
+            .unwrap();
+        builder.build_return(None).unwrap();
+        function.add_attribute(
+            inkwell::attributes::AttributeLoc::Function,
+            context.create_string_attribute("warn-stack-size", "0"),
+        );
+        machine
+            .write_to_memory_buffer(&module, FileType::Object)
+            .unwrap();
+        assert!(collector.take().is_empty());
+        let frames = collector.take_frames();
+        assert_eq!(frames.len(), 1, "{frames:?}");
+        assert_eq!(frames[0].0, "f");
+        assert!(frames[0].1 >= 40, "{frames:?}");
+        // Taking the frames empties the collector.
+        assert!(collector.take_frames().is_empty());
     }
 
     #[test]

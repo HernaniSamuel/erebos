@@ -194,7 +194,7 @@ pub fn build(
             failures.into_iter().for_each(|diag| diags.push(diag));
             diag::render(&diags.into_vec(), &sources, color)
         })
-        .and_then(|()| {
+        .and_then(|_frames| {
             fs::write(&script, link::linker_script(map, target))
                 .map_err(|e| format!("error: cannot write `{}`: {e}", script.display()))
         })
@@ -727,6 +727,34 @@ pub(crate) fn hir_of(text: &'static str) -> Option<hir::Hir> {
     to_hir(&program, None, target::DEFAULT, &mut sources, &mut diags).ok()
 }
 
+/// The whole MIR of the program of root file `main.ers` holding `text` on
+/// `target`, `core` included, before `leave_out`, for the tests of the layers
+/// after it; the error is why the program has none. It returns a `Result` so
+/// that the test helpers decide how to fail: a panic outside the test module
+/// would count against `tests/architecture.rs`.
+#[cfg(test)]
+pub(crate) fn whole_mir_of(
+    target: &'static Target,
+    text: &'static str,
+) -> Result<mir::Mir, String> {
+    let program = Program {
+        name: "main.ers".to_owned(),
+        text,
+        loader: Loader::Memory(Vec::new()),
+        arch: None,
+    };
+    let mut sources = SourceMap::default();
+    let mut diags = Diagnostics::default();
+    match front_end(&program, None, target, &mut sources, &mut diags) {
+        FrontEnd::Mir(mir) => Ok(*mir),
+        FrontEnd::Dump(_) | FrontEnd::Failed => Err(format!(
+            "{}: the program has errors: {:?}",
+            target.name,
+            diags.into_vec()
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -906,19 +934,7 @@ mod tests {
     /// The whole MIR of a program of `text` on `target`, `core` included,
     /// before `leave_out`.
     fn whole_mir(target: &'static Target, text: &'static str) -> mir::Mir {
-        let program = program(text, Vec::new());
-        let mut sources = SourceMap::default();
-        let mut diags = Diagnostics::default();
-        match front_end(&program, None, target, &mut sources, &mut diags) {
-            FrontEnd::Mir(mir) => *mir,
-            FrontEnd::Dump(_) | FrontEnd::Failed => {
-                panic!(
-                    "{}: the program has errors: {:?}",
-                    target.name,
-                    diags.into_vec()
-                )
-            }
-        }
+        super::whole_mir_of(target, text).unwrap_or_else(|e| panic!("{e}"))
     }
 
     /// What a walk found: the bodies that hold a check (`Terminator::Panic`),

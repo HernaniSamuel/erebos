@@ -35,6 +35,15 @@ pub(super) fn lower<'ctx>(
     defaults
 }
 
+/// The symbols of the default handlers `lower` defines, in its order: the
+/// names LLVM reports their frames under (ADR 0123).
+pub(super) fn symbols(mir: &Mir) -> Vec<&str> {
+    (mir.vector_table.iter())
+        .flat_map(|table| &table.defaults)
+        .map(|default| default.symbol.as_str())
+        .collect()
+}
+
 /// What starts the table's assembly on `arch`: its section and alignment.
 /// ARMv7-M's table is the section `.vector_table`, which the linker script
 /// places first in the code's region, where the core reads it (ADR 0074,
