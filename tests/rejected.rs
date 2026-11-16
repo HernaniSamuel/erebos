@@ -4,6 +4,10 @@
 //! program of `tests/ui` or `tests/e2e`, and the compiler must report the
 //! code of that rule.
 //!
+//! A second check works the other way (ADR 0119): from each program of
+//! `tests/e2e`, the `unsafe` of each outer `unsafe` block is removed, one at a
+//! time, and the compiler must report `ty::unsafe-required`.
+//!
 //! - `EREBOS_REJECTED_PROGRAMS`: how many base programs to inject into
 //!   (default `DEFAULT_PROGRAMS`).
 //! - `EREBOS_REJECTED_SEED`: the seed of the choice of programs and places
@@ -18,6 +22,7 @@ use std::path::{Path, PathBuf};
 
 use common::generator::Rng;
 use erebos::driver::{self, OptLevel, Stage};
+use erebos::target::Target;
 
 /// How many base programs a run injects into without
 /// `EREBOS_REJECTED_PROGRAMS`.
@@ -1424,25 +1429,33 @@ const INJ_C: u32 = comptime {
     ),
 ];
 
+/// The root files of the programs of `tests/<dir>`, in a fixed order: the
+/// files `*.ers` and the `main.ers` of each directory.
+fn programs_in(dir: &str) -> Vec<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(dir);
+    let mut entries: Vec<_> = fs::read_dir(root)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    entries.sort();
+    let mut paths = Vec::new();
+    for path in entries {
+        if path.extension().is_some_and(|e| e == "ers") {
+            paths.push(path);
+        } else if path.join("main.ers").is_file() {
+            paths.push(path.join("main.ers"));
+        }
+    }
+    paths
+}
+
 /// The valid programs to inject into: every root file of `tests/ui` and
 /// `tests/e2e`, in a fixed order.
 fn base_programs() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-    let mut paths = Vec::new();
-    for dir in ["ui", "e2e"] {
-        let mut entries: Vec<_> = fs::read_dir(root.join(dir))
-            .unwrap()
-            .map(|e| e.unwrap().path())
-            .collect();
-        entries.sort();
-        for path in entries {
-            if path.extension().is_some_and(|e| e == "ers") {
-                paths.push(path);
-            } else if path.join("main.ers").is_file() {
-                paths.push(path.join("main.ers"));
-            }
-        }
-    }
+    let mut paths = programs_in("ui");
+    paths.extend(programs_in("e2e"));
     paths
 }
 
@@ -1826,6 +1839,270 @@ fn run(catalog: &[Snippet], bases: &[PathBuf], programs: usize, seed: u64) -> Re
         }
     }
     report
+}
+
+/// A token of the scan for `unsafe` blocks. Comments, and the contents of
+/// strings and character literals, are not tokens.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Token {
+    /// A run of letters, digits and `_`, at these byte offsets.
+    Word(usize, usize),
+    /// Any other character that is not white space, at this byte offset.
+    Punct(char, usize),
+    /// A string or a character literal.
+    Literal,
+}
+
+/// The tokens of `text`, skipping comments (the block ones nest), strings
+/// and character literals as the lexer does, so that an `unsafe` or a brace
+/// in them is not seen.
+fn tokens(text: &str) -> Vec<Token> {
+    let mut found = Vec::new();
+    let mut chars = text.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '/' if chars.peek().is_some_and(|&(_, k)| k == '/') => {
+                while chars.next_if(|&(_, k)| k != '\n').is_some() {}
+            }
+            '/' if chars.peek().is_some_and(|&(_, k)| k == '*') => {
+                chars.next();
+                let mut depth = 1;
+                while depth > 0 {
+                    match chars.next() {
+                        Some((_, '*')) if chars.next_if(|&(_, k)| k == '/').is_some() => depth -= 1,
+                        Some((_, '/')) if chars.next_if(|&(_, k)| k == '*').is_some() => depth += 1,
+                        Some(_) => {}
+                        None => break,
+                    }
+                }
+            }
+            // A string runs to its closing quote, a character literal to its
+            // closing quote on the same line; a backslash escapes the next
+            // character in both (`'\''`, `"\""`).
+            '"' | '\'' => {
+                while let Some((_, k)) = chars.next() {
+                    if k == '\\' {
+                        chars.next();
+                    } else if k == c || (k == '\n' && c == '\'') {
+                        break;
+                    }
+                }
+                found.push(Token::Literal);
+            }
+            c if c.is_alphanumeric() || c == '_' => {
+                let mut end = at + c.len_utf8();
+                while let Some((i, k)) = chars.next_if(|&(_, k)| k.is_alphanumeric() || k == '_') {
+                    end = i + k.len_utf8();
+                }
+                found.push(Token::Word(at, end));
+            }
+            c if c.is_whitespace() => {}
+            c => found.push(Token::Punct(c, at)),
+        }
+    }
+    found
+}
+
+/// The byte offsets of the `unsafe` of each block `unsafe { .. }` of `text`
+/// that is not inside another such block, in order. An `unsafe` that is not
+/// followed by `{` (`unsafe fn`) is not a block, and the body of an `unsafe
+/// fn` does not make the blocks in it nested: it is not an `unsafe` block
+/// (ADR 0119). Found by a scan of the tokens that tracks the braces, not by
+/// parsing: the test works on the programs as text.
+fn outer_unsafe_blocks(text: &str) -> Vec<usize> {
+    let tokens = tokens(text);
+    // Whether each open brace is the one of an `unsafe` block.
+    let mut open: Vec<bool> = Vec::new();
+    let mut found = Vec::new();
+    for (i, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Punct('{', _) => {
+                let keyword = match i.checked_sub(1).map(|j| tokens[j]) {
+                    Some(Token::Word(start, end)) if &text[start..end] == "unsafe" => Some(start),
+                    _ => None,
+                };
+                if let Some(start) = keyword
+                    && !open.contains(&true)
+                {
+                    found.push(start);
+                }
+                open.push(keyword.is_some());
+            }
+            Token::Punct('}', _) => {
+                open.pop();
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
+/// Removes the `unsafe` of the block at byte offset `at` of `text`, keeping
+/// the block. The word becomes spaces, so that every other line and column
+/// stays where it was.
+fn without_unsafe(text: &str, at: usize) -> String {
+    let word = "unsafe";
+    assert!(text[at..].starts_with(word));
+    let mut changed = text.to_owned();
+    changed.replace_range(at..at + word.len(), &" ".repeat(word.len()));
+    changed
+}
+
+/// The code of the error that an `unsafe` block removed from the program
+/// must give.
+const UNSAFE_REQUIRED: &str = "ty::unsafe-required";
+
+/// For each outer `unsafe` block of `text` (the program at `path`, built for
+/// `target`), compiles the program without that one `unsafe` and returns how
+/// many blocks there are and what is wrong with the results: a program that
+/// is accepted, or rejected without `ty::unsafe-required`.
+fn removal_failures(path: &Path, text: &str, target: &'static Target) -> (usize, Vec<String>) {
+    let blocks = outer_unsafe_blocks(text);
+    let shown = path
+        .strip_prefix(env!("CARGO_MANIFEST_DIR"))
+        .unwrap_or(path);
+    let mut failures = Vec::new();
+    for &at in &blocks {
+        let line = text[..at].matches('\n').count() + 1;
+        let changed = without_unsafe(text, at);
+        match driver::dump(
+            path,
+            &common::board::with_board(path, &changed, target),
+            Stage::Mir,
+            target,
+            OptLevel::None,
+            false,
+        ) {
+            Ok(_) => failures.push(format!(
+                "{}:{line} ({}): the program without this `unsafe` was accepted",
+                shown.display(),
+                target.name
+            )),
+            Err(rendered) if !rendered.contains(UNSAFE_REQUIRED) => failures.push(format!(
+                "{}:{line} ({}): `{UNSAFE_REQUIRED}` was not reported without this `unsafe`; \
+                 the diagnostics:\n{rendered}",
+                shown.display(),
+                target.name
+            )),
+            Err(_) => {}
+        }
+    }
+    (blocks.len(), failures)
+}
+
+/// Removing the `unsafe` of an outer block of a program of `tests/e2e` is an
+/// error (ADR 0119): the block is used, so something directly in it needs
+/// it. Each program is built for the targets of its `// targets:` header, or
+/// for every target, as it runs.
+#[test]
+fn removing_an_outer_unsafe_from_an_e2e_program_is_rejected() {
+    let mut programs = 0;
+    let mut removals = 0;
+    let mut failures = Vec::new();
+    for path in programs_in("e2e") {
+        let text = read(&path);
+        if outer_unsafe_blocks(&text).is_empty() {
+            continue;
+        }
+        programs += 1;
+        let expectation =
+            common::qemu::expectation(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        for target in expectation.targets {
+            let (blocks, found) = removal_failures(&path, &text, target);
+            removals += blocks;
+            failures.extend(found);
+        }
+    }
+    // The scan finds the blocks: 116 programs and 1,358 removals when this was
+    // written, and the programs only grow.
+    assert!(
+        programs >= 100 && removals >= 1000,
+        "only {removals} blocks of {programs} programs were found; the scan is broken"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {removals} removals of an `unsafe` were not rejected with `{UNSAFE_REQUIRED}`:\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
+}
+
+#[test]
+fn outer_unsafe_blocks_are_found() {
+    let text = "\
+unsafe fn f(p: *const u8) -> u8 {
+    unsafe { *p }
+}
+// unsafe { in a comment }
+/* unsafe { /* nested */ in a block comment } */
+fn g(p: *const u8) -> u8 {
+    let s = \"unsafe { in a string }\";
+    let c = '{';
+    let q = '\\'';
+    unsafe {
+        unsafe { *p };
+        if true { unsafe { *p } } else { 0 }
+    }
+}
+fn h() {
+    let unsafely = 1;
+    let x: u8 = unsafe /* gap */ {
+        1
+    };
+}
+";
+    let found: Vec<usize> = outer_unsafe_blocks(text)
+        .iter()
+        .map(|at| text[..*at].matches('\n').count() + 1)
+        .collect();
+    // The block in the `unsafe fn` (its body is not a block), the outer
+    // block of `g` and not the two inside it, and the one of `h` with a
+    // comment between the keyword and the brace.
+    assert_eq!(found, vec![2, 10, 17]);
+    assert_eq!(outer_unsafe_blocks("unsafe {"), vec![0]);
+    assert!(outer_unsafe_blocks("unsafe fn f() {}").is_empty());
+}
+
+#[test]
+fn without_unsafe_keeps_the_block_and_the_positions() {
+    let text = "let a = unsafe { 1 };\n";
+    let at = outer_unsafe_blocks(text)[0];
+    assert_eq!(without_unsafe(text, at), "let a =        { 1 };\n");
+}
+
+/// The check can fail: a removal that is accepted, or that gives another
+/// error, is reported.
+#[test]
+fn a_removal_that_is_not_rejected_is_reported() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e/hello.ers");
+    let target = erebos::target::DEFAULT;
+    let program = |body| {
+        format!(
+            "panic fn on_panic() -> ! {{\n    loop {{}}\n}}\n\
+             entry fn main() -> ! {{\n    unsafe {{ {body} }}\n    loop {{}}\n}}\n"
+        )
+    };
+
+    // Nothing in the block needs it: the program is accepted without it.
+    let (blocks, failures) = removal_failures(&path, &program("let a: u32 = 1;"), target);
+    assert_eq!(blocks, 1);
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert!(failures[0].contains("was accepted"), "{failures:?}");
+
+    // Another error without the `unsafe`, and not `ty::unsafe-required`.
+    let (blocks, failures) = removal_failures(&path, &program("let a: u32 = true;"), target);
+    assert_eq!(blocks, 1);
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert!(failures[0].contains("was not reported"), "{failures:?}");
+
+    // An operation that needs it: rejected with the code, nothing reported.
+    let (blocks, failures) = removal_failures(
+        &path,
+        &program("let p: *const u8 = 0 as *const u8; let a: u8 = *p;"),
+        target,
+    );
+    assert_eq!(blocks, 1);
+    assert!(failures.is_empty(), "{failures:?}");
 }
 
 fn env_number(var: &str, default: u64) -> u64 {
