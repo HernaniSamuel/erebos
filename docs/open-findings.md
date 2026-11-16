@@ -303,6 +303,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `Return` blocks with the same borrow span and the same "returned here" span,
   and it is redundant for the borrow's span, which is already in the labels.
   (M5.8, step 2)
+- `src/ty/unsafety.rs` (around lines 95-103): `Operation::label` repeats the
+  verb table of `Access::gerund` for `ExternStatic`; one small helper on
+  `Access` would remove it. (M5.9)
+- `tests/snapshots/ui__ui@naked_unsafe_block.ers.snap`, case
+  `block_after_the_asm`: the `unsafe` block is labelled "not allowed here",
+  while the other two cases say "an `unsafe` block, not needed on a naked
+  function"; consistent with step 3's decision, so a note. (M5.9)
 
 ## Tests
 
@@ -502,6 +509,21 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   through an `extern fn`, and the C program of step 8 runs only a `&[u8]`
   result across the ABI; the ABI reads the signature, so kind and linkage add
   nothing, but no test says so. (M5.8, steps 7 and 8)
+- `tests/ui/`: the compile-time bodies other than the four of ADR 0119's
+  conformance list (a repeat count, `#[align]`, a bit-field default, a `memory`
+  region value, a register offset, a peripheral address) have no `unsafe`
+  test; they work, because every `Fn` with a body is a root, but nothing pins
+  it. (M5.9)
+- `tests/rejected.rs`, the `unsafe` removal test: it scans the root file of
+  each e2e program, so the blocks of submodule files
+  (`panic_location/parse/digits.ers`, 3 blocks) are not removed one by one; its
+  tokenizer ends an unterminated character literal at the end of the line,
+  where the lexer reports an error. (M5.9, step 7)
+- `tests/e2e/unsafe_boundary.ers`: the comment "Called once: two rings would
+  share the bytes" documents a contract the safe `pub fn` does not enforce; not
+  a soundness hole, two rings would only print odd output. (M5.9, step 8)
+- `docs/reference.md` says that `&raw const p[i]` emits no `inbounds`; no
+  review looked at the LLVM IR for it. (M5.9, step 10)
 
 ## Docs
 
@@ -663,3 +685,22 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `-> *const [u8]` while it returns `*const [u8; 1]`; the 45 lines of step
   10's recount include `parse.ers:13`, a cast line with no site, so a reader
   who recounts lines by kind finds 44. (M5.8, final review)
+- `docs/reference.md`: several lines of M5.9's text run past the 80 columns of
+  the rest ("External functions" around line 327, "Statements and blocks",
+  "What may be borrowed", "Slices behind references", the `sym COUNT` example,
+  `bkpt 0xab`, `csrs mie`), as does the M5.9 status entry of
+  `docs/roadmap.md`; the `ty::unsafe-required` row of "Diagnostics" reads as
+  if the help about an `unsafe fn` body appeared at compile time too (it
+  appears only in an `unsafe fn` body). (M5.9, step 10)
+- `docs/roadmap.md` says "117 programs hold the 1004 operations" next to "118
+  of 177 files": the difference is `panic_location/parse/digits.ers`, counted
+  under its root; a parenthesis would say so. The plan of M5.9 (step 9)
+  describes the count of `tests/e2e/` in prose; a short script would make it
+  cheaper to repeat. (M5.9, step 9)
+- ADR 0030 ("Erebos has no `unsafe`") and ADR 0117 (marking the dereference
+  "deferred until it is clear what remains") are stale: neither is marked
+  amended by 0119 and 0119's `Amends` does not list them. Whether to add
+  "amended by 0119" to their status lines and the index is the user's.
+  `.claude/agents/code-reviewer.md` has no item for ADR 0119's two review
+  rules (now in `CONTRIBUTING.md`); that change is the user's too. (M5.9,
+  final review)
