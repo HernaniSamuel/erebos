@@ -1,0 +1,61 @@
+// emit: mir
+// `#[stack(N)]` (ADR 0122) applies to every function: a plain one, a naked
+// one, the entry function, the panic function, an interrupt handler, a
+// function of a type and an `extern fn`. `N` is any `usize` computed at
+// compile time, 0 included, and MIR keeps it: the dump shows `#[stack(N)]`
+// before the function, after `#[align(N)]`, and nothing for one without it.
+// The bodies run only at compile time (`BASE`, the arguments) have none to
+// show.
+use core::arch::Vector;
+
+const BASE: usize = 16;
+
+struct Ring {
+    count: usize,
+}
+
+impl Ring {
+    #[stack(BASE * 2)]
+    fn push(&mut self) {
+        (*self).count += 1;
+    }
+}
+
+#[stack(8)]
+fn plain() {}
+
+#[stack(0)]
+fn zero() {}
+
+fn without() {}
+
+#[align(64)]
+#[stack(BASE + 1)]
+fn aligned() {}
+
+#[stack(64)]
+#[naked]
+fn naked_ret() {
+    asm("ret", options(noreturn))
+}
+
+#[stack(BASE)]
+extern fn outside(x: u32) -> u32;
+
+#[stack(12)]
+interrupt fn tick() at Vector::MachineTimer {}
+
+#[stack(100)]
+entry fn main() -> ! {
+    let mut ring: Ring = Ring { count: 0 };
+    ring.push();
+    plain();
+    zero();
+    without();
+    aligned();
+    unsafe { naked_ret(); }
+    loop {}
+}
+
+#[stack(2)]
+panic fn on_panic() -> ! { loop {} }

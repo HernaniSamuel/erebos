@@ -1,0 +1,153 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/stack_attribute.ers
+---
+--- mir ---
+struct Ring { 0 count: usize at 0 } // size 4, align 4
+
+#[stack(32)]
+fn Ring.push(_1: &mut Ring) -> () {
+    let _0: ();
+    let _1: &mut Ring; // self
+
+    bb0: {
+        (*_1).0 = Add(copy (*_1).0, const 1_usize);
+        return;
+    }
+}
+
+#[stack(8)]
+fn plain() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+#[stack(0)]
+fn zero() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+fn without() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+#[align(64)]
+#[stack(17)]
+fn aligned() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+#[stack(64)]
+naked fn naked_ret() -> () {
+    let _0: ();
+
+    bb0: {
+        asm("ret", options(noreturn));
+    }
+}
+
+#[stack(16)]
+extern fn outside(_1: u32) -> u32;
+
+#[stack(12)]
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+#[stack(100)]
+entry fn main() -> ! {
+    let _0: !;
+    let _1: Ring; // ring
+    let _2: Ring;
+    let _3: &mut Ring;
+
+    bb0: {
+        _2.0 = const 0_usize;
+        _1 = move _2;
+        _3 = &mut _1;
+        call Ring.push(move _3);
+        call plain();
+        call zero();
+        call without();
+        call aligned();
+        call naked_ret();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+#[stack(2)]
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn BASE() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 16_usize;
+        return;
+    }
+}
+
+comptime fn length() -> usize {
+    let _0: usize;
+    let _1: usize;
+
+    bb0: {
+        _1 = Mul(const 16_usize, const 2_usize);
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn length() -> usize {
+    let _0: usize;
+    let _1: usize;
+
+    bb0: {
+        _1 = Add(const 16_usize, const 1_usize);
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn length() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 16_usize;
+        return;
+    }
+}

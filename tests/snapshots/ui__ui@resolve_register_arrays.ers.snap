@@ -101,6 +101,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            stack: None,
             owner: None,
         },
         Fn {
@@ -147,6 +148,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            stack: None,
             owner: None,
         },
         Fn {
@@ -195,6 +197,7 @@ Hir {
                 ),
             ),
             align: None,
+            stack: None,
             owner: None,
         },
         Fn {
@@ -243,6 +246,7 @@ Hir {
                 ),
             ),
             align: None,
+            stack: None,
             owner: None,
         },
         Fn {
@@ -287,6 +291,7 @@ Hir {
                 Value,
             ),
             align: None,
+            stack: None,
             owner: None,
         },
         Fn {
@@ -331,6 +336,7 @@ Hir {
                 Value,
             ),
             align: None,
+            stack: None,
             owner: None,
         },
     ],

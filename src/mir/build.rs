@@ -241,6 +241,11 @@ impl<'a, 'h> Builder<'a, 'h> {
         } else {
             self.q.fn_align(self.fn_id)
         };
+        let stack = if comptime {
+            None
+        } else {
+            self.q.fn_stack(self.fn_id)
+        };
         let body = Body {
             name,
             span,
@@ -249,6 +254,7 @@ impl<'a, 'h> Builder<'a, 'h> {
             external,
             naked,
             align,
+            stack,
             ret: self.locals[0].ty,
             param_count,
             locals: self.locals,

@@ -1,0 +1,50 @@
+// `#[stack(N)]` (ADR 0122) applies only to functions: on a struct, a
+// bit-field struct, an enum, a static, a constant, a module and an `impl`
+// block it is `resolve::misplaced-attribute`, whose help lists functions. It
+// is given once and with an argument. The values that are not sizes are in
+// `stack_attribute_invalid.ers`, which resolution lets through.
+#[stack(8)]
+struct A { x: u8 }
+
+#[stack(8)]
+struct Flags: u8 { ready: bool at 0 }
+
+#[stack(8)]
+enum Color: u8 { Red = 0, Green = 1 }
+
+#[stack(8)]
+static COUNT: u32 = 0;
+
+#[stack(8)]
+extern static OUTSIDE: u32;
+
+#[stack(8)]
+const LIMIT: u32 = 4;
+
+#[stack(8)]
+mod m {}
+
+#[stack(8)]
+impl A {
+    #[stack(8)]
+    #[stack(16)]
+    fn twice(&self) {}
+}
+
+#[stack(8)]
+#[stack(16)]
+fn twice() {}
+
+#[stack(8)]
+#[stack(16)]
+extern fn twice_outside();
+
+#[stack]
+fn without_argument() {}
+
+#[stack]
+extern fn without_argument_outside();
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

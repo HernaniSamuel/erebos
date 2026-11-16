@@ -364,6 +364,10 @@ impl<'h> Queries<'h> {
         for id in 0..hir.fns.len() {
             self.fn_align(FnId(id as u32));
         }
+        // And every `#[stack(N)]` (ADR 0122).
+        for id in 0..hir.fns.len() {
+            self.fn_stack(FnId(id as u32));
+        }
         for &block in &hir.comptime_blocks {
             self.comptime_block(block);
         }
@@ -710,6 +714,14 @@ impl<'h> Queries<'h> {
         align
     }
 
+    /// The bytes a function declares with `#[stack(N)]` (ADR 0122), or `None`
+    /// if it has none or the computation failed (reported once, by
+    /// `array_len`). Any value is valid.
+    pub fn fn_stack(&mut self, id: FnId) -> Option<u64> {
+        let (len, _) = self.hir.fn_(id).stack?;
+        self.array_len(len)
+    }
+
     /// `#[align(N)]` with `N` computed as `wanted`, for something whose
     /// natural alignment is `natural` (ADR 0022, 0030): `N` if it is a
     /// power of two, at most `MAX_ALIGN` and not below `natural`, else
@@ -779,8 +791,8 @@ impl<'h> Queries<'h> {
         value
     }
 
-    /// The value of an array length, repeat count or `#[align]` argument,
-    /// or `None` if it failed (reported).
+    /// The value of an array length, repeat count, `#[align]` or `#[stack]`
+    /// argument, or `None` if it failed (reported).
     pub fn array_len(&mut self, len: ArrayLen) -> Option<u64> {
         self.comptime_int(len, target::POINTER_BYTES)
     }

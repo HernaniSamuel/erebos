@@ -299,6 +299,7 @@ impl Mir {
                 body.runtime = false;
                 body.naked = false;
                 body.align = None;
+                body.stack = None;
                 body.blocks.clear();
                 body.locals.truncate(1 + body.param_count);
             }
@@ -485,6 +486,10 @@ pub struct Body {
     /// `#[align(N)]` (ADR 0087): the function's first instruction is at a
     /// multiple of this, which code generation sets on the LLVM function.
     pub align: Option<u64>,
+    /// `#[stack(N)]` (ADR 0122): the bytes of stack the function uses that
+    /// the compiler does not measure, or, on an `extern fn`, its whole depth.
+    /// Nothing reads it before the stack bound (ADR 0123).
+    pub stack: Option<u64>,
 }
 
 impl Body {
@@ -2252,6 +2257,9 @@ impl fmt::Display for Mir {
             if let Some(align) = body.align {
                 writeln!(f, "#[align({align})]")?;
             }
+            if let Some(stack) = body.stack {
+                writeln!(f, "#[stack({stack})]")?;
+            }
             write!(f, "{external}{comptime}{naked}{kind}fn {}(", body.name)?;
             for (i, param) in body.params().iter().enumerate() {
                 if i > 0 {
@@ -2321,6 +2329,7 @@ mod tests {
             external: false,
             naked: false,
             align: None,
+            stack: None,
         }
     }
 

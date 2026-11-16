@@ -23,6 +23,14 @@ struct StructAttrs {
     linear: Option<Span>,
 }
 
+/// The attributes of a function, as `fn_attrs` found them.
+struct FnAttrs {
+    export: bool,
+    naked: bool,
+    align: Option<(ArrayLen, Span)>,
+    stack: Option<(ArrayLen, Span)>,
+}
+
 impl Lowerer<'_> {
     pub(super) fn struct_decl(&mut self, decl: &ast::StructDecl) -> StructDef {
         self.duplicate_fields(decl.fields.iter().map(|field| &field.name));
@@ -173,7 +181,7 @@ impl Lowerer<'_> {
                     .label(attr.span, "not allowed on a bit-field struct")
                     .help("a bit-field struct has the size and alignment of its integer type, which it is stored as (ADR 0059)"),
                 ),
-                "export" | "naked" | "interrupts" | "copy" | "linear" => {
+                "export" | "naked" | "interrupts" | "copy" | "linear" | "stack" => {
                     self.misplaced_attr(attr, "a bit-field struct")
                 }
                 _ => self.unknown_attr(attr),
@@ -218,7 +226,7 @@ impl Lowerer<'_> {
                     }
                     align_attr.replace(attr.span)
                 }
-                "export" | "naked" | "interrupts" => {
+                "export" | "naked" | "interrupts" | "stack" => {
                     self.misplaced_attr(attr, "a struct");
                     None
                 }
@@ -273,9 +281,8 @@ impl Lowerer<'_> {
     pub(super) fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" | "export" | "naked" | "interrupts" | "copy" | "linear" => {
-                    self.misplaced_attr(attr, what)
-                }
+                "packed" | "align" | "export" | "naked" | "interrupts" | "copy" | "linear"
+                | "stack" => self.misplaced_attr(attr, what),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -293,7 +300,7 @@ impl Lowerer<'_> {
                 "interrupts" => self.flag_attr(attr, &mut interrupts),
                 "copy" if payloads => self.flag_attr(attr, &mut copy),
                 "copy" => self.misplaced_attr(attr, "an enum without payloads"),
-                "packed" | "align" | "export" | "naked" | "linear" => {
+                "packed" | "align" | "export" | "naked" | "linear" | "stack" => {
                     self.misplaced_attr(attr, "an enum")
                 }
                 _ => self.unknown_attr(attr),
@@ -312,6 +319,7 @@ impl Lowerer<'_> {
             "interrupts" => "an enum declared in the program",
             "copy" => "structs, other than bit-field structs, and enums with payloads",
             "linear" => "structs, other than bit-field structs",
+            "stack" => "functions",
             _ => "structs",
         };
         let mut diag = Diagnostic::error(
@@ -337,6 +345,9 @@ impl Lowerer<'_> {
             } else {
                 "`#[linear]` makes the values of a struct linear: each must be consumed before the function holding it returns, and none is overwritten; no other item has values (ADR 0101)"
             });
+        }
+        if attr.name.name == "stack" {
+            diag = diag.help("`#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)");
         }
         self.diags.push(diag);
     }
@@ -367,27 +378,50 @@ impl Lowerer<'_> {
     }
 
     /// `#[export]`, `#[naked]` and `#[align(N)]` are the attributes of a
-    /// function with a body; an `extern fn` takes none (ADR 0051, 0087), and
-    /// the entry, the panic function and the interrupt handlers are not naked
-    /// (ADR 0079, 0084). Returns
-    /// whether it is exported, whether it is naked, and its alignment.
+    /// function with a body; an `extern fn` takes none of them (ADR 0051,
+    /// 0087), only `#[stack(N)]`, which every function takes (ADR 0122). The
+    /// entry, the panic function and the interrupt handlers are not naked
+    /// (ADR 0079, 0084). Returns whether it is exported, whether it is naked,
+    /// its alignment and its stack.
     fn fn_attrs(
         &mut self,
         attrs: &[ast::Attr],
         external: bool,
         kind: &ast::FnKind,
         of_type: bool,
-    ) -> (bool, bool, Option<(ArrayLen, Span)>) {
-        if external {
-            self.no_attrs(attrs, "an `extern fn`");
-            return (false, false, None);
-        }
+    ) -> FnAttrs {
         let mut export = None;
         let mut naked = None;
         let mut align: Option<(ArrayLen, Span)> = None;
         let mut align_attr: Option<Span> = None;
+        let mut stack: Option<(ArrayLen, Span)> = None;
+        let mut stack_attr: Option<Span> = None;
         for attr in attrs {
+            if external && attr.name.name != "stack" {
+                self.no_attrs(std::slice::from_ref(attr), "an `extern fn`");
+                continue;
+            }
             match attr.name.name.as_str() {
+                "stack" => {
+                    match &attr.arg {
+                        Some(arg) => stack = Some((self.array_len(arg), arg.span)),
+                        None => self.attr_error(
+                            attr.span,
+                            "`#[stack]` takes a number of bytes, such as `#[stack(64)]`",
+                            "no size",
+                        ),
+                    }
+                    if let Some(first) = stack_attr.replace(attr.span) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "resolve::duplicate-attribute",
+                                "`#[stack]` is given more than once",
+                            )
+                            .label(attr.span, "given again here")
+                            .label(first, "first given here"),
+                        );
+                    }
+                }
                 "export" if of_type => self.export_of_type(attr),
                 "export" => self.flag_attr(attr, &mut export),
                 "naked" => match kind {
@@ -422,7 +456,12 @@ impl Lowerer<'_> {
                 _ => self.unknown_attr(attr),
             }
         }
-        (export.is_some(), naked.is_some(), align)
+        FnAttrs {
+            export: export.is_some(),
+            naked: naked.is_some(),
+            align,
+            stack,
+        }
     }
 
     /// `#[export]` on a function of a type: its symbol is its path, and
@@ -477,7 +516,7 @@ impl Lowerer<'_> {
                     }
                 }
                 "export" => self.flag_attr(attr, &mut export),
-                "packed" | "naked" | "interrupts" | "copy" | "linear" => {
+                "packed" | "naked" | "interrupts" | "copy" | "linear" | "stack" => {
                     self.misplaced_attr(attr, "a static")
                 }
                 _ => self.unknown_attr(attr),
@@ -540,6 +579,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Static(id)),
             align: None,
+            stack: None,
             owner: None,
         };
         (def, Some(body))
@@ -586,6 +626,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Const(id)),
             align: None,
+            stack: None,
             owner: None,
         };
         (def, body)
@@ -674,6 +715,7 @@ impl Lowerer<'_> {
                 runtime: false,
                 comptime: Some(Comptime::Discriminant(id, i as u32)),
                 align: None,
+                stack: None,
                 owner: None,
             });
         }
@@ -727,6 +769,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Block),
             align: None,
+            stack: None,
             owner: None,
         }
     }
@@ -810,6 +853,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(comptime),
             align: None,
+            stack: None,
             owner: None,
         });
         id
@@ -836,7 +880,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[copy]` on structs and on enums with payloads (ADR 0096), `#[linear]` on structs (ADR 0101), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), and `#[interrupts]` on an enum (ADR 0089)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[copy]` on structs and on enums with payloads (ADR 0096), `#[linear]` on structs (ADR 0101), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), `#[stack(N)]` on functions (ADR 0122), and `#[interrupts]` on an enum (ADR 0089)"),
         );
     }
 
@@ -936,8 +980,12 @@ impl Lowerer<'_> {
         };
         self.self_ty = def;
         let external = decl.body.is_none();
-        let (export, naked, align) =
-            self.fn_attrs(&decl.attrs, external, &decl.kind, def.is_some());
+        let FnAttrs {
+            export,
+            naked,
+            align,
+            stack,
+        } = self.fn_attrs(&decl.attrs, external, &decl.kind, def.is_some());
         let vector = match &decl.kind {
             ast::FnKind::Interrupt(at) => self.handler_vector(at),
             _ => None,
@@ -1033,6 +1081,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: None,
             align,
+            stack,
             owner,
         }
     }
@@ -1092,6 +1141,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: None,
             align: None,
+            stack: None,
             owner: None,
         }
     }

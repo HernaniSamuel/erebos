@@ -1138,6 +1138,8 @@ pub struct Fn {
     pub comptime: Option<Comptime>,
     /// `#[align(N)]` (ADR 0087), with the span of `N`.
     pub align: Option<(ArrayLen, Span)>,
+    /// `#[stack(N)]` (ADR 0122), with the span of `N`.
+    pub stack: Option<(ArrayLen, Span)>,
     /// The type a function of a type belongs to, and the form of its
     /// receiver (ADR 0113). `None` for any other function.
     pub owner: Option<FnOwner>,

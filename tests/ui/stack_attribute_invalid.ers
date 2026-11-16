@@ -1,0 +1,32 @@
+// The argument of `#[stack(N)]` is a `usize` computed at compile time as the
+// argument of `#[align(N)]` is (ADR 0122): a value of another type is a type
+// error, and one that fails to compute is the error of that computation, on a
+// function with a body and on an `extern fn`. Any value that computes is
+// valid, 0 and a size that is no multiple of the stack alignment included.
+#[stack(-1)]
+fn negative() {}
+
+#[stack(true)]
+fn not_an_integer() {}
+
+#[stack(8 as u32)]
+fn not_a_usize() {}
+
+#[stack(1 / 0)]
+fn fails_to_compute() {}
+
+#[stack(1 / 0)]
+extern fn fails_outside();
+
+#[stack(true)]
+extern fn not_an_integer_outside();
+
+#[stack(0)]
+fn zero() {}
+
+#[stack(7)]
+fn odd() {}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

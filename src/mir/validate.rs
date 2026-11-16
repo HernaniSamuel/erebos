@@ -2649,6 +2649,7 @@ mod tests {
             external: false,
             naked: false,
             align: None,
+            stack: None,
         }
     }
 

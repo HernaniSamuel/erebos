@@ -1,0 +1,161 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/stack_attribute_errors.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+   ╭─[stack_attribute_errors.ers:6:1]
+ 5 │ // `stack_attribute_invalid.ers`, which resolution lets through.
+ 6 │ #[stack(8)]
+   · ─────┬─────
+   ·      ╰── not allowed on a struct
+ 7 │ struct A { x: u8 }
+   ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:9:1]
+  8 │ 
+  9 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on a bit-field struct
+ 10 │ struct Flags: u8 { ready: bool at 0 }
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:12:1]
+ 11 │ 
+ 12 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on an enum
+ 13 │ enum Color: u8 { Red = 0, Green = 1 }
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:15:1]
+ 14 │ 
+ 15 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on a static
+ 16 │ static COUNT: u32 = 0;
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:18:1]
+ 17 │ 
+ 18 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on an `extern static`
+ 19 │ extern static OUTSIDE: u32;
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:21:1]
+ 20 │ 
+ 21 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on a constant
+ 22 │ const LIMIT: u32 = 4;
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:24:1]
+ 23 │ 
+ 24 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on a module
+ 25 │ mod m {}
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::misplaced-attribute
+
+  × `#[stack]` applies only to functions
+    ╭─[stack_attribute_errors.ers:27:1]
+ 26 │ 
+ 27 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── not allowed on an `impl` block
+ 28 │ impl A {
+    ╰────
+  help: `#[stack(N)]` gives the bytes of stack that the compiler does not measure in a function
+        with a body, or the whole depth of an `extern fn`; no other item has a stack (ADR 0122)
+resolve::duplicate-attribute
+
+  × `#[stack]` is given more than once
+    ╭─[stack_attribute_errors.ers:30:5]
+ 28 │ impl A {
+ 29 │     #[stack(8)]
+    ·     ─────┬─────
+    ·          ╰── first given here
+ 30 │     #[stack(16)]
+    ·     ──────┬─────
+    ·           ╰── given again here
+ 31 │     fn twice(&self) {}
+    ╰────
+resolve::duplicate-attribute
+
+  × `#[stack]` is given more than once
+    ╭─[stack_attribute_errors.ers:35:1]
+ 33 │ 
+ 34 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── first given here
+ 35 │ #[stack(16)]
+    · ──────┬─────
+    ·       ╰── given again here
+ 36 │ fn twice() {}
+    ╰────
+resolve::duplicate-attribute
+
+  × `#[stack]` is given more than once
+    ╭─[stack_attribute_errors.ers:39:1]
+ 37 │ 
+ 38 │ #[stack(8)]
+    · ─────┬─────
+    ·      ╰── first given here
+ 39 │ #[stack(16)]
+    · ──────┬─────
+    ·       ╰── given again here
+ 40 │ extern fn twice_outside();
+    ╰────
+resolve::attribute-argument
+
+  × `#[stack]` takes a number of bytes, such as `#[stack(64)]`
+    ╭─[stack_attribute_errors.ers:42:1]
+ 41 │ 
+ 42 │ #[stack]
+    · ────┬───
+    ·     ╰── no size
+ 43 │ fn without_argument() {}
+    ╰────
+resolve::attribute-argument
+
+  × `#[stack]` takes a number of bytes, such as `#[stack(64)]`
+    ╭─[stack_attribute_errors.ers:45:1]
+ 44 │ 
+ 45 │ #[stack]
+    · ────┬───
+    ·     ╰── no size
+ 46 │ extern fn without_argument_outside();
+    ╰────

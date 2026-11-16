@@ -1,0 +1,70 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/stack_attribute_invalid.ers
+---
+--- errors ---
+ty::negate-unsigned
+
+  × cannot negate a value of unsigned type `usize`
+   ╭─[stack_attribute_invalid.ers:6:9]
+ 5 │ // valid, 0 and a size that is no multiple of the stack alignment included.
+ 6 │ #[stack(-1)]
+   ·         ─┬
+   ·          ╰── unsigned
+ 7 │ fn negative() {}
+   ╰────
+  help: for a wrapping negation, write `0 - x`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[stack_attribute_invalid.ers:9:9]
+  8 │ 
+  9 │ #[stack(true)]
+    ·         ──┬─
+    ·           ╰── expected `usize`, found `bool`
+ 10 │ fn not_an_integer() {}
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[stack_attribute_invalid.ers:12:9]
+ 11 │ 
+ 12 │ #[stack(8 as u32)]
+    ·         ────┬───
+    ·             ╰── expected `usize`, found `u32`
+ 13 │ fn not_a_usize() {}
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[stack_attribute_invalid.ers:15:13]
+ 14 │ 
+ 15 │ #[stack(1 / 0)]
+    ·             ┬
+    ·             ╰── this divisor is zero
+ 16 │ fn fails_to_compute() {}
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[stack_attribute_invalid.ers:18:13]
+ 17 │ 
+ 18 │ #[stack(1 / 0)]
+    ·             ┬
+    ·             ╰── this divisor is zero
+ 19 │ extern fn fails_outside();
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[stack_attribute_invalid.ers:21:9]
+ 20 │ 
+ 21 │ #[stack(true)]
+    ·         ──┬─
+    ·           ╰── expected `usize`, found `bool`
+ 22 │ extern fn not_an_integer_outside();
+    ╰────
