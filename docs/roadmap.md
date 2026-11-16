@@ -688,6 +688,34 @@ ADRs:
     registers (6): reasons 3 and 5 of ADR 0117. A review of a program's soundness
     starts from these 860 blocks and 18 functions (a search for `unsafe`
     finds them, C and naked functions included).
+  - Recursion, counted after M5.10 (ADR 0120, Consequences) by the compiler,
+    on the tree before the migration (commit `24981a6`) with the check of
+    `analysis::recursion` taken from M5.10's step 3, as the plan
+    `.claude/plans/M5.10.md` records, step 4, with the commands. Errors, each
+    one a cycle: 52, all of one function that calls itself, and none of two or
+    more that call each other, so 52 functions. `rt/` 0, `tests/boards/` 0
+    (both are in every one of the 161 programs of `tests/e2e/`, on both
+    targets), `tests/svd/chips/` 0 (the ESP32-C3's), `tests/layout/` 0,
+    `tests/e2e/` 45 (in 45 of the 161 programs, each counted on the first
+    target it runs on; the other target finds the same ones) and `tests/ui/` 7
+    (in 7 of the 731 programs; the check runs on the 346 that reach it, the
+    others stop on an earlier error or at a stage before MIR). In `tests/e2e/`:
+    29 recursive `print_u32` (28 programs, and `uart::print_u32` of `modules`),
+    14 recursive `print_u64`, `fib` of `functions` and `walk` of
+    `returned_references`. In `tests/ui/`: `fib` of `typeck_calls`, `pass` of
+    `typeck_bit_struct_values`, `last` of `returned_references` and of
+    `returned_references_mir`, `recurse` of `call_borrows_accepted`,
+    `recursive` of `shared_static_accepted` and `spin` of `shared_static_path`.
+    The text searches of M5.10's steps 1 and 2 found the same 52 (45 and 7).
+    The "about 55 programs" of the table above was an estimate from a text
+    search, before the check existed: the compiler finds 43 programs with a
+    recursive digit printer (29 and 14). Step 1 migrated 62 programs, 21 of
+    them with a digit loop that did not recurse. The compiler does not see
+    what the searches found in `tests/ui/impl_errors.ers`, `parse_try.ers` and
+    `typeck_pointer_index_errors.ers`, which stop before the analyses (at the
+    `hir`, `ast` and `typeck` stages), nor the snippets embedded in `tests/*.rs`
+    and the `print_u64` that `tests/common/generator.rs` writes into every
+    generated program (not files of these directories; step 3 rewrote it).
   - Marking the dereference of a raw pointer, since the language had no
     `unsafe` (ADR 0030): moved here from M5, as ADR 0117 says, whatever the
     counts. The question was whether what remains is rare and local enough to
