@@ -571,6 +571,42 @@ ADRs:
   (202); 9 reinterpreting memory 104 (428), as before. Only reason 8 moved:
   M5.8 removed 34 of its sites and 157 net of its lines, all in `tests/e2e/`.
   `aapcs_c.ers` alone is 373 of the lines and 55 of the sites.
+  - `unsafe`, counted after M5.9 (ADR 0119, Consequences), in the same three
+    directories, as the plan `.claude/plans/M5.9.md` records, step 9, with the
+    commands. ADR 0117's count of raw pointers is unchanged by the migration:
+    `unsafe` marks where a raw pointer is used, not where one is declared, and
+    no declaration moved (729 lines, 351 sites, 77 files, as above). The one
+    program added since, `unsafe_boundary` (M5.9's step 8), writes 3 lines and
+    2 sites of reason 1 in 1 file: 732 lines, 353 sites, 78 files now.
+    `unsafe` blocks, `unsafe fn`s and files that write `unsafe`: `rt/` 36, 17
+    and 3 of 4; `tests/boards/` 4, 0 and 2 of 2; `tests/e2e/` 820, 1 and 118 of
+    177; 860 blocks and 18 `unsafe fn`s in all. (`rt/`'s `unsafe fn`s are
+    `enable_interrupts` of each target, `memcpy`, `memmove`, `memset` and the
+    twelve `__aeabi_*` entry points that call them; `tests/e2e/`'s is `fill` of
+    `unsafe_boundary`.) The operations the blocks cover, as the compiler counts
+    them (one `ty::unsafe-required` per operation when the `unsafe` of every
+    block is removed, ADR 0119), numbered as the ADR does; a block can hold
+    several, so 1049 operations are in 860 blocks. Operations of `rt/` and
+    `tests/boards/` are counted once per file: the two `rt/arch/` files and
+    the two boards are each for one target, and `tests/e2e/` once per
+    program, on the first target it runs on:
+
+    | operation | `rt/` | `tests/boards/` | `tests/e2e/` | total |
+    |---|---|---|---|---|
+    | 1 access through a raw pointer | 10 | 6 | 362 | 378 |
+    | 2 `asm` | 15 | 1 | 84 | 100 |
+    | 3 call of an `extern fn` or a naked function | 0 | 0 | 508 | 508 |
+    | 4 access of an `extern static` | 0 | 0 | 7 | 7 |
+    | 5 call of an `unsafe fn` | 13 | 0 | 43 | 56 |
+    | total | 38 | 7 | 1004 | 1049 |
+
+    In `tests/e2e/`, operation 3 is 500 calls of an `extern fn` and 8 of a
+    naked function, and 117 programs hold the 1004 operations. The raw
+    pointer accesses of `rt/` and the boards are `core`'s memory functions
+    (5), the NVIC registers (5) and the two boards' UART and finisher
+    registers (6): reasons 3 and 5 of ADR 0117. A review of a program's soundness
+    starts from these 860 blocks and 18 functions (a search for `unsafe`
+    finds them, C and naked functions included).
   - Marking the dereference of a raw pointer, since the language has no
     `unsafe` (ADR 0030): moved here from M5, as ADR 0117 says, whatever the
     counts. The question is whether what remains is rare and local enough to
