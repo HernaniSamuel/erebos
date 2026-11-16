@@ -8,7 +8,7 @@ fn reason() -> *const [u8] {
 
 fn checked(x: u32, s: &[u8], m: &mut [u8; 3]) {
     assert(x < 10, &b"x < 10");
-    assert(x < 20, &*reason());
+    unsafe { assert(x < 20, &*reason()); }
     assert(x < 30, s);
     assert(x < 40, m);
 }

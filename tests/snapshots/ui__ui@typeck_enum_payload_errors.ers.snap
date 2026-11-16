@@ -336,23 +336,23 @@ ty::mismatched-types
 ty::volatile-aggregate
 
   × a volatile `Msg` cannot be accessed as a whole
-    ╭─[typeck_enum_payload_errors.ers:44:18]
+    ╭─[typeck_enum_payload_errors.ers:44:27]
  43 │ fn through(p: *mut volatile Msg, m: Msg) {
- 44 │     let a: Msg = *p;
-    ·                  ─┬
-    ·                   ╰── an enum with payloads is an aggregate, without fields to access one at a time
- 45 │     *p = m;
+ 44 │     let a: Msg = unsafe { *p };
+    ·                           ─┬
+    ·                            ╰── an enum with payloads is an aggregate, without fields to access one at a time
+ 45 │     unsafe { *p = m; }
     ╰────
   help: the width and number of the bus accesses would be up to the compiler; device registers are
         described with structs, integers and enums without payloads (ADR 0023, 0039)
 ty::volatile-aggregate
 
   × a volatile `Msg` cannot be accessed as a whole
-    ╭─[typeck_enum_payload_errors.ers:45:5]
- 44 │     let a: Msg = *p;
- 45 │     *p = m;
-    ·     ─┬
-    ·      ╰── an enum with payloads is an aggregate, without fields to access one at a time
+    ╭─[typeck_enum_payload_errors.ers:45:14]
+ 44 │     let a: Msg = unsafe { *p };
+ 45 │     unsafe { *p = m; }
+    ·              ─┬
+    ·               ╰── an enum with payloads is an aggregate, without fields to access one at a time
  46 │ }
     ╰────
   help: the width and number of the bus accesses would be up to the compiler; device registers are

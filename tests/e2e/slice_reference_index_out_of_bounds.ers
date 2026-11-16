@@ -18,7 +18,7 @@ entry fn main() -> ! {
     let a: [u8; 4] = [1, 2, 3, 4];
     // Two elements of four: the third one is out of bounds.
     let raw: *const [u8] = slice(&raw const a[1], 2);
-    let s: &[u8] = &*raw;
+    let s: &[u8] = unsafe { &*raw };
     let mut i: usize = 0;
     while i <= 2 {
         show(s, i);

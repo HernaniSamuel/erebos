@@ -84,17 +84,17 @@ ty::mut-borrow-of-immutable
  24 │     let a: &mut [u8] = &mut *s;
     ·                              ┬
     ·                              ╰── has type `&[u8]`
- 25 │     let b: &mut [u8] = &mut *p;
+ 25 │     let b: &mut [u8] = unsafe { &mut *p };
     ╰────
   help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
 ty::mut-borrow-of-immutable
 
   × cannot borrow as `&mut` through a `*const` pointer
-    ╭─[slice_reference_errors.ers:25:30]
+    ╭─[slice_reference_errors.ers:25:39]
  24 │     let a: &mut [u8] = &mut *s;
- 25 │     let b: &mut [u8] = &mut *p;
-    ·                              ┬
-    ·                              ╰── has type `*const [u8]`
+ 25 │     let b: &mut [u8] = unsafe { &mut *p };
+    ·                                       ┬
+    ·                                       ╰── has type `*const [u8]`
  26 │     let c: &mut u8 = &mut (*s)[0];
     ╰────
   help: only `*mut` pointers can be borrowed through as `&mut`
@@ -102,7 +102,7 @@ ty::mut-borrow-of-immutable
 
   × cannot borrow as `&mut` through a `&` reference
     ╭─[slice_reference_errors.ers:26:29]
- 25 │     let b: &mut [u8] = &mut *p;
+ 25 │     let b: &mut [u8] = unsafe { &mut *p };
  26 │     let c: &mut u8 = &mut (*s)[0];
     ·                             ┬
     ·                             ╰── has type `&[u8]`

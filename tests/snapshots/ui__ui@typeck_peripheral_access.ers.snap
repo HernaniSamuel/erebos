@@ -9,96 +9,106 @@ peripheral Timer { read write ctrl: u32 at 0x0, read count: u16 at 0x4, write re
 peripheral uart::UART0: uart::Uart16550 at 0x10000000 covers [0x10000000, 0x10000008)
 peripheral TIMER0: Timer at 0x20000000 covers [0x20000000, 0x20000009)
 fn uart::status::ready(u: *const uart::Uart16550) -> bool
-    expr 0 binary != 1177..1199: bool
-    expr 1 binary & 1177..1194: u8
-    expr 2 register lsr 1178..1186: u8
-    expr 3 deref 1178..1182: uart::Uart16550
-    expr 4 local u 1180..1181: *const uart::Uart16550
-    expr 5 int 32 1189..1193: u8
-    expr 6 int 0 1198..1199: u8
+    expr 0 unsafe 1177..1210: bool
+    expr 1 binary != 1186..1208: bool
+    expr 2 binary & 1186..1203: u8
+    expr 3 register lsr 1187..1195: u8
+    expr 4 deref 1187..1191: uart::Uart16550
+    expr 5 local u 1189..1190: *const uart::Uart16550
+    expr 6 int 32 1198..1202: u8
+    expr 7 int 0 1207..1208: u8
 fn uart::putc(u: *mut uart::Uart16550, byte: u8) -> ()
-    expr 7 while 1272..1298: ()
-    expr 8 not 1278..1295: bool
-    expr 9 call 1279..1295: bool
-    expr 10 local u 1293..1294: *mut uart::Uart16550
-    expr 11 assign 1307..1322: ()
-    expr 12 register thr 1307..1315: u8
-    expr 13 deref 1307..1311: uart::Uart16550
-    expr 14 local u 1309..1310: *mut uart::Uart16550
-    expr 15 local byte 1318..1322: u8
+    expr 8 while 1283..1309: ()
+    expr 9 not 1289..1306: bool
+    expr 10 call 1290..1306: bool
+    expr 11 local u 1304..1305: *mut uart::Uart16550
+    expr 12 unsafe 1318..1345: ()
+    expr 13 assign 1327..1342: ()
+    expr 14 register thr 1327..1335: u8
+    expr 15 deref 1327..1331: uart::Uart16550
+    expr 16 local u 1329..1330: *mut uart::Uart16550
+    expr 17 local byte 1338..1342: u8
 fn from_peripheral() -> u32
     let count: u16
-    expr 16 assign 1671..1686: ()
-    expr 17 register ctrl 1671..1682: u32
-    expr 18 peripheral TIMER0 1671..1677: Timer
-    expr 19 int 1 1685..1686: u32
-    expr 20 assign |= 1692..1711: ()
-    expr 21 register ctrl 1692..1703: u32
-    expr 22 peripheral TIMER0 1692..1698: Timer
-    expr 23 int 16 1707..1711: u32
-    expr 24 assign += 1717..1737: ()
-    expr 25 register prescale 1717..1732: u8
-    expr 26 peripheral TIMER0 1717..1723: Timer
-    expr 27 int 1 1736..1737: u8
-    expr 28 assign 1743..1762: ()
-    expr 29 register reload 1743..1756: u16
-    expr 30 peripheral TIMER0 1743..1749: Timer
-    expr 31 int 100 1759..1762: u16
-    expr 32 register count 1785..1797: u16
-    expr 33 peripheral TIMER0 1785..1791: Timer
-    expr 34 binary + 1803..1829: u32
-    expr 35 register ctrl 1803..1814: u32
-    expr 36 peripheral TIMER0 1803..1809: Timer
-    expr 37 as u32 1817..1829: u32
-    expr 38 local count 1817..1822: u16
+    expr 18 assign 1693..1708: ()
+    expr 19 register ctrl 1693..1704: u32
+    expr 20 peripheral TIMER0 1693..1699: Timer
+    expr 21 int 1 1707..1708: u32
+    expr 22 assign |= 1714..1733: ()
+    expr 23 register ctrl 1714..1725: u32
+    expr 24 peripheral TIMER0 1714..1720: Timer
+    expr 25 int 16 1729..1733: u32
+    expr 26 assign += 1739..1759: ()
+    expr 27 register prescale 1739..1754: u8
+    expr 28 peripheral TIMER0 1739..1745: Timer
+    expr 29 int 1 1758..1759: u8
+    expr 30 assign 1765..1784: ()
+    expr 31 register reload 1765..1778: u16
+    expr 32 peripheral TIMER0 1765..1771: Timer
+    expr 33 int 100 1781..1784: u16
+    expr 34 register count 1807..1819: u16
+    expr 35 peripheral TIMER0 1807..1813: Timer
+    expr 36 binary + 1825..1851: u32
+    expr 37 register ctrl 1825..1836: u32
+    expr 38 peripheral TIMER0 1825..1831: Timer
+    expr 39 as u32 1839..1851: u32
+    expr 40 local count 1839..1844: u16
 fn through_pointers(t: *mut Timer, c: *const Timer) -> u16
-    expr 39 assign 1965..1978: ()
-    expr 40 register ctrl 1965..1974: u32
-    expr 41 deref 1965..1969: Timer
-    expr 42 local t 1967..1968: *mut Timer
-    expr 43 int 2 1977..1978: u32
-    expr 44 assign <<= 1984..1999: ()
-    expr 45 register ctrl 1984..1993: u32
-    expr 46 deref 1984..1988: Timer
-    expr 47 local t 1986..1987: *mut Timer
-    expr 48 int 1 1998..1999: u32
-    expr 49 assign 2005..2029: ()
-    expr 50 register reload 2005..2016: u16
-    expr 51 deref 2005..2009: Timer
-    expr 52 local t 2007..2008: *mut Timer
-    expr 53 register count 2019..2029: u16
-    expr 54 deref 2019..2023: Timer
-    expr 55 local c 2021..2022: *const Timer
-    expr 56 binary + 2035..2058: u16
-    expr 57 register count 2035..2045: u16
-    expr 58 deref 2035..2039: Timer
-    expr 59 local c 2037..2038: *const Timer
-    expr 60 register count 2048..2058: u16
-    expr 61 deref 2048..2052: Timer
-    expr 62 local t 2050..2051: *mut Timer
+    expr 41 unsafe 1987..2012: ()
+    expr 42 assign 1996..2009: ()
+    expr 43 register ctrl 1996..2005: u32
+    expr 44 deref 1996..2000: Timer
+    expr 45 local t 1998..1999: *mut Timer
+    expr 46 int 2 2008..2009: u32
+    expr 47 unsafe 2017..2044: ()
+    expr 48 assign <<= 2026..2041: ()
+    expr 49 register ctrl 2026..2035: u32
+    expr 50 deref 2026..2030: Timer
+    expr 51 local t 2028..2029: *mut Timer
+    expr 52 int 1 2040..2041: u32
+    expr 53 unsafe 2049..2085: ()
+    expr 54 assign 2058..2082: ()
+    expr 55 register reload 2058..2069: u16
+    expr 56 deref 2058..2062: Timer
+    expr 57 local t 2060..2061: *mut Timer
+    expr 58 register count 2072..2082: u16
+    expr 59 deref 2072..2076: Timer
+    expr 60 local c 2074..2075: *const Timer
+    expr 61 unsafe 2090..2124: u16
+    expr 62 binary + 2099..2122: u16
+    expr 63 register count 2099..2109: u16
+    expr 64 deref 2099..2103: Timer
+    expr 65 local c 2101..2102: *const Timer
+    expr 66 register count 2112..2122: u16
+    expr 67 deref 2112..2116: Timer
+    expr 68 local t 2114..2115: *mut Timer
 fn other_module(u: *mut uart::Uart16550) -> u8
-    expr 63 assign 2251..2266: ()
-    expr 64 register thr 2251..2259: u8
-    expr 65 deref 2251..2255: uart::Uart16550
-    expr 66 local u 2253..2254: *mut uart::Uart16550
-    expr 67 int 65 2262..2266: u8
-    expr 68 assign |= 2272..2285: ()
-    expr 69 register ier 2272..2280: u8
-    expr 70 deref 2272..2276: uart::Uart16550
-    expr 71 local u 2274..2275: *mut uart::Uart16550
-    expr 72 int 1 2284..2285: u8
-    expr 73 assign 2291..2317: ()
-    expr 74 register scr 2291..2306: u8
-    expr 75 peripheral uart::UART0 2291..2302: uart::Uart16550
-    expr 76 register rbr 2309..2317: u8
-    expr 77 deref 2309..2313: uart::Uart16550
-    expr 78 local u 2311..2312: *mut uart::Uart16550
-    expr 79 register rbr 2323..2338: u8
-    expr 80 peripheral uart::UART0 2323..2334: uart::Uart16550
+    expr 69 unsafe 2317..2344: ()
+    expr 70 assign 2326..2341: ()
+    expr 71 register thr 2326..2334: u8
+    expr 72 deref 2326..2330: uart::Uart16550
+    expr 73 local u 2328..2329: *mut uart::Uart16550
+    expr 74 int 65 2337..2341: u8
+    expr 75 unsafe 2349..2374: ()
+    expr 76 assign |= 2358..2371: ()
+    expr 77 register ier 2358..2366: u8
+    expr 78 deref 2358..2362: uart::Uart16550
+    expr 79 local u 2360..2361: *mut uart::Uart16550
+    expr 80 int 1 2370..2371: u8
+    expr 81 unsafe 2379..2417: ()
+    expr 82 assign 2388..2414: ()
+    expr 83 register scr 2388..2403: u8
+    expr 84 peripheral uart::UART0 2388..2399: uart::Uart16550
+    expr 85 register rbr 2406..2414: u8
+    expr 86 deref 2406..2410: uart::Uart16550
+    expr 87 local u 2408..2409: *mut uart::Uart16550
+    expr 88 register rbr 2422..2437: u8
+    expr 89 peripheral uart::UART0 2422..2433: uart::Uart16550
 fn count(t: *const Timer) -> u16
-    expr 81 register count 2381..2391: u16
-    expr 82 deref 2381..2385: Timer
-    expr 83 local t 2383..2384: *const Timer
+    expr 90 unsafe 2480..2501: u16
+    expr 91 register count 2489..2499: u16
+    expr 92 deref 2489..2493: Timer
+    expr 93 local t 2491..2492: *const Timer
 fn drivers() -> ()
     let n: u16
     let p: *const uart::Uart16550
@@ -106,53 +116,54 @@ fn drivers() -> ()
     let same: *mut Timer
     let read_only: *const Timer
     let bytes: *mut u8
-    expr 84 call 2538..2576: ()
-    expr 85 &raw mut 2549..2569: *mut uart::Uart16550
-    expr 86 peripheral uart::UART0 2558..2569: uart::Uart16550
-    expr 87 int 104 2571..2575: u8
-    expr 88 call 2595..2619: u16
-    expr 89 &raw const 2601..2618: *const Timer
-    expr 90 peripheral TIMER0 2612..2618: Timer
-    expr 91 &raw const 2651..2673: *const uart::Uart16550
-    expr 92 peripheral uart::UART0 2662..2673: uart::Uart16550
-    expr 93 &raw mut 2699..2714: *mut Timer
-    expr 94 peripheral TIMER0 2708..2714: Timer
-    expr 95 &raw mut 2743..2754: *mut Timer
-    expr 96 deref 2752..2754: Timer
-    expr 97 local u 2753..2754: *mut Timer
-    expr 98 &raw const 2790..2803: *const Timer
-    expr 99 deref 2801..2803: Timer
-    expr 100 local u 2802..2803: *mut Timer
-    expr 101 as *mut u8 2830..2856: *mut u8
-    expr 102 &raw mut 2830..2845: *mut Timer
-    expr 103 peripheral TIMER0 2839..2845: Timer
+    expr 94 call 2648..2686: ()
+    expr 95 &raw mut 2659..2679: *mut uart::Uart16550
+    expr 96 peripheral uart::UART0 2668..2679: uart::Uart16550
+    expr 97 int 104 2681..2685: u8
+    expr 98 call 2705..2729: u16
+    expr 99 &raw const 2711..2728: *const Timer
+    expr 100 peripheral TIMER0 2722..2728: Timer
+    expr 101 &raw const 2761..2783: *const uart::Uart16550
+    expr 102 peripheral uart::UART0 2772..2783: uart::Uart16550
+    expr 103 &raw mut 2809..2824: *mut Timer
+    expr 104 peripheral TIMER0 2818..2824: Timer
+    expr 105 &raw mut 2853..2864: *mut Timer
+    expr 106 deref 2862..2864: Timer
+    expr 107 local u 2863..2864: *mut Timer
+    expr 108 &raw const 2900..2913: *const Timer
+    expr 109 deref 2911..2913: Timer
+    expr 110 local u 2912..2913: *mut Timer
+    expr 111 as *mut u8 2940..2966: *mut u8
+    expr 112 &raw mut 2940..2955: *mut Timer
+    expr 113 peripheral TIMER0 2949..2955: Timer
 fn reads() -> u32
-    expr 104 if 2959..3012: ()
-    expr 105 binary == 2962..2979: bool
-    expr 106 register count 2962..2974: u16
-    expr 107 peripheral TIMER0 2962..2968: Timer
-    expr 108 int 0 2978..2979: u16
-    expr 109 assign 2990..3005: ()
-    expr 110 register ctrl 2990..3001: u32
-    expr 111 peripheral TIMER0 2990..2996: Timer
-    expr 112 int 0 3004..3005: u32
-    expr 113 register count 3017..3029: u16
-    expr 114 peripheral TIMER0 3017..3023: Timer
-    expr 115 match 3035..3096: u32
-    expr 116 register prescale 3041..3056: u8
-    expr 117 peripheral TIMER0 3041..3047: Timer
-    expr 118 int 1 3072..3073: u32
-    expr 119 int 2 3088..3089: u32
+    expr 114 if 3069..3122: ()
+    expr 115 binary == 3072..3089: bool
+    expr 116 register count 3072..3084: u16
+    expr 117 peripheral TIMER0 3072..3078: Timer
+    expr 118 int 0 3088..3089: u16
+    expr 119 assign 3100..3115: ()
+    expr 120 register ctrl 3100..3111: u32
+    expr 121 peripheral TIMER0 3100..3106: Timer
+    expr 122 int 0 3114..3115: u32
+    expr 123 register count 3127..3139: u16
+    expr 124 peripheral TIMER0 3127..3133: Timer
+    expr 125 match 3145..3206: u32
+    expr 126 register prescale 3151..3166: u8
+    expr 127 peripheral TIMER0 3151..3157: Timer
+    expr 128 int 1 3182..3183: u32
+    expr 129 int 2 3198..3199: u32
 fn from_integer() -> ()
     let t: *mut Timer
-    expr 120 as *mut Timer 3211..3236: *mut Timer
-    expr 121 int 536875008 3211..3222: usize
-    expr 122 assign 3242..3255: ()
-    expr 123 register ctrl 3242..3251: u32
-    expr 124 deref 3242..3246: Timer
-    expr 125 local t 3244..3245: *mut Timer
-    expr 126 int 1 3254..3255: u32
+    expr 130 as *mut Timer 3321..3346: *mut Timer
+    expr 131 int 536875008 3321..3332: usize
+    expr 132 unsafe 3352..3377: ()
+    expr 133 assign 3361..3374: ()
+    expr 134 register ctrl 3361..3370: u32
+    expr 135 deref 3361..3365: Timer
+    expr 136 local t 3363..3364: *mut Timer
+    expr 137 int 1 3373..3374: u32
 entry fn main() -> !
-    expr 127 loop 3283..3290: !
+    expr 138 loop 3404..3411: !
 panic fn on_panic() -> !
-    expr 128 loop 3320..3327: !
+    expr 139 loop 3441..3448: !

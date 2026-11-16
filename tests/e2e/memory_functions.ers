@@ -35,37 +35,37 @@ fn scratch() -> *mut u8 {
 
 entry fn main() -> ! {
     let a: *mut u8 = scratch();
-    a[0] = b'h';
-    a[1] = b'e';
-    a[2] = b'l';
-    a[3] = b'l';
-    a[4] = b'o';
+    unsafe { a[0] = b'h'; }
+    unsafe { a[1] = b'e'; }
+    unsafe { a[2] = b'l'; }
+    unsafe { a[3] = b'l'; }
+    unsafe { a[4] = b'o'; }
     let b: *mut u8 = &raw mut a[16];
-    core::memcpy(b, a, 5);
-    print(&*slice(b, 5));
+    unsafe { core::memcpy(b, a, 5); }
+    unsafe { print(&*slice(b, 5)); }
 
     // Overlapping, destination above the source: copies backwards.
-    core::memmove(&raw mut b[1], b, 5);
-    print(&*slice(b, 6));
+    unsafe { core::memmove(&raw mut b[1], b, 5); }
+    unsafe { print(&*slice(b, 6)); }
 
     // Overlapping, destination below the source.
-    core::memmove(b, &raw const b[2], 4);
-    print(&*slice(b, 4));
+    unsafe { core::memmove(b, &raw const b[2], 4); }
+    unsafe { print(&*slice(b, 4)); }
 
-    core::memset(b, 0x178, 5);
-    print(&*slice(b, 5));
+    unsafe { core::memset(b, 0x178, 5); }
+    unsafe { print(&*slice(b, 5)); }
 
     // A fill loop, which `-O` turns into a call to `memset`.
     let big: *mut u8 = &raw mut a[1024];
     let mut i: usize = 0;
     while i < 256 {
-        big[i] = 1;
+        unsafe { big[i] = 1; }
         i += 1;
     }
     let mut sum: u32 = 0;
     i = 0;
     while i < 256 {
-        sum += big[i] as u32;
+        unsafe { sum += big[i] as u32; }
         i += 1;
     }
     print_u32(sum);

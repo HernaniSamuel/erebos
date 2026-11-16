@@ -30,11 +30,11 @@ fn set_divisor(divisor: u16) {
 }
 
 fn divisor(u: *mut Uart16550) -> u16 {
-    (*u).dll as u16 | ((*u).dlm as u16) << 8
+    unsafe { (*u).dll as u16 | ((*u).dlm as u16) << 8 }
 }
 
 fn wide(w: *mut Wide) -> u32 {
-    (*w).wide
+    unsafe { (*w).wide }
 }
 
 entry fn main() -> ! { loop {} }

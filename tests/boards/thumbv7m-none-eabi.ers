@@ -31,10 +31,16 @@ pub const SCRATCH: usize = 0x2100_0000;
 // Writes one byte to the UART. The divisor is the smallest QEMU accepts and
 // must be set before the transmitter is enabled.
 pub fn putc(byte: u8) {
-    *UART_BAUDDIV = 16;
-    *UART_CTRL = 1;
-    while (*UART_STATE & 1) != 0 {}
-    *UART_DATA = byte as u32;
+    // Sound: the four constants are the addresses of the registers of the
+    // machine's UART that the comment above names; writing the divisor, then
+    // the control, then the data only configures and feeds it, and reading
+    // its state has no effect.
+    unsafe {
+        *UART_BAUDDIV = 16;
+        *UART_CTRL = 1;
+        while (*UART_STATE & 1) != 0 {}
+        *UART_DATA = byte as u32;
+    }
 }
 
 // Writes the bytes of `s` to the UART, in order, through `putc` (ADR 0117).

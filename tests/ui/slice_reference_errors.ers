@@ -22,7 +22,7 @@ fn whole(s: &[u8], t: &mut [u8]) {
 fn writes(s: &[u8], p: *const [u8]) {
     (*s)[0] = 1;
     let a: &mut [u8] = &mut *s;
-    let b: &mut [u8] = &mut *p;
+    let b: &mut [u8] = unsafe { &mut *p };
     let c: &mut u8 = &mut (*s)[0];
 }
 

@@ -101,7 +101,7 @@ fn escape() -> u32 {
         let r: &u32 = &TICKS;
         r as *const u32
     };
-    *p
+    unsafe { *p }
 }
 
 interrupt fn tick() at Vector::MachineTimer {

@@ -57,7 +57,7 @@ eval::pointer-out-of-bounds
 eval::read-only-write
 
   × `m::LIMIT` is a `static`, which cannot be written
-    ╭─[eval_module_static_errors.ers:19:5]
+    ╭─[eval_module_static_errors.ers:19:14]
  11 │ const READ_MUT: u32 = m::COUNT;
  12 │ const WRITE_STATIC: u32 = write_static();
     ·       ──────┬─────        ───────┬──────
@@ -69,9 +69,9 @@ eval::read-only-write
  16 │ 
  17 │ fn write_static() -> u32 {
  18 │     let p: *mut u32 = &raw const m::LIMIT as *mut u32;
- 19 │     *p = 11;
-    ·     ───┬───
-    ·        ╰── written here
+ 19 │     unsafe { *p = 11; }
+    ·              ───┬───
+    ·                 ╰── written here
  20 │     m::LIMIT
     ╰────
   help: this code runs at compile time (ADR 0027)

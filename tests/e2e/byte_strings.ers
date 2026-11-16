@@ -22,7 +22,7 @@ fn x() -> *const [u8; 1] {
 fn print(bytes: *const u8, len: usize) {
     let mut i: usize = 0;
     while i < len {
-        putc(bytes[i]);
+        unsafe { putc(bytes[i]); }
         i += 1;
     }
 }

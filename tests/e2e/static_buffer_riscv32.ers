@@ -71,7 +71,7 @@ interrupt fn tick() at Vector::MachineTimer {
         push(&mut SAMPLES, FILLED, SEQ);
         FILLED += 1;
     }
-    *MTIMECMP_LOW = *MTIME + PERIOD;
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
 }
 
 fn print_u32(value: u32) {
@@ -125,8 +125,8 @@ fn round(number: u32, last: bool) {
 }
 
 entry fn main() -> ! {
-    *MTIMECMP_HIGH = 0;
-    *MTIMECMP_LOW = *MTIME + PERIOD;
+    unsafe { *MTIMECMP_HIGH = 0; }
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     round(1, false);

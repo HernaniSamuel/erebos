@@ -13,35 +13,41 @@ fn from_pointer(p: *mut volatile Ring, q: *const volatile Ring) -> ()
     let d: &volatile u32
     let e: &volatile Desc
     let f: &mut volatile u32
-    expr 0 & 1265..1268: &volatile Ring
-    expr 1 deref 1266..1268: Ring
-    expr 2 local p 1267..1268: *mut volatile Ring
-    expr 3 &mut 1302..1309: &mut volatile Ring
-    expr 4 deref 1307..1309: Ring
-    expr 5 local p 1308..1309: *mut volatile Ring
-    expr 6 &mut 1343..1360: &mut volatile Desc
-    expr 7 index 1348..1360: Desc
-    expr 8 field desc 1348..1357: [Desc; 2]
-    expr 9 deref 1348..1352: Ring
-    expr 10 local p 1350..1351: *mut volatile Ring
-    expr 11 int 1 1358..1359: usize
-    expr 12 & 1389..1399: &volatile u32
-    expr 13 field head 1390..1399: u32
-    expr 14 deref 1390..1394: Ring
-    expr 15 local q 1392..1393: *const volatile Ring
-    expr 16 & 1429..1442: &volatile Desc
-    expr 17 index 1430..1442: Desc
-    expr 18 field desc 1430..1439: [Desc; 2]
-    expr 19 deref 1430..1434: Ring
-    expr 20 local q 1432..1433: *const volatile Ring
-    expr 21 int 0 1440..1441: usize
-    expr 22 &mut 1475..1496: &mut volatile u32
-    expr 23 field len 1480..1496: u32
-    expr 24 index 1480..1492: Desc
-    expr 25 field desc 1480..1489: [Desc; 2]
-    expr 26 deref 1480..1484: Ring
-    expr 27 local p 1482..1483: *mut volatile Ring
-    expr 28 int 0 1490..1491: usize
+    expr 0 unsafe 1265..1279: &volatile Ring
+    expr 1 & 1274..1277: &volatile Ring
+    expr 2 deref 1275..1277: Ring
+    expr 3 local p 1276..1277: *mut volatile Ring
+    expr 4 unsafe 1313..1331: &mut volatile Ring
+    expr 5 &mut 1322..1329: &mut volatile Ring
+    expr 6 deref 1327..1329: Ring
+    expr 7 local p 1328..1329: *mut volatile Ring
+    expr 8 unsafe 1365..1393: &mut volatile Desc
+    expr 9 &mut 1374..1391: &mut volatile Desc
+    expr 10 index 1379..1391: Desc
+    expr 11 field desc 1379..1388: [Desc; 2]
+    expr 12 deref 1379..1383: Ring
+    expr 13 local p 1381..1382: *mut volatile Ring
+    expr 14 int 1 1389..1390: usize
+    expr 15 unsafe 1422..1443: &volatile u32
+    expr 16 & 1431..1441: &volatile u32
+    expr 17 field head 1432..1441: u32
+    expr 18 deref 1432..1436: Ring
+    expr 19 local q 1434..1435: *const volatile Ring
+    expr 20 unsafe 1473..1497: &volatile Desc
+    expr 21 & 1482..1495: &volatile Desc
+    expr 22 index 1483..1495: Desc
+    expr 23 field desc 1483..1492: [Desc; 2]
+    expr 24 deref 1483..1487: Ring
+    expr 25 local q 1485..1486: *const volatile Ring
+    expr 26 int 0 1493..1494: usize
+    expr 27 unsafe 1530..1562: &mut volatile u32
+    expr 28 &mut 1539..1560: &mut volatile u32
+    expr 29 field len 1544..1560: u32
+    expr 30 index 1544..1556: Desc
+    expr 31 field desc 1544..1553: [Desc; 2]
+    expr 32 deref 1544..1548: Ring
+    expr 33 local p 1546..1547: *mut volatile Ring
+    expr 34 int 0 1554..1555: usize
 fn from_slice(s: *mut volatile [u32], t: *const volatile [u32]) -> ()
     let a: &volatile u32
     let b: &mut volatile u32
@@ -49,33 +55,39 @@ fn from_slice(s: *mut volatile [u32], t: *const volatile [u32]) -> ()
     let d: &mut volatile [u32]
     let e: &volatile [u32]
     let f: &mut volatile [u32]
-    expr 29 & 1670..1678: &volatile u32
-    expr 30 index 1671..1678: u32
-    expr 31 deref 1671..1675: [u32]
-    expr 32 local s 1673..1674: *mut volatile [u32]
-    expr 33 int 0 1676..1677: usize
-    expr 34 &mut 1711..1723: &mut volatile u32
-    expr 35 index 1716..1723: u32
-    expr 36 deref 1716..1720: [u32]
-    expr 37 local s 1718..1719: *mut volatile [u32]
-    expr 38 int 1 1721..1722: usize
-    expr 39 & 1754..1757: &volatile [u32]
-    expr 40 deref 1755..1757: [u32]
-    expr 41 local t 1756..1757: *const volatile [u32]
-    expr 42 &mut 1792..1799: &mut volatile [u32]
-    expr 43 deref 1797..1799: [u32]
-    expr 44 local s 1798..1799: *mut volatile [u32]
-    expr 45 & 1830..1841: &volatile [u32]
-    expr 46 subslice 1831..1841: [u32]
-    expr 47 deref 1831..1835: [u32]
-    expr 48 local t 1833..1834: *const volatile [u32]
-    expr 49 int 1 1836..1837: usize
-    expr 50 int 3 1839..1840: usize
-    expr 51 &mut 1876..1890: &mut volatile [u32]
-    expr 52 subslice 1881..1890: [u32]
-    expr 53 deref 1881..1885: [u32]
-    expr 54 local s 1883..1884: *mut volatile [u32]
-    expr 55 int 2 1888..1889: usize
+    expr 35 unsafe 1736..1755: &volatile u32
+    expr 36 & 1745..1753: &volatile u32
+    expr 37 index 1746..1753: u32
+    expr 38 deref 1746..1750: [u32]
+    expr 39 local s 1748..1749: *mut volatile [u32]
+    expr 40 int 0 1751..1752: usize
+    expr 41 unsafe 1788..1811: &mut volatile u32
+    expr 42 &mut 1797..1809: &mut volatile u32
+    expr 43 index 1802..1809: u32
+    expr 44 deref 1802..1806: [u32]
+    expr 45 local s 1804..1805: *mut volatile [u32]
+    expr 46 int 1 1807..1808: usize
+    expr 47 unsafe 1842..1856: &volatile [u32]
+    expr 48 & 1851..1854: &volatile [u32]
+    expr 49 deref 1852..1854: [u32]
+    expr 50 local t 1853..1854: *const volatile [u32]
+    expr 51 unsafe 1891..1909: &mut volatile [u32]
+    expr 52 &mut 1900..1907: &mut volatile [u32]
+    expr 53 deref 1905..1907: [u32]
+    expr 54 local s 1906..1907: *mut volatile [u32]
+    expr 55 unsafe 1940..1962: &volatile [u32]
+    expr 56 & 1949..1960: &volatile [u32]
+    expr 57 subslice 1950..1960: [u32]
+    expr 58 deref 1950..1954: [u32]
+    expr 59 local t 1952..1953: *const volatile [u32]
+    expr 60 int 1 1955..1956: usize
+    expr 61 int 3 1958..1959: usize
+    expr 62 unsafe 1997..2022: &mut volatile [u32]
+    expr 63 &mut 2006..2020: &mut volatile [u32]
+    expr 64 subslice 2011..2020: [u32]
+    expr 65 deref 2011..2015: [u32]
+    expr 66 local s 2013..2014: *mut volatile [u32]
+    expr 67 int 2 2018..2019: usize
 fn from_reference(r: &volatile Ring, m: &mut volatile Ring) -> ()
     let a: &volatile u32
     let b: &volatile Desc
@@ -83,32 +95,32 @@ fn from_reference(r: &volatile Ring, m: &mut volatile Ring) -> ()
     let d: &volatile Ring
     let e: &mut volatile Desc
     let f: &volatile Ring
-    expr 56 & 2036..2046: &volatile u32
-    expr 57 field head 2037..2046: u32
-    expr 58 deref 2037..2041: Ring
-    expr 59 local r 2039..2040: &volatile Ring
-    expr 60 & 2076..2089: &volatile Desc
-    expr 61 index 2077..2089: Desc
-    expr 62 field desc 2077..2086: [Desc; 2]
-    expr 63 deref 2077..2081: Ring
-    expr 64 local r 2079..2080: &volatile Ring
-    expr 65 int 1 2087..2088: usize
-    expr 66 &mut 2122..2136: &mut volatile u32
-    expr 67 field tail 2127..2136: u32
-    expr 68 deref 2127..2131: Ring
-    expr 69 local m 2129..2130: &mut volatile Ring
-    expr 70 & 2166..2169: &volatile Ring
-    expr 71 deref 2167..2169: Ring
-    expr 72 local r 2168..2169: &volatile Ring
-    expr 73 &mut 2203..2220: &mut volatile Desc
-    expr 74 index 2208..2220: Desc
-    expr 75 field desc 2208..2217: [Desc; 2]
-    expr 76 deref 2208..2212: Ring
-    expr 77 local m 2210..2211: &mut volatile Ring
-    expr 78 int 0 2218..2219: usize
-    expr 79 & 2250..2253: &volatile Ring
-    expr 80 deref 2251..2253: Ring
-    expr 81 local m 2252..2253: &mut volatile Ring
+    expr 68 & 2168..2178: &volatile u32
+    expr 69 field head 2169..2178: u32
+    expr 70 deref 2169..2173: Ring
+    expr 71 local r 2171..2172: &volatile Ring
+    expr 72 & 2208..2221: &volatile Desc
+    expr 73 index 2209..2221: Desc
+    expr 74 field desc 2209..2218: [Desc; 2]
+    expr 75 deref 2209..2213: Ring
+    expr 76 local r 2211..2212: &volatile Ring
+    expr 77 int 1 2219..2220: usize
+    expr 78 &mut 2254..2268: &mut volatile u32
+    expr 79 field tail 2259..2268: u32
+    expr 80 deref 2259..2263: Ring
+    expr 81 local m 2261..2262: &mut volatile Ring
+    expr 82 & 2298..2301: &volatile Ring
+    expr 83 deref 2299..2301: Ring
+    expr 84 local r 2300..2301: &volatile Ring
+    expr 85 &mut 2335..2352: &mut volatile Desc
+    expr 86 index 2340..2352: Desc
+    expr 87 field desc 2340..2349: [Desc; 2]
+    expr 88 deref 2340..2344: Ring
+    expr 89 local m 2342..2343: &mut volatile Ring
+    expr 90 int 0 2350..2351: usize
+    expr 91 & 2382..2385: &volatile Ring
+    expr 92 deref 2383..2385: Ring
+    expr 93 local m 2384..2385: &mut volatile Ring
 fn not_volatile(p: *mut Ring, r: &Ring, q: *mut volatile *mut Ring) -> ()
     let x: u32
     let a: &u32
@@ -116,109 +128,111 @@ fn not_volatile(p: *mut Ring, r: &Ring, q: *mut volatile *mut Ring) -> ()
     let c: &mut Ring
     let d: &u32
     let e: &mut Ring
-    expr 82 int 0 2452..2453: u32
-    expr 83 & 2473..2475: &u32
-    expr 84 local x 2474..2475: u32
-    expr 85 & 2496..2501: &Ring
-    expr 86 static RING 2497..2501: Ring
-    expr 87 &mut 2526..2533: &mut Ring
-    expr 88 deref 2531..2533: Ring
-    expr 89 local p 2532..2533: *mut Ring
-    expr 90 & 2553..2563: &u32
-    expr 91 field head 2554..2563: u32
-    expr 92 deref 2554..2558: Ring
-    expr 93 local r 2556..2557: &Ring
-    expr 94 &mut 2588..2596: &mut Ring
-    expr 95 deref 2593..2596: Ring
-    expr 96 deref 2594..2596: *mut Ring
-    expr 97 local q 2595..2596: *mut volatile *mut Ring
+    expr 94 int 0 2584..2585: u32
+    expr 95 & 2605..2607: &u32
+    expr 96 local x 2606..2607: u32
+    expr 97 & 2628..2633: &Ring
+    expr 98 static RING 2629..2633: Ring
+    expr 99 unsafe 2658..2676: &mut Ring
+    expr 100 &mut 2667..2674: &mut Ring
+    expr 101 deref 2672..2674: Ring
+    expr 102 local p 2673..2674: *mut Ring
+    expr 103 & 2696..2706: &u32
+    expr 104 field head 2697..2706: u32
+    expr 105 deref 2697..2701: Ring
+    expr 106 local r 2699..2700: &Ring
+    expr 107 unsafe 2731..2750: &mut Ring
+    expr 108 &mut 2740..2748: &mut Ring
+    expr 109 deref 2745..2748: Ring
+    expr 110 deref 2746..2748: *mut Ring
+    expr 111 local q 2747..2748: *mut volatile *mut Ring
 fn access(r: &mut volatile Ring, s: &mut volatile [u32], n: &volatile u32) -> u32
-    expr 98 assign 2784..2797: ()
-    expr 99 field head 2784..2793: u32
-    expr 100 deref 2784..2788: Ring
-    expr 101 local r 2786..2787: &mut volatile Ring
-    expr 102 int 1 2796..2797: u32
-    expr 103 assign += 2803..2824: ()
-    expr 104 field len 2803..2819: u32
-    expr 105 index 2803..2815: Desc
-    expr 106 field desc 2803..2812: [Desc; 2]
-    expr 107 deref 2803..2807: Ring
-    expr 108 local r 2805..2806: &mut volatile Ring
-    expr 109 int 0 2813..2814: usize
-    expr 110 int 2 2823..2824: u32
-    expr 111 assign 2830..2844: ()
-    expr 112 index 2830..2837: u32
-    expr 113 deref 2830..2834: [u32]
-    expr 114 local s 2832..2833: &mut volatile [u32]
-    expr 115 int 1 2835..2836: usize
-    expr 116 deref 2840..2844: u32
-    expr 117 local n 2842..2843: &volatile u32
-    expr 118 binary + 2850..2889: u32
-    expr 119 binary + 2850..2869: u32
-    expr 120 field tail 2850..2859: u32
-    expr 121 deref 2850..2854: Ring
-    expr 122 local r 2852..2853: &mut volatile Ring
-    expr 123 index 2862..2869: u32
-    expr 124 deref 2862..2866: [u32]
-    expr 125 local s 2864..2865: &mut volatile [u32]
-    expr 126 int 0 2867..2868: usize
-    expr 127 field addr 2872..2889: u32
-    expr 128 index 2872..2884: Desc
-    expr 129 field desc 2872..2881: [Desc; 2]
-    expr 130 deref 2872..2876: Ring
-    expr 131 local r 2874..2875: &mut volatile Ring
-    expr 132 int 1 2882..2883: usize
+    expr 112 assign 2938..2951: ()
+    expr 113 field head 2938..2947: u32
+    expr 114 deref 2938..2942: Ring
+    expr 115 local r 2940..2941: &mut volatile Ring
+    expr 116 int 1 2950..2951: u32
+    expr 117 assign += 2957..2978: ()
+    expr 118 field len 2957..2973: u32
+    expr 119 index 2957..2969: Desc
+    expr 120 field desc 2957..2966: [Desc; 2]
+    expr 121 deref 2957..2961: Ring
+    expr 122 local r 2959..2960: &mut volatile Ring
+    expr 123 int 0 2967..2968: usize
+    expr 124 int 2 2977..2978: u32
+    expr 125 assign 2984..2998: ()
+    expr 126 index 2984..2991: u32
+    expr 127 deref 2984..2988: [u32]
+    expr 128 local s 2986..2987: &mut volatile [u32]
+    expr 129 int 1 2989..2990: usize
+    expr 130 deref 2994..2998: u32
+    expr 131 local n 2996..2997: &volatile u32
+    expr 132 binary + 3004..3043: u32
+    expr 133 binary + 3004..3023: u32
+    expr 134 field tail 3004..3013: u32
+    expr 135 deref 3004..3008: Ring
+    expr 136 local r 3006..3007: &mut volatile Ring
+    expr 137 index 3016..3023: u32
+    expr 138 deref 3016..3020: [u32]
+    expr 139 local s 3018..3019: &mut volatile [u32]
+    expr 140 int 0 3021..3022: usize
+    expr 141 field addr 3026..3043: u32
+    expr 142 index 3026..3038: Desc
+    expr 143 field desc 3026..3035: [Desc; 2]
+    expr 144 deref 3026..3030: Ring
+    expr 145 local r 3028..3029: &mut volatile Ring
+    expr 146 int 1 3036..3037: usize
 fn read(r: &volatile Ring) -> u32
-    expr 133 field head 3043..3052: u32
-    expr 134 deref 3043..3047: Ring
-    expr 135 local r 3045..3046: &volatile Ring
+    expr 147 field head 3197..3206: u32
+    expr 148 deref 3197..3201: Ring
+    expr 149 local r 3199..3200: &volatile Ring
 fn convert(m: &mut volatile Ring) -> u32
     let a: &volatile Ring
-    expr 136 local m 3127..3128: &mut volatile Ring as &volatile Ring
-    expr 137 binary + 3134..3151: u32
-    expr 138 call 3134..3141: u32
-    expr 139 local m 3139..3140: &mut volatile Ring as &volatile Ring
-    expr 140 call 3144..3151: u32
-    expr 141 local a 3149..3150: &volatile Ring
+    expr 150 local m 3281..3282: &mut volatile Ring as &volatile Ring
+    expr 151 binary + 3288..3305: u32
+    expr 152 call 3288..3295: u32
+    expr 153 local m 3293..3294: &mut volatile Ring as &volatile Ring
+    expr 154 call 3298..3305: u32
+    expr 155 local a 3303..3304: &volatile Ring
 fn sum(s: &volatile [u32]) -> u32
-    expr 142 binary + 3304..3321: u32
-    expr 143 index 3304..3311: u32
-    expr 144 deref 3304..3308: [u32]
-    expr 145 local s 3306..3307: &volatile [u32]
-    expr 146 int 0 3309..3310: usize
-    expr 147 index 3314..3321: u32
-    expr 148 deref 3314..3318: [u32]
-    expr 149 local s 3316..3317: &volatile [u32]
-    expr 150 int 1 3319..3320: usize
+    expr 156 binary + 3458..3475: u32
+    expr 157 index 3458..3465: u32
+    expr 158 deref 3458..3462: [u32]
+    expr 159 local s 3460..3461: &volatile [u32]
+    expr 160 int 0 3463..3464: usize
+    expr 161 index 3468..3475: u32
+    expr 162 deref 3468..3472: [u32]
+    expr 163 local s 3470..3471: &volatile [u32]
+    expr 164 int 1 3473..3474: usize
 fn fill(s: &mut volatile [u32]) -> ()
-    expr 151 assign 3363..3374: ()
-    expr 152 index 3363..3370: u32
-    expr 153 deref 3363..3367: [u32]
-    expr 154 local s 3365..3366: &mut volatile [u32]
-    expr 155 int 0 3368..3369: usize
-    expr 156 int 7 3373..3374: u32
+    expr 165 assign 3517..3528: ()
+    expr 166 index 3517..3524: u32
+    expr 167 deref 3517..3521: [u32]
+    expr 168 local s 3519..3520: &mut volatile [u32]
+    expr 169 int 0 3522..3523: usize
+    expr 170 int 7 3527..3528: u32
 fn arrays(a: &volatile [u32; 4], b: &mut volatile [u32; 4]) -> u32
     let c: &volatile [u32]
-    expr 157 call 3452..3459: ()
-    expr 158 local b 3457..3458: &mut volatile [u32; 4] as &mut volatile [u32]
-    expr 159 local b 3490..3491: &mut volatile [u32; 4] as &volatile [u32]
-    expr 160 binary + 3497..3521: u32
-    expr 161 binary + 3497..3512: u32
-    expr 162 call 3497..3503: u32
-    expr 163 local a 3501..3502: &volatile [u32; 4] as &volatile [u32]
-    expr 164 call 3506..3512: u32
-    expr 165 local b 3510..3511: &mut volatile [u32; 4] as &volatile [u32]
-    expr 166 call 3515..3521: u32
-    expr 167 local c 3519..3520: &volatile [u32]
+    expr 171 call 3606..3613: ()
+    expr 172 local b 3611..3612: &mut volatile [u32; 4] as &mut volatile [u32]
+    expr 173 local b 3644..3645: &mut volatile [u32; 4] as &volatile [u32]
+    expr 174 binary + 3651..3675: u32
+    expr 175 binary + 3651..3666: u32
+    expr 176 call 3651..3657: u32
+    expr 177 local a 3655..3656: &volatile [u32; 4] as &volatile [u32]
+    expr 178 call 3660..3666: u32
+    expr 179 local b 3664..3665: &mut volatile [u32; 4] as &volatile [u32]
+    expr 180 call 3669..3675: u32
+    expr 181 local c 3673..3674: &volatile [u32]
 fn length(a: &volatile [u8], b: &mut volatile [u8], c: &volatile [u8; 6]) -> usize
-    expr 168 binary + 3695..3719: usize
-    expr 169 binary + 3695..3710: usize
-    expr 170 len 3695..3701: usize
-    expr 171 local a 3699..3700: &volatile [u8]
-    expr 172 len 3704..3710: usize
-    expr 173 local b 3708..3709: &mut volatile [u8]
-    expr 174 len 3713..3719: usize
-    expr 175 local c 3717..3718: &volatile [u8; 6]
+    expr 182 binary + 3849..3873: usize
+    expr 183 binary + 3849..3864: usize
+    expr 184 len 3849..3855: usize
+    expr 185 local a 3853..3854: &volatile [u8]
+    expr 186 len 3858..3864: usize
+    expr 187 local b 3862..3863: &mut volatile [u8]
+    expr 188 len 3867..3873: usize
+    expr 189 local c 3871..3872: &volatile [u8; 6]
 fn casts(r: &volatile Ring, m: &mut volatile Ring, s: &volatile [u32], t: &mut volatile [u32], u: &mut volatile [u32]) -> ()
     let a: *const volatile Ring
     let b: *mut volatile Ring
@@ -229,61 +243,63 @@ fn casts(r: &volatile Ring, m: &mut volatile Ring, s: &volatile [u32], t: &mut v
     let g: *const volatile u32
     let h: *mut volatile u32
     let i: *const [u32]
-    expr 176 as *const volatile Ring 3977..4002: *const volatile Ring
-    expr 177 local r 3977..3978: &volatile Ring
-    expr 178 as *mut volatile Ring 4036..4059: *mut volatile Ring
-    expr 179 local m 4036..4037: &mut volatile Ring
-    expr 180 as *const Ring 4086..4102: *const Ring
-    expr 181 local r 4086..4087: &volatile Ring
-    expr 182 as usize 4123..4157: usize
-    expr 183 as *const volatile Ring 4123..4148: *const volatile Ring
-    expr 184 local r 4123..4124: &volatile Ring
-    expr 185 as *const volatile [u32] 4194..4220: *const volatile [u32]
-    expr 186 local s 4194..4195: &volatile [u32]
-    expr 187 as *mut volatile [u32] 4255..4279: *mut volatile [u32]
-    expr 188 local t 4255..4256: &mut volatile [u32]
-    expr 189 as *const volatile u32 4314..4338: *const volatile u32
-    expr 190 local s 4314..4315: &volatile [u32]
-    expr 191 as *mut volatile u32 4371..4393: *mut volatile u32
-    expr 192 local u 4371..4372: &mut volatile [u32]
-    expr 193 as *const [u32] 4421..4438: *const [u32]
-    expr 194 local s 4421..4422: &volatile [u32]
+    expr 190 as *const volatile Ring 4131..4156: *const volatile Ring
+    expr 191 local r 4131..4132: &volatile Ring
+    expr 192 as *mut volatile Ring 4190..4213: *mut volatile Ring
+    expr 193 local m 4190..4191: &mut volatile Ring
+    expr 194 as *const Ring 4240..4256: *const Ring
+    expr 195 local r 4240..4241: &volatile Ring
+    expr 196 as usize 4277..4311: usize
+    expr 197 as *const volatile Ring 4277..4302: *const volatile Ring
+    expr 198 local r 4277..4278: &volatile Ring
+    expr 199 as *const volatile [u32] 4348..4374: *const volatile [u32]
+    expr 200 local s 4348..4349: &volatile [u32]
+    expr 201 as *mut volatile [u32] 4409..4433: *mut volatile [u32]
+    expr 202 local t 4409..4410: &mut volatile [u32]
+    expr 203 as *const volatile u32 4468..4492: *const volatile u32
+    expr 204 local s 4468..4469: &volatile [u32]
+    expr 205 as *mut volatile u32 4525..4547: *mut volatile u32
+    expr 206 local u 4525..4526: &mut volatile [u32]
+    expr 207 as *const [u32] 4575..4592: *const [u32]
+    expr 208 local s 4575..4576: &volatile [u32]
 fn lend(p: *mut volatile Ring) -> u32
     let a: &mut volatile Ring
     let n: u32
-    expr 195 &mut 4679..4686: &mut volatile Ring
-    expr 196 deref 4684..4686: Ring
-    expr 197 local p 4685..4686: *mut volatile Ring
-    expr 198 call 4705..4712: u32
-    expr 199 local a 4710..4711: &mut volatile Ring as &volatile Ring
-    expr 200 assign 4718..4731: ()
-    expr 201 field tail 4718..4727: u32
-    expr 202 deref 4718..4722: Ring
-    expr 203 local a 4720..4721: &mut volatile Ring
-    expr 204 local n 4730..4731: u32
-    expr 205 binary + 4737..4755: u32
-    expr 206 local n 4737..4738: u32
-    expr 207 call 4741..4755: u32
-    expr 208 & 4746..4754: &volatile Ring
-    expr 209 deref 4747..4754: Ring
-    expr 210 const WINDOW 4748..4754: *mut volatile Ring
+    expr 209 unsafe 4833..4851: &mut volatile Ring
+    expr 210 &mut 4842..4849: &mut volatile Ring
+    expr 211 deref 4847..4849: Ring
+    expr 212 local p 4848..4849: *mut volatile Ring
+    expr 213 call 4870..4877: u32
+    expr 214 local a 4875..4876: &mut volatile Ring as &volatile Ring
+    expr 215 assign 4883..4896: ()
+    expr 216 field tail 4883..4892: u32
+    expr 217 deref 4883..4887: Ring
+    expr 218 local a 4885..4886: &mut volatile Ring
+    expr 219 local n 4895..4896: u32
+    expr 220 unsafe 4902..4931: u32
+    expr 221 binary + 4911..4929: u32
+    expr 222 local n 4911..4912: u32
+    expr 223 call 4915..4929: u32
+    expr 224 & 4920..4928: &volatile Ring
+    expr 225 deref 4921..4928: Ring
+    expr 226 const WINDOW 4922..4928: *mut volatile Ring
 extern fn device(r: &mut volatile Ring, s: &volatile [u32]) -> ()
 entry fn main() -> !
-    expr 211 loop 4844..4851: !
+    expr 227 loop 5020..5027: !
 panic fn on_panic() -> !
-    expr 212 loop 4881..4888: !
+    expr 228 loop 5057..5064: !
 comptime fn WINDOW() -> *mut volatile Ring
-    expr 213 as *mut volatile Ring 4569..4604: *mut volatile Ring
-    expr 214 &raw mut 4569..4582: *mut Ring
-    expr 215 static RING 4578..4582: Ring
+    expr 229 as *mut volatile Ring 4723..4758: *mut volatile Ring
+    expr 230 &raw mut 4723..4736: *mut Ring
+    expr 231 static RING 4732..4736: Ring
 comptime fn RING() -> Ring
-    expr 216 struct Ring 864..962: Ring
-    expr 217 int 0 881..882: u32
-    expr 218 int 0 894..895: u32
-    expr 219 array 907..959: [Desc; 2]
-    expr 220 struct Desc 908..932: Desc
-    expr 221 int 0 921..922: u32
-    expr 222 int 0 929..930: u32
-    expr 223 struct Desc 934..958: Desc
-    expr 224 int 0 947..948: u32
-    expr 225 int 0 955..956: u32
+    expr 232 struct Ring 864..962: Ring
+    expr 233 int 0 881..882: u32
+    expr 234 int 0 894..895: u32
+    expr 235 array 907..959: [Desc; 2]
+    expr 236 struct Desc 908..932: Desc
+    expr 237 int 0 921..922: u32
+    expr 238 int 0 929..930: u32
+    expr 239 struct Desc 934..958: Desc
+    expr 240 int 0 947..948: u32
+    expr 241 int 0 955..956: u32

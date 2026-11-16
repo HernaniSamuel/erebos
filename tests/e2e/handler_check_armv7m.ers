@@ -18,13 +18,13 @@ const ZERO: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
 static mut QUOTIENT: u32 = 0;
 
 interrupt fn tick() at Vector::SysTick {
-    QUOTIENT = 100 / *ZERO;
+    unsafe { QUOTIENT = 100 / *ZERO; }
 }
 
 entry fn main() -> ! {
-    *SYST_RVR = 10_000;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 10_000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     loop {
         core::arch::wait_for_interrupt();

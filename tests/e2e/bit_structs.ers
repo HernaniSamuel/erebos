@@ -56,8 +56,8 @@ static mut SCRATCH: u32 = 0;
 // `x`, written to and read back from a volatile static.
 fn hidden(x: u32) -> u32 {
     let p: *mut volatile u32 = &raw mut SCRATCH as *mut volatile u32;
-    *p = x;
-    *p
+    unsafe { *p = x; }
+    unsafe { *p }
 }
 
 fn print_u64(n: u64) {
@@ -198,13 +198,13 @@ entry fn main() -> ! {
     putc(b'\n');
 
     let device: *mut volatile Control = &raw mut DEVICE as *mut volatile Control;
-    (*device).high = 0x5A;
-    (*device).mode = .Even;
-    (*device).low += 1;
+    unsafe { (*device).high = 0x5A; }
+    unsafe { (*device).mode = .Even; }
+    unsafe { (*device).low += 1; }
     print(&b"volatile");
     print_hex(DEVICE as u64, 8);
-    print_hex((*device).high as u64, 2);
-    print(parity_name((*device).mode));
+    unsafe { print_hex((*device).high as u64, 2); }
+    unsafe { print(parity_name((*device).mode)); }
     putc(b'\n');
 
     // Bits 3 and 4 hold 2, which is no variant of `Parity`; a field write

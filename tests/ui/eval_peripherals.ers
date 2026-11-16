@@ -26,7 +26,7 @@ const LSR: u8 = UART0.lsr;
 
 const VIA: u8 = {
     let u: *mut Uart = 0x1000_0000 as *mut Uart;
-    (*u).lsr
+    unsafe { (*u).lsr }
 };
 
 comptime {

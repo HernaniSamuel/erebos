@@ -140,18 +140,18 @@ ty::no-fields
  29 │     let at: usize = offset_of(Option(u8), f);
     ·                                           ┬
     ·                                           ╰── no such field
- 30 │     let r: Option(u8) = *v;
+ 30 │     let r: Option(u8) = unsafe { *v };
     ╰────
   help: the values of an enum's payload have no names, and are reached only by patterns (ADR 0039,
         0040)
 ty::volatile-aggregate
 
   × a volatile `Option(u8)` cannot be accessed as a whole
-    ╭─[typeck_option_result_errors.ers:30:25]
+    ╭─[typeck_option_result_errors.ers:30:34]
  29 │     let at: usize = offset_of(Option(u8), f);
- 30 │     let r: Option(u8) = *v;
-    ·                         ─┬
-    ·                          ╰── an enum with payloads is an aggregate, without fields to access one at a time
+ 30 │     let r: Option(u8) = unsafe { *v };
+    ·                                  ─┬
+    ·                                   ╰── an enum with payloads is an aggregate, without fields to access one at a time
  31 │ }
     ╰────
   help: the width and number of the bus accesses would be up to the compiler; device registers are

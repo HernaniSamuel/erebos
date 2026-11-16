@@ -30,7 +30,7 @@ fn unsized(p: *const [Broken]) -> u32 { 2 }
 fn held(h: Holder) -> u32 { 2 }
 fn enum_by_value(e: Payload) -> u32 { match e { Payload::A(_) => 1, Payload::B => 2 } }
 fn option(p: Option(*const Broken)) -> u32 { 2 }
-fn field(p: *const Broken) -> u8 { (*p).x[0] }
+fn field(p: *const Broken) -> u8 { unsafe { (*p).x[0] } }
 fn inner_comptime() -> usize { comptime { let p: *const Broken = 0 as *const Broken; 1 } }
 
 entry fn main() -> ! { loop {} }

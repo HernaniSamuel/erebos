@@ -57,7 +57,7 @@ fn reborrow(u: &mut Uart16550) -> bool {
     putc(&mut *u, 1);
     let r: &Uart16550 = &*u;
     let p: *mut Uart16550 = &raw mut *u;
-    (*p).ier = 2;
+    unsafe { (*p).ier = 2; }
     ready(r)
 }
 

@@ -20,9 +20,9 @@ fn name(m: Mode) -> &[u8] {
 entry fn main() -> ! {
     BYTES = [1, 7];
     let modes: *const Mode = &raw const BYTES as *const Mode;
-    print(name(modes[0]));
+    unsafe { print(name(modes[0])); }
     print(&b"\n");
-    print(name(modes[1]));
+    unsafe { print(name(modes[1])); }
     exit(0)
 }
 
@@ -58,10 +58,10 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
     print(reason(info.reason));
     if len(info.message) > 0 {
         print(&b": ");
-        print(&*info.message);
+        unsafe { print(&*info.message); }
     }
     print(&b" at ");
-    print(&*info.file);
+    unsafe { print(&*info.file); }
     print(&b":");
     print_u32(info.line);
     print(&b":");

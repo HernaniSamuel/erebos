@@ -7,7 +7,7 @@
 static BYTES: [u8; 8] = [2, 0, 0, 0, 5, 0, 0, 0];
 
 fn odd() -> Option(u32) {
-    (&raw const BYTES as *const Option(u32))[0]
+    unsafe { (&raw const BYTES as *const Option(u32))[0] }
 }
 
 fn plus_one() -> Option(u32) {

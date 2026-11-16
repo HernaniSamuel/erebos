@@ -73,54 +73,57 @@ fn shadowed() -> Mode
     expr 49 int 7 1510..1511: u8
     expr 50 variant Mode::Run 1517..1526: Mode
 fn device(p: *mut volatile Device, wide: *const Wide) -> u64
-    expr 51 assign 1597..1619: ()
-    expr 52 field port 1597..1606: Port
-    expr 53 deref 1597..1601: Device
-    expr 54 local p 1599..1600: *mut volatile Device
-    expr 55 variant Port::Data 1609..1619: Port
-    expr 56 assign 1625..1644: ()
-    expr 57 static CURRENT 1625..1632: Mode
-    expr 58 field mode 1635..1644: Mode
-    expr 59 deref 1635..1639: Device
-    expr 60 local p 1637..1638: *mut volatile Device
-    expr 61 as u64 1650..1662: u64
-    expr 62 deref 1650..1655: Wide
-    expr 63 local wide 1651..1655: *const Wide
+    expr 51 unsafe 1597..1631: ()
+    expr 52 assign 1606..1628: ()
+    expr 53 field port 1606..1615: Port
+    expr 54 deref 1606..1610: Device
+    expr 55 local p 1608..1609: *mut volatile Device
+    expr 56 variant Port::Data 1618..1628: Port
+    expr 57 unsafe 1636..1667: ()
+    expr 58 assign 1645..1664: ()
+    expr 59 static CURRENT 1645..1652: Mode
+    expr 60 field mode 1655..1664: Mode
+    expr 61 deref 1655..1659: Device
+    expr 62 local p 1657..1658: *mut volatile Device
+    expr 63 unsafe 1672..1695: u64
+    expr 64 as u64 1681..1693: u64
+    expr 65 deref 1681..1686: Wide
+    expr 66 local wide 1682..1686: *const Wide
 entry fn main() -> !
-    expr 64 loop 1689..1696: !
+    expr 67 loop 1722..1729: !
 panic fn on_panic() -> !
-    expr 65 loop 1726..1733: !
+    expr 68 loop 1759..1766: !
 comptime fn DEFAULT() -> Mode
-    expr 66 variant Mode::Idle 621..631: Mode
+    expr 69 variant Mode::Idle 621..631: Mode
 comptime fn ORDER() -> [Mode; 3]
-    expr 67 array 658..692: [Mode; 3]
-    expr 68 variant Mode::Off 659..668: Mode
-    expr 69 variant Mode::Idle 670..680: Mode
-    expr 70 variant Mode::Run 682..691: Mode
+    expr 70 array 658..692: [Mode; 3]
+    expr 71 variant Mode::Off 659..668: Mode
+    expr 72 variant Mode::Idle 670..680: Mode
+    expr 73 variant Mode::Run 682..691: Mode
 comptime fn CURRENT() -> Mode
-    expr 71 variant Mode::Off 721..730: Mode
+    expr 74 variant Mode::Off 721..730: Mode
 comptime fn LEVELS() -> [Level; 2]
-    expr 72 array 760..785: [Level; 2]
-    expr 73 variant Level::Low 761..771: Level
-    expr 74 variant Level::High 773..784: Level
+    expr 75 array 760..785: [Level; 2]
+    expr 76 variant Level::Low 761..771: Level
+    expr 77 variant Level::High 773..784: Level
 comptime fn Mode::Off() -> u8
-    expr 75 int 0 391..392: u8
+    expr 78 int 0 391..392: u8
 comptime fn Mode::Idle() -> u8
-    expr 76 int 1 401..402: u8
+    expr 79 int 1 401..402: u8
 comptime fn Mode::Run() -> u8
-    expr 77 binary + 410..430: u8
-    expr 78 as u8 410..426: u8
-    expr 79 variant Mode::Idle 410..420: Mode
-    expr 80 int 2 429..430: u8
+    expr 80 binary + 410..430: u8
+    expr 81 as u8 410..426: u8
+    expr 82 variant Mode::Idle 410..420: Mode
+    expr 83 int 2 429..430: u8
 comptime fn Level::Low() -> i8
-    expr 81 neg 456..458: i8
-    expr 82 int 1 457..458: i8
+    expr 84 neg 456..458: i8
+    expr 85 int 1 457..458: i8
 comptime fn Level::High() -> i8
-    expr 83 int 1 467..468: i8
+    expr 86 int 1 467..468: i8
 comptime fn Wide::Big() -> u64
-    expr 84 int 4294967296 494..507: u64
+    expr 87 int 4294967296 494..507: u64
 comptime fn Port::Data() -> u16
-    expr 85 int 1016 534..539: u16
+    expr 88 int 1016 534..539: u16
 comptime fn length() -> usize
     expr 38 as usize 1310..1328: usize
     expr 39 variant Mode::Run 1310..1319: Mode

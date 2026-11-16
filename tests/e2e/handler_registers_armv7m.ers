@@ -25,36 +25,36 @@ const OUT: *mut volatile u32 = (board::SCRATCH + 64) as *mut volatile u32;
 static mut TICKS: u32 = 0;
 
 interrupt fn tick() at Vector::SysTick {
-    let a: u32 = SRC[0];
-    let b: u32 = SRC[1];
-    let c: u32 = SRC[2];
-    let d: u32 = SRC[3];
-    let e: u32 = SRC[4];
-    let f: u32 = SRC[5];
-    let g: u32 = SRC[6];
-    let h: u32 = SRC[7];
-    let i: u32 = SRC[8];
-    let j: u32 = SRC[9];
+    let a: u32 = unsafe { SRC[0] };
+    let b: u32 = unsafe { SRC[1] };
+    let c: u32 = unsafe { SRC[2] };
+    let d: u32 = unsafe { SRC[3] };
+    let e: u32 = unsafe { SRC[4] };
+    let f: u32 = unsafe { SRC[5] };
+    let g: u32 = unsafe { SRC[6] };
+    let h: u32 = unsafe { SRC[7] };
+    let i: u32 = unsafe { SRC[8] };
+    let j: u32 = unsafe { SRC[9] };
     // Everything a call may change is overwritten, so each value is, below, in
     // a register the C ABI preserves, or in the frame.
     unsafe { asm("", clobber_abi("C")); }
-    OUT[0] = a;
-    OUT[1] = b;
-    OUT[2] = c;
-    OUT[3] = d;
-    OUT[4] = e;
-    OUT[5] = f;
-    OUT[6] = g;
-    OUT[7] = h;
-    OUT[8] = i;
-    OUT[9] = j;
+    unsafe { OUT[0] = a; }
+    unsafe { OUT[1] = b; }
+    unsafe { OUT[2] = c; }
+    unsafe { OUT[3] = d; }
+    unsafe { OUT[4] = e; }
+    unsafe { OUT[5] = f; }
+    unsafe { OUT[6] = g; }
+    unsafe { OUT[7] = h; }
+    unsafe { OUT[8] = i; }
+    unsafe { OUT[9] = j; }
     TICKS += 1;
 }
 
 entry fn main() -> ! {
-    *SYST_RVR = 10_000;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 10_000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     // `r4` to `r11` are saved and restored by the template, which uses them
     // as they are, `r6` and `r7` too, that the compiler keeps for itself.
@@ -112,7 +112,7 @@ entry fn main() -> ! {
             clobber_abi("C"),
         );
     }
-    *SYST_CSR = 0;
+    unsafe { *SYST_CSR = 0; }
     // The handler ran: without it the test proves nothing.
     if critical { TICKS } == 0 {
         exit(2)

@@ -39,18 +39,18 @@ fn widths() -> u32 {
 
 // The same, through a pointer.
 fn widths_through(u: *mut Uart, t: *mut Timer) -> u32 {
-    (*u).thr = 1;
-    (*t).reload = 2;
-    (*t).ctrl = 3;
-    let lsr: u8 = (*u).lsr;
-    let count: u16 = (*t).count;
-    (*t).ctrl + lsr as u32 + count as u32
+    unsafe { (*u).thr = 1; }
+    unsafe { (*t).reload = 2; }
+    unsafe { (*t).ctrl = 3; }
+    let lsr: u8 = unsafe { (*u).lsr };
+    let count: u16 = unsafe { (*t).count };
+    unsafe { (*t).ctrl + lsr as u32 + count as u32 }
 }
 
 // One load, then one store.
 fn compound(u: *mut Uart) {
     UART0.ier |= 1;
-    (*u).ier |= 1;
+    unsafe { (*u).ier |= 1; }
 }
 
 // Two loads, neither merged nor removed.
@@ -69,22 +69,22 @@ fn echo() {
 // other way round.
 fn with_volatile(buffer: *mut volatile u8) {
     UART0.thr = 1;
-    *buffer = 2;
-    *buffer = 3;
+    unsafe { *buffer = 2; }
+    unsafe { *buffer = 3; }
     UART0.thr = 4;
 }
 
 // A pointer made from an integer.
 fn from_integer() {
     let u: *mut Uart = 0x1000_1000 as *mut Uart;
-    (*u).thr = 5;
+    unsafe { (*u).thr = 5; }
 }
 
 // A peripheral's address in a static's initializer.
 static CONSOLE: *mut Uart = &raw mut UART0;
 
 fn through_static() {
-    (*CONSOLE).thr = 6;
+    unsafe { (*CONSOLE).thr = 6; }
 }
 
 entry fn main() -> ! { loop {} }

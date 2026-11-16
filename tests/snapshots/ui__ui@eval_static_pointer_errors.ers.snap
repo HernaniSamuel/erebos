@@ -9,7 +9,7 @@ ty::cycle
   × the static `SELF` depends on its own value
    ╭─[eval_static_pointer_errors.ers:6:8]
  5 │ struct Node { next: *const Node, value: u32 }
- 6 │ static SELF: Node = Node { next: &raw const SELF, value: (*(&raw const SELF)).value };
+ 6 │ static SELF: Node = unsafe { Node { next: &raw const SELF, value: (*(&raw const SELF)).value } };
    ·        ──┬─
    ·          ╰── needed while computing itself
  7 │ static TABLE: [u32; 2] = [1, 2];

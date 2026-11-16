@@ -9,7 +9,7 @@ enum E: u8 { A(u8) = first(), B = 1 }
 fn first() -> u8 {
     let e: E = E::B;
     let p: *const u8 = &raw const e as *const u8;
-    p[0] + 1
+    unsafe { p[0] + 1 }
 }
 
 entry fn main() -> ! { loop {} }

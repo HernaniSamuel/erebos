@@ -27,6 +27,9 @@ enum Operation {
     /// A read, write or borrow of an `extern static`, or of a part of one,
     /// by its path (ADR 0119, operation 4).
     ExternStatic(String, Access),
+    /// A read, write or borrow of a place reached through a raw pointer
+    /// (ADR 0119, operation 1).
+    RawPointer(Access),
 }
 
 /// How the expression around a place touches it. A place that only has its
@@ -40,6 +43,17 @@ enum Access {
     Update,
     /// `&` and `&mut`, and a method call whose receiver is a reference.
     Borrow,
+}
+
+impl Access {
+    fn gerund(self) -> &'static str {
+        match self {
+            Access::Read => "reading",
+            Access::Write => "writing",
+            Access::Update => "reading and writing",
+            Access::Borrow => "borrowing",
+        }
+    }
 }
 
 impl Operation {
@@ -57,13 +71,16 @@ impl Operation {
                 format!("calling the `#[naked]` function `{path}` needs an `unsafe` block")
             }
             Operation::ExternStatic(path, how) => {
-                let verb = match how {
-                    Access::Read => "reading",
-                    Access::Write => "writing",
-                    Access::Update => "reading and writing",
-                    Access::Borrow => "borrowing",
-                };
-                format!("{verb} `extern static {path}` needs an `unsafe` block")
+                format!(
+                    "{} `extern static {path}` needs an `unsafe` block",
+                    how.gerund()
+                )
+            }
+            Operation::RawPointer(how) => {
+                format!(
+                    "{} through a raw pointer needs an `unsafe` block",
+                    how.gerund()
+                )
             }
         }
     }
@@ -84,6 +101,7 @@ impl Operation {
                 };
                 format!("this {verb} an `extern static`")
             }
+            Operation::RawPointer(_) => "this dereferences a raw pointer".to_owned(),
         }
     }
 
@@ -104,6 +122,9 @@ impl Operation {
             }
             Operation::ExternStatic(..) => {
                 "the compiler does not see what defines an `extern static`, or who else writes it: access it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs no block (ADR 0119)"
+            }
+            Operation::RawPointer(_) => {
+                "the compiler cannot check that a raw pointer is valid, aligned and in bounds: access through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place, `len`, `slice` and casts need no block (ADR 0119)"
             }
         }
     }
@@ -200,13 +221,39 @@ impl Unsafety<'_, '_> {
                 }
             }
             ExprKind::Static(id) => self.static_(expr, *id, access),
-            ExprKind::Field(base, ..) => self.visit(base, access),
+            ExprKind::Deref(pointer) => {
+                match self.q.tables.expr_ty(pointer.id) {
+                    Ty::Ptr(_) => {
+                        let in_error = self.q.tables.expr_ty(expr.id) == Ty::Error;
+                        self.raw_pointer(expr, access, in_error);
+                    }
+                    // A pointer already in error may or may not be raw:
+                    // the dereference counts as unsafe, even for `&raw`.
+                    Ty::Error => {
+                        self.mark_used();
+                    }
+                    // A reference is safe to dereference.
+                    _ => {}
+                }
+                self.expr(pointer);
+            }
+            ExprKind::Field(base, ..) => self.place_base(base, access, false),
             ExprKind::Index(base, index, _) => {
-                self.visit(base, access);
+                match self.q.tables.expr_ty(base.id) {
+                    // `p[i]` reads `p` and touches the place it leads to,
+                    // the address of which depends on `p` and on `i`.
+                    Ty::Ptr(_) => {
+                        let in_error = self.q.tables.expr_ty(expr.id) == Ty::Error
+                            || self.q.tables.expr_ty(index.id) == Ty::Error;
+                        self.raw_pointer(expr, access, in_error);
+                        self.expr(base);
+                    }
+                    _ => self.place_base(base, access, true),
+                }
                 self.expr(index);
             }
             ExprKind::Subslice { base, from, to, .. } => {
-                self.visit(base, access);
+                self.place_base(base, access, true);
                 for bound in [from, to].into_iter().flatten() {
                     self.expr(bound);
                 }
@@ -253,6 +300,40 @@ impl Unsafety<'_, '_> {
                 self.operation(expr);
                 self.children(expr);
             }
+        }
+    }
+
+    /// A place reached through a raw pointer, `expr`, touched as `access`
+    /// says: an unsafe operation, unless only its address is taken (`None`).
+    /// `in_error`: it was reported, and counts as unsafe for the block around
+    /// it without being reported again.
+    fn raw_pointer(&mut self, expr: &Expr, access: Option<Access>, in_error: bool) {
+        if let Some(access) = access {
+            self.report(Operation::RawPointer(access), expr.span, in_error);
+        } else if in_error {
+            self.mark_used();
+        }
+    }
+
+    /// The base of a field, an index or a range, touched as `access` says.
+    /// A reference is read to reach what it refers to, which is not an
+    /// access through a raw pointer (ADR 0114). A base that is a pointer
+    /// (a field of one is `ty::no-fields`, a range of one an error too) counts
+    /// as an operation in error for the block around it, as does a base in
+    /// error of an index or a range (`indexed`): the type checker reported
+    /// them.
+    fn place_base(&mut self, base: &Expr, access: Option<Access>, indexed: bool) {
+        match self.q.tables.expr_ty(base.id) {
+            Ty::Ref(_) => self.expr(base),
+            Ty::Ptr(_) => {
+                self.mark_used();
+                self.expr(base);
+            }
+            Ty::Error if indexed => {
+                self.mark_used();
+                self.visit(base, access);
+            }
+            _ => self.visit(base, access),
         }
     }
 

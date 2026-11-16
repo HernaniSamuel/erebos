@@ -13,17 +13,17 @@ eval::dangling-pointer
     ·       ────────┬───────         ─────────┬────────
     ·               │                         ╰── compared here
     ·               ╰── while evaluating the constant `DANGLING_COMPARE`
- 12 │ const DANGLING_READ: u32 = *addr(1);
+ 12 │ const DANGLING_READ: u32 = unsafe { *addr(1) };
     ╰────
   help: this code runs at compile time (ADR 0027)
 eval::dangling-pointer
 
   × this pointer points to a variable of a call that has returned
-    ╭─[eval_pointer_compare_errors.ers:12:28]
+    ╭─[eval_pointer_compare_errors.ers:12:37]
  11 │ const DANGLING_COMPARE: bool = addr(1) == addr(2);
- 12 │ const DANGLING_READ: u32 = *addr(1);
-    ·       ──────┬──────        ────┬───
-    ·             │                  ╰── accessed here
+ 12 │ const DANGLING_READ: u32 = unsafe { *addr(1) };
+    ·       ──────┬──────                 ────┬───
+    ·             │                           ╰── accessed here
     ·             ╰── while evaluating the constant `DANGLING_READ`
  13 │ const DANGLING_COMPTIME: bool = comptime_element() == comptime_element();
     ╰────
@@ -32,7 +32,7 @@ eval::dangling-pointer
 
   × this pointer points to a variable of a call that has returned
     ╭─[eval_pointer_compare_errors.ers:13:33]
- 12 │ const DANGLING_READ: u32 = *addr(1);
+ 12 │ const DANGLING_READ: u32 = unsafe { *addr(1) };
  13 │ const DANGLING_COMPTIME: bool = comptime_element() == comptime_element();
     ·       ────────┬────────         ────────────────────┬───────────────────
     ·               │                                     ╰── compared here

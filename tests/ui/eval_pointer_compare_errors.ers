@@ -9,7 +9,7 @@ const ACROSS: bool = across();
 const WRAPPED: bool = wrapped();
 const WITH_ADDRESS: bool = with_address();
 const DANGLING_COMPARE: bool = addr(1) == addr(2);
-const DANGLING_READ: u32 = *addr(1);
+const DANGLING_READ: u32 = unsafe { *addr(1) };
 const DANGLING_COMPTIME: bool = comptime_element() == comptime_element();
 
 fn past_end() -> bool {

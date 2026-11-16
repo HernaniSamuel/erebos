@@ -30,22 +30,22 @@ struct Ring {
 // Through a volatile pointer: the whole, a field, an element and a field of
 // an element.
 fn from_pointer(p: *mut volatile Ring, q: *const volatile Ring) {
-    let a: &volatile Ring = &*p;
-    let b: &mut volatile Ring = &mut *p;
-    let c: &mut volatile Desc = &mut (*p).desc[1];
-    let d: &volatile u32 = &(*q).head;
-    let e: &volatile Desc = &(*q).desc[0];
-    let f: &mut volatile u32 = &mut (*p).desc[0].len;
+    let a: &volatile Ring = unsafe { &*p };
+    let b: &mut volatile Ring = unsafe { &mut *p };
+    let c: &mut volatile Desc = unsafe { &mut (*p).desc[1] };
+    let d: &volatile u32 = unsafe { &(*q).head };
+    let e: &volatile Desc = unsafe { &(*q).desc[0] };
+    let f: &mut volatile u32 = unsafe { &mut (*p).desc[0].len };
 }
 
 // Through a volatile raw slice: an element, the slice itself, a sub-slice.
 fn from_slice(s: *mut volatile [u32], t: *const volatile [u32]) {
-    let a: &volatile u32 = &(*s)[0];
-    let b: &mut volatile u32 = &mut (*s)[1];
-    let c: &volatile [u32] = &*t;
-    let d: &mut volatile [u32] = &mut *s;
-    let e: &volatile [u32] = &(*t)[1..3];
-    let f: &mut volatile [u32] = &mut (*s)[..2];
+    let a: &volatile u32 = unsafe { &(*s)[0] };
+    let b: &mut volatile u32 = unsafe { &mut (*s)[1] };
+    let c: &volatile [u32] = unsafe { &*t };
+    let d: &mut volatile [u32] = unsafe { &mut *s };
+    let e: &volatile [u32] = unsafe { &(*t)[1..3] };
+    let f: &mut volatile [u32] = unsafe { &mut (*s)[..2] };
 }
 
 // Through a volatile reference, shared or mutable.
@@ -64,9 +64,9 @@ fn not_volatile(p: *mut Ring, r: &Ring, q: *mut volatile *mut Ring) {
     let x: u32 = 0;
     let a: &u32 = &x;
     let b: &Ring = &RING;
-    let c: &mut Ring = &mut *p;
+    let c: &mut Ring = unsafe { &mut *p };
     let d: &u32 = &(*r).head;
-    let e: &mut Ring = &mut **q;
+    let e: &mut Ring = unsafe { &mut **q };
 }
 
 // An access through one is volatile: a scalar, a field, an element, a
@@ -134,10 +134,10 @@ fn casts(
 const WINDOW: *mut volatile Ring = &raw mut RING as *mut volatile Ring;
 
 fn lend(p: *mut volatile Ring) -> u32 {
-    let a: &mut volatile Ring = &mut *p;
+    let a: &mut volatile Ring = unsafe { &mut *p };
     let n: u32 = read(a);
     (*a).tail = n;
-    n + read(&*WINDOW)
+    unsafe { n + read(&*WINDOW) }
 }
 
 extern fn device(r: &mut volatile Ring, s: &volatile [u32]);

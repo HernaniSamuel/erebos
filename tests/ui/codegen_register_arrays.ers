@@ -39,8 +39,8 @@ fn nested(i: usize, j: usize, v: u32) -> u32 {
 
 // Through a pointer to the cluster's type.
 fn driver(c: *mut Context, j: usize) {
-    (*c).threshold = 1;
-    (*c).words[j] = 2;
+    unsafe { (*c).threshold = 1; }
+    unsafe { (*c).words[j] = 2; }
 }
 
 fn address(i: usize) {

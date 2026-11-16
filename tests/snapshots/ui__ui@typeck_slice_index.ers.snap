@@ -10,65 +10,70 @@ fn elements(s: *const [u8], m: *mut [u16], i: usize) -> u8
     let all: *const [u16]
     let same: *mut [u16]
     let again: *const [u8]
-    expr 0 assign 375..386: ()
-    expr 1 index 375..382: u16
-    expr 2 deref 375..379: [u16]
-    expr 3 local m 377..378: *mut [u16]
-    expr 4 local i 380..381: usize
-    expr 5 int 1 385..386: u16
-    expr 6 assign += 392..417: ()
-    expr 7 index 392..399: u16
-    expr 8 deref 392..396: [u16]
-    expr 9 local m 394..395: *mut [u16]
-    expr 10 local i 397..398: usize
-    expr 11 as u16 403..417: u16
-    expr 12 index 403..410: u8
-    expr 13 deref 403..407: [u8]
-    expr 14 local s 405..406: *const [u8]
-    expr 15 local i 408..409: usize
-    expr 16 &raw const 449..467: *const u16
-    expr 17 index 460..467: u16
-    expr 18 deref 460..464: [u16]
-    expr 19 local m 462..463: *mut [u16]
-    expr 20 local i 465..466: usize
-    expr 21 &raw mut 498..514: *mut u16
-    expr 22 index 507..514: u16
-    expr 23 deref 507..511: [u16]
-    expr 24 local m 509..510: *mut [u16]
-    expr 25 int 0 512..513: usize
-    expr 26 &raw const 544..557: *const [u16]
-    expr 27 deref 555..557: [u16]
-    expr 28 local m 556..557: *mut [u16]
-    expr 29 &raw mut 586..597: *mut [u16]
-    expr 30 deref 595..597: [u16]
-    expr 31 local m 596..597: *mut [u16]
-    expr 32 &raw const 628..641: *const [u8]
-    expr 33 deref 639..641: [u8]
-    expr 34 local s 640..641: *const [u8]
-    expr 35 index 647..654: u8
-    expr 36 deref 647..651: [u8]
-    expr 37 local s 649..650: *const [u8]
-    expr 38 local i 652..653: usize
+    expr 0 unsafe 375..398: ()
+    expr 1 assign 384..395: ()
+    expr 2 index 384..391: u16
+    expr 3 deref 384..388: [u16]
+    expr 4 local m 386..387: *mut [u16]
+    expr 5 local i 389..390: usize
+    expr 6 int 1 394..395: u16
+    expr 7 unsafe 403..440: ()
+    expr 8 assign += 412..437: ()
+    expr 9 index 412..419: u16
+    expr 10 deref 412..416: [u16]
+    expr 11 local m 414..415: *mut [u16]
+    expr 12 local i 417..418: usize
+    expr 13 as u16 423..437: u16
+    expr 14 index 423..430: u8
+    expr 15 deref 423..427: [u8]
+    expr 16 local s 425..426: *const [u8]
+    expr 17 local i 428..429: usize
+    expr 18 &raw const 471..489: *const u16
+    expr 19 index 482..489: u16
+    expr 20 deref 482..486: [u16]
+    expr 21 local m 484..485: *mut [u16]
+    expr 22 local i 487..488: usize
+    expr 23 &raw mut 520..536: *mut u16
+    expr 24 index 529..536: u16
+    expr 25 deref 529..533: [u16]
+    expr 26 local m 531..532: *mut [u16]
+    expr 27 int 0 534..535: usize
+    expr 28 &raw const 566..579: *const [u16]
+    expr 29 deref 577..579: [u16]
+    expr 30 local m 578..579: *mut [u16]
+    expr 31 &raw mut 608..619: *mut [u16]
+    expr 32 deref 617..619: [u16]
+    expr 33 local m 618..619: *mut [u16]
+    expr 34 &raw const 650..663: *const [u8]
+    expr 35 deref 661..663: [u8]
+    expr 36 local s 662..663: *const [u8]
+    expr 37 unsafe 669..687: u8
+    expr 38 index 678..685: u8
+    expr 39 deref 678..682: [u8]
+    expr 40 local s 680..681: *const [u8]
+    expr 41 local i 683..684: usize
 fn registers(regs: *mut volatile [u32], rows: *const [[u8; 4]]) -> u32
-    expr 39 assign 735..762: ()
-    expr 40 index 735..745: u32
-    expr 41 deref 735..742: [u32]
-    expr 42 local regs 737..741: *mut volatile [u32]
-    expr 43 int 0 743..744: usize
-    expr 44 binary | 748..762: u32
-    expr 45 index 748..758: u32
-    expr 46 deref 748..755: [u32]
-    expr 47 local regs 750..754: *mut volatile [u32]
-    expr 48 int 1 756..757: usize
-    expr 49 int 1 761..762: u32
-    expr 50 as u32 768..788: u32
-    expr 51 index 768..781: u8
-    expr 52 index 768..778: [u8; 4]
-    expr 53 deref 768..775: [[u8; 4]]
-    expr 54 local rows 770..774: *const [[u8; 4]]
-    expr 55 int 2 776..777: usize
-    expr 56 int 3 779..780: usize
+    expr 42 unsafe 768..807: ()
+    expr 43 assign 777..804: ()
+    expr 44 index 777..787: u32
+    expr 45 deref 777..784: [u32]
+    expr 46 local regs 779..783: *mut volatile [u32]
+    expr 47 int 0 785..786: usize
+    expr 48 binary | 790..804: u32
+    expr 49 index 790..800: u32
+    expr 50 deref 790..797: [u32]
+    expr 51 local regs 792..796: *mut volatile [u32]
+    expr 52 int 1 798..799: usize
+    expr 53 int 1 803..804: u32
+    expr 54 unsafe 812..843: u32
+    expr 55 as u32 821..841: u32
+    expr 56 index 821..834: u8
+    expr 57 index 821..831: [u8; 4]
+    expr 58 deref 821..828: [[u8; 4]]
+    expr 59 local rows 823..827: *const [[u8; 4]]
+    expr 60 int 2 829..830: usize
+    expr 61 int 3 832..833: usize
 entry fn main() -> !
-    expr 57 loop 815..822: !
+    expr 62 loop 870..877: !
 panic fn on_panic() -> !
-    expr 58 loop 852..859: !
+    expr 63 loop 907..914: !

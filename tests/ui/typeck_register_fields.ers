@@ -94,11 +94,11 @@ fn fields() -> bool {
 
 // The same through a pointer to the peripheral type.
 fn through(u: *mut Uart, t: *mut Timer) -> u8 {
-    (*u).lcr.parity = false;
-    (*u).lcr.dlab |= true;
-    (*t).status.count -= 1;
-    (*t).status.done = true;
-    (*t).status.count
+    unsafe { (*u).lcr.parity = false; }
+    unsafe { (*u).lcr.dlab |= true; }
+    unsafe { (*t).status.count -= 1; }
+    unsafe { (*t).status.done = true; }
+    unsafe { (*t).status.count }
 }
 
 // Registers whose reads have effects, read explicitly: whole and by field,
@@ -119,12 +119,12 @@ fn effects() -> u8 {
 // effects, and field and compound assignments of types whose reads have
 // none, with `=` to a write-effect field.
 fn through_volatile(l: *mut volatile Lsr, s: *mut volatile Status, c: *mut volatile Lcr) -> bool {
-    let lsr: Lsr = *l;
-    *l = lsr;
-    (*s).count += 1;
-    (*s).overrun = true;
-    (*c).dlab = true;
-    (*l).overrun
+    let lsr: Lsr = unsafe { *l };
+    unsafe { *l = lsr; }
+    unsafe { (*s).count += 1; }
+    unsafe { (*s).overrun = true; }
+    unsafe { (*c).dlab = true; }
+    unsafe { (*l).overrun }
 }
 
 // In ordinary memory effects mean nothing.

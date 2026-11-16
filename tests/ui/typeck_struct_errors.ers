@@ -14,8 +14,8 @@ fn errors(p: *mut Point, v: *mut volatile Point, n: u32) {
     let w: u32 = n.x;
     let x: i32 = p.x;
     let same: bool = q == q;
-    let copy: Point = *v;
-    let y: i32 = (*v).y;
+    let copy: Point = unsafe { *v };
+    let y: i32 = unsafe { (*v).y };
 }
 
 fn by_value(p: Point) {}

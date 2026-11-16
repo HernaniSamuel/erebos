@@ -29,22 +29,24 @@ fn set_divisor(divisor: u16) -> ()
     expr 18 peripheral UART0 1029..1034: Uart16550
     expr 19 int 3 1041..1045: u8
 fn divisor(u: *mut Uart16550) -> u16
-    expr 20 binary | 1093..1133: u16
-    expr 21 as u16 1093..1108: u16
-    expr 22 register dll 1093..1101: u8
-    expr 23 deref 1093..1097: Uart16550
-    expr 24 local u 1095..1096: *mut Uart16550
-    expr 25 binary << 1111..1133: u16
-    expr 26 as u16 1111..1128: u16
-    expr 27 register dlm 1112..1120: u8
-    expr 28 deref 1112..1116: Uart16550
-    expr 29 local u 1114..1115: *mut Uart16550
-    expr 30 int 8 1132..1133: u16
+    expr 20 unsafe 1093..1144: u16
+    expr 21 binary | 1102..1142: u16
+    expr 22 as u16 1102..1117: u16
+    expr 23 register dll 1102..1110: u8
+    expr 24 deref 1102..1106: Uart16550
+    expr 25 local u 1104..1105: *mut Uart16550
+    expr 26 binary << 1120..1142: u16
+    expr 27 as u16 1120..1137: u16
+    expr 28 register dlm 1121..1129: u8
+    expr 29 deref 1121..1125: Uart16550
+    expr 30 local u 1123..1124: *mut Uart16550
+    expr 31 int 8 1141..1142: u16
 fn wide(w: *mut Wide) -> u32
-    expr 31 register wide 1172..1181: u32
-    expr 32 deref 1172..1176: Wide
-    expr 33 local w 1174..1175: *mut Wide
+    expr 32 unsafe 1183..1203: u32
+    expr 33 register wide 1192..1201: u32
+    expr 34 deref 1192..1196: Wide
+    expr 35 local w 1194..1195: *mut Wide
 entry fn main() -> !
-    expr 34 loop 1208..1215: !
+    expr 36 loop 1230..1237: !
 panic fn on_panic() -> !
-    expr 35 loop 1245..1252: !
+    expr 37 loop 1267..1274: !

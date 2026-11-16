@@ -5,8 +5,8 @@ fn errors(x: u32, n: u32, vp: *mut volatile [u8; 2]) {
     let c: [u8; 2] = [1, 2];
     let e: u8 = c[n];
     let f: bool = c == c;
-    let g: [u8; 2] = *vp;
-    *vp = c;
+    let g: [u8; 2] = unsafe { *vp };
+    unsafe { *vp = c; }
     [b'a', 2][0] = 3;
     let h: u32 = x[0];
     let i: u32 = [1, 2] as u32;
@@ -23,7 +23,7 @@ panic fn on_panic() -> ! { loop {} }
 
 fn huge_values(p: *const [u8; 3_000_000_000]) -> u8 {
     let a: u8 = [b'a'; 3_000_000_000][0];
-    let b: u8 = (*p)[1];
-    let c: u8 = p[1][0];
+    let b: u8 = unsafe { (*p)[1] };
+    let c: u8 = unsafe { p[1][0] };
     b
 }

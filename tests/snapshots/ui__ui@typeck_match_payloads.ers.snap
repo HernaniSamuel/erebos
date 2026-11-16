@@ -61,50 +61,51 @@ fn opaque_positions(b: Bag) -> u8
     let ptr: *const u8
     let s: *const [u8]
     let LIMIT: u8
-    expr 38 match 1919..2163: u8
+    expr 38 match 1919..2174: u8
     expr 39 local b 1925..1926: Bag
-    expr 40 block 2024..2075: u8
-    expr 41 binary + 2038..2065: u8
-    expr 42 binary + 2038..2055: u8
-    expr 43 binary + 2038..2048: u8
-    expr 44 field a 2038..2041: u8
-    expr 45 local p 2038..2039: Pair
-    expr 46 index 2044..2048: u8
-    expr 47 local a 2044..2045: [u8; 2]
-    expr 48 int 1 2046..2047: usize
-    expr 49 deref 2051..2055: u8
-    expr 50 local ptr 2052..2055: *const u8
-    expr 51 index 2058..2065: u8
-    expr 52 deref 2058..2062: [u8]
-    expr 53 local s 2060..2061: *const [u8]
-    expr 54 int 0 2063..2064: usize
-    expr 55 local LIMIT 2120..2125: u8
-    expr 56 int 0 2155..2156: u8
+    expr 40 block 2024..2086: u8
+    expr 41 unsafe 2038..2076: u8
+    expr 42 binary + 2047..2074: u8
+    expr 43 binary + 2047..2064: u8
+    expr 44 binary + 2047..2057: u8
+    expr 45 field a 2047..2050: u8
+    expr 46 local p 2047..2048: Pair
+    expr 47 index 2053..2057: u8
+    expr 48 local a 2053..2054: [u8; 2]
+    expr 49 int 1 2055..2056: usize
+    expr 50 deref 2060..2064: u8
+    expr 51 local ptr 2061..2064: *const u8
+    expr 52 index 2067..2074: u8
+    expr 53 deref 2067..2071: [u8]
+    expr 54 local s 2069..2070: *const [u8]
+    expr 55 int 0 2072..2073: usize
+    expr 56 local LIMIT 2131..2136: u8
+    expr 57 int 0 2166..2167: u8
 entry fn main() -> !
-    expr 57 loop 2190..2197: !
+    expr 58 loop 2201..2208: !
 panic fn on_panic() -> !
-    expr 58 loop 2227..2234: !
+    expr 59 loop 2238..2245: !
 comptime fn LIMIT() -> u8
-    expr 59 int 9 860..861: u8
+    expr 60 int 9 860..861: u8
 comptime fn RUN() -> Mode
-    expr 60 variant Mode::Run 881..890: Mode
+    expr 61 variant Mode::Run 881..890: Mode
 comptime fn ON() -> bool
-    expr 61 bool true 909..913: bool
+    expr 62 bool true 909..913: bool
 comptime fn Mode::Off() -> u8
-    expr 62 int 0 583..584: u8
+    expr 63 int 0 583..584: u8
 comptime fn Mode::Run() -> u8
-    expr 63 int 1 592..593: u8
+    expr 64 int 1 592..593: u8
 comptime fn Msg::Nop() -> u8
-    expr 64 int 0 651..652: u8
+    expr 65 int 0 651..652: u8
 comptime fn Msg::Led() -> u8
-    expr 65 int 1 670..671: u8
+    expr 66 int 1 670..671: u8
 comptime fn Msg::Write() -> u8
-    expr 66 int 2 694..695: u8
+    expr 67 int 2 694..695: u8
 comptime fn Msg::Wide() -> u8
-    expr 67 int 3 713..714: u8
+    expr 68 int 3 713..714: u8
 comptime fn Msg::SetMode() -> u8
-    expr 68 int 4 736..737: u8
+    expr 69 int 4 736..737: u8
 comptime fn Bag::Things() -> u8
-    expr 69 int 0 813..814: u8
+    expr 70 int 0 813..814: u8
 comptime fn Bag::Count() -> u8
-    expr 70 int 1 836..837: u8
+    expr 71 int 1 836..837: u8

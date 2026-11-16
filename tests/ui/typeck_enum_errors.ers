@@ -43,7 +43,7 @@ fn places(mut m: Mode, p: *const volatile Wide) {
     Mode::Run = m;
     let b: u8 = m.f;
     let c: usize = offset_of(Mode, f);
-    let d: Wide = *p;
+    let d: Wide = unsafe { *p };
 }
 
 struct Regs { mode: Mode }
@@ -57,8 +57,8 @@ fn quoted(mode: Mode, s: Regs, regs: *const Regs, p: *const Mode) {
     let b: bool = IDLE == 1;
     let c: bool = CURRENT != 1;
     let d: bool = s.mode == 1;
-    let e: bool = (*regs).mode == 1;
-    let f: bool = *p == 1;
+    let e: bool = unsafe { (*regs).mode == 1 };
+    let f: bool = unsafe { *p == 1 };
     let g: bool = 3 == mode;
 }
 

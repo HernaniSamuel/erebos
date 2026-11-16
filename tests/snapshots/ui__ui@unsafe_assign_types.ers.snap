@@ -7,20 +7,20 @@ input_file: tests/ui/unsafe_assign_types.ers
 ty::not-assignable
 
   × cannot assign to this expression
-    ╭─[unsafe_assign_types.ers:9:5]
-  8 │ fn assign(p: *mut u32) {
-  9 │     (unsafe { touch(); *p }) = 1;
-    ·     ────────────┬───────────
-    ·                 ╰── not a variable, `*pointer` or `a[index]`
- 10 │     ({ *p }) = 1;
-    ╰────
+   ╭─[unsafe_assign_types.ers:7:5]
+ 6 │ fn assign(p: *mut u32) {
+ 7 │     (unsafe { *p }) = 1;
+   ·     ───────┬───────
+   ·            ╰── not a variable, `*pointer` or `a[index]`
+ 8 │     unsafe { ({ *p }) = 1; }
+   ╰────
 ty::not-assignable
 
   × cannot assign to this expression
-    ╭─[unsafe_assign_types.ers:10:5]
-  9 │     (unsafe { touch(); *p }) = 1;
- 10 │     ({ *p }) = 1;
-    ·     ────┬───
-    ·         ╰── not a variable, `*pointer` or `a[index]`
- 11 │     unsafe { touch(); *p = 1; }
-    ╰────
+   ╭─[unsafe_assign_types.ers:8:14]
+ 7 │     (unsafe { *p }) = 1;
+ 8 │     unsafe { ({ *p }) = 1; }
+   ·              ────┬───
+   ·                  ╰── not a variable, `*pointer` or `a[index]`
+ 9 │     unsafe { *p = 1; }
+   ╰────

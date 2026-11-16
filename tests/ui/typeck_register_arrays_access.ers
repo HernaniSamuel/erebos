@@ -33,15 +33,15 @@ peripheral Plic {
 peripheral PLIC: Plic at 0x0C00_0000;
 
 fn serve(c: *mut Context) -> u32 {
-    (*c).threshold = 3;
-    (*c).threshold += 1;
-    (*c).inner.word[1] = 9;
-    (*c).inner.ctl[0].enable = true;
-    (*c).claim
+    unsafe { (*c).threshold = 3; }
+    unsafe { (*c).threshold += 1; }
+    unsafe { (*c).inner.word[1] = 9; }
+    unsafe { (*c).inner.ctl[0].enable = true; }
+    unsafe { (*c).claim }
 }
 
 fn view(c: *const Context) -> u32 {
-    (*c).threshold + (*c).inner.word[2]
+    unsafe { (*c).threshold + (*c).inner.word[2] }
 }
 
 fn registers(i: usize, v: u32) -> u32 {
@@ -59,9 +59,9 @@ fn registers(i: usize, v: u32) -> u32 {
 }
 
 fn through(p: *mut Plic, q: *const Plic, i: usize) -> u32 {
-    (*p).priority[i] = 1;
-    (*p).ctx[i].inner.word[0] = 2;
-    (*q).priority[i] + (*q).ctx[1].threshold + (*q).first.claim
+    unsafe { (*p).priority[i] = 1; }
+    unsafe { (*p).ctx[i].inner.word[0] = 2; }
+    unsafe { (*q).priority[i] + (*q).ctx[1].threshold + (*q).first.claim }
 }
 
 fn pointers(i: usize) -> u32 {
@@ -70,7 +70,7 @@ fn pointers(i: usize) -> u32 {
     let c: *const Context = &raw const PLIC.first;
     let d: *mut Context = &raw mut PLIC.first;
     let e: *mut Inner = &raw mut PLIC.ctx[i].inner;
-    serve(a) + view(b) + view(c) + serve(d) + (*e).word[0]
+    unsafe { serve(a) + view(b) + view(c) + serve(d) + (*e).word[0] }
 }
 
 entry fn main() -> ! { loop {} }

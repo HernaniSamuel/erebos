@@ -23,16 +23,16 @@ ty::mismatched-types
  24 │     let p: *const Broken = 0 as *const u8;
     ·                            ───────┬──────
     ·                                   ╰── expected `*const Broken`, found `*const u8`
- 25 │     (*p).z
+ 25 │     unsafe { (*p).z }
     ╰────
 ty::unknown-field
 
   × `Broken` has no field `z`
-    ╭─[typeck_failed_length_values.ers:25:10]
+    ╭─[typeck_failed_length_values.ers:25:19]
  24 │     let p: *const Broken = 0 as *const u8;
- 25 │     (*p).z
-    ·          ┬
-    ·          ╰── unknown field
+ 25 │     unsafe { (*p).z }
+    ·                   ┬
+    ·                   ╰── unknown field
  26 │ }
     ╰────
   help: its fields are `x`, `y`

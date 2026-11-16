@@ -97,7 +97,7 @@ fn through_volatile(r: &volatile Ring, m: &mut volatile Ring) -> usize {
 
 // A reference to a pointer is indexed as the pointer is.
 fn pointers(r: &*const u8, h: &Holder) -> u8 {
-    r[1] + h.p[0]
+    unsafe { r[1] + h.p[0] }
 }
 
 // The base is any expression of a reference type.
@@ -117,9 +117,9 @@ fn explicit(m: &mut Ring) -> usize {
 
 // A raw pointer to an array keeps its arithmetic: `p[i]` is the next array.
 fn raw(p: *const [u8; 4], q: *mut [u8; 4]) -> u8 {
-    q[1][0] = 1;
-    (*q)[0] = 1;
-    p[1][0] + (*p)[2]
+    unsafe { q[1][0] = 1; }
+    unsafe { (*q)[0] = 1; }
+    unsafe { p[1][0] + (*p)[2] }
 }
 
 // The same function written both ways.

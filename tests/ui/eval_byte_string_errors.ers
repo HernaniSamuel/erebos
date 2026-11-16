@@ -16,8 +16,8 @@ const PAST_END: *const u8 = &raw const (&raw const b"ok" as *const u8)[3];
 
 fn write() -> u8 {
     let p: *mut u8 = &raw const b"abc" as *mut u8;
-    p[1] = b'x';
-    p[1]
+    unsafe { p[1] = b'x'; }
+    unsafe { p[1] }
 }
 
 fn with_local() -> bool {

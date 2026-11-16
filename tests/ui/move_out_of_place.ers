@@ -40,17 +40,17 @@ fn array_elements(a: [Handle; 2], i: usize) {
 
 // Rejected: a place through a pointer.
 fn pointers(p: *mut Handle, q: *mut [Handle; 2], s: *mut [Handle], h: *mut Holder, i: usize) {
-    let a: Handle = *p;
-    let b: Handle = (*q)[i];
-    let c: Handle = (*s)[i];
-    let d: Handle = (*h).h;
-    let e: Handle = p[i];
-    let f: Handle = (*h).items[1];
+    let a: Handle = unsafe { *p };
+    let b: Handle = unsafe { (*q)[i] };
+    let c: Handle = unsafe { (*s)[i] };
+    let d: Handle = unsafe { (*h).h };
+    let e: Handle = unsafe { p[i] };
+    let f: Handle = unsafe { (*h).items[1] };
 }
 
 // Rejected: a place through a pointer, of a linear type.
 fn linear_pointer(p: *mut Ticket) {
-    let t: Ticket = *p;
+    let t: Ticket = unsafe { *p };
 }
 
 // Rejected: a static, or a part of one.
@@ -63,9 +63,9 @@ fn statics() {
 // Rejected: the arguments, the returned value and a literal's field read
 // the whole value as well.
 fn uses(p: *mut Handle) -> Handle {
-    take(*p);
-    let h: Holder = Holder { h: *p, n: 0, items: [*p, *p], plain: Plain { n: 0 } };
-    *p
+    unsafe { take(*p); }
+    let h: Holder = unsafe { Holder { h: *p, n: 0, items: [*p, *p], plain: Plain { n: 0 } } };
+    unsafe { *p }
 }
 
 fn take(h: Handle) {}
@@ -74,17 +74,17 @@ fn take(h: Handle) {}
 fn copy_fields(a: [Holder; 2], p: *mut Holder, i: usize) {
     let a1: u32 = a[i].n;
     let a2: Plain = a[0].plain;
-    let b1: u32 = (*p).n;
-    let b2: Plain = (*p).plain;
+    let b1: u32 = unsafe { (*p).n };
+    let b2: Plain = unsafe { (*p).plain };
     let c1: u32 = SHOLDER.n;
     let c2: Plain = SHOLDER.plain;
     let c3: u32 = SH.n;
-    let d: u32 = (*p).items[0].n;
+    let d: u32 = unsafe { (*p).items[0].n };
 }
 
 // Accepted: a value is written through a pointer, an element or a static.
 fn writes(p: *mut Handle, mut a: [Handle; 2], v: Handle) {
-    *p = v;
+    unsafe { *p = v; }
     a[0] = Handle { n: 1 };
     SH = Handle { n: 2 };
 }
@@ -115,10 +115,10 @@ fn matches(p: *mut Msg, a: [Msg; 2], m: Msg) -> u32 {
         .Num(let n: u32) => n,
         .Empty => 0,
     };
-    let from_pointer: u32 = match *p {
+    let from_pointer: u32 = unsafe { match *p {
         .Data(let h: Handle) => h.n,
         _ => 0,
-    };
+    } };
     let from_element: u32 = match a[1] {
         .Data(let h: Handle) => h.n,
         _ => 0,
@@ -127,11 +127,11 @@ fn matches(p: *mut Msg, a: [Msg; 2], m: Msg) -> u32 {
         .Num(let n: u32) => n,
         _ => 0,
     };
-    let no_binding: u32 = match *p {
+    let no_binding: u32 = unsafe { match *p {
         .Data(_) => 1,
         .Num(7) => 2,
         _ => 0,
-    };
+    } };
     match m {
         .Data(let h: Handle) => h.n,
         _ => copy_payload,
@@ -141,16 +141,16 @@ fn matches(p: *mut Msg, a: [Msg; 2], m: Msg) -> u32 {
 // Rejected: only a place, or a block ending with one, is discarded without
 // being read; an `if` chooses a value, and a block that is a value moves it.
 fn read(p: *mut Handle) {
-    if true { *p } else { *p };
-    let h: Handle = { *p };
+    unsafe { if true { *p } else { *p }; }
+    let h: Handle = unsafe { { *p } };
 }
 
 // Rejected as a volatile read of an aggregate, as it is today.
 fn volatile_match(p: *mut volatile Msg) -> u32 {
-    match *p {
+    unsafe { match *p {
         .Num(let n: u32) => n,
         _ => 0,
-    }
+    } }
 }
 
 entry fn main() -> ! {

@@ -66,7 +66,7 @@ fn repeat_use() -> u32 {
 
 // `ty::move-out-of-place`, in bodies that also name the faults above.
 fn from_pointer(p: *mut Handle) -> Handle {
-    *p
+    unsafe { *p }
 }
 
 fn from_static() -> Handle {
@@ -88,7 +88,7 @@ static BAD_STATIC: Bad = Bad { h: Handle { id: 1 } };
 fn bad_uses(p: *mut Bad) -> u32 {
     let a: Bad = BAD;
     let b: Bad = BAD_STATIC;
-    let c: Bad = *p;
+    let c: Bad = unsafe { *p };
     BAD.h.id
 }
 

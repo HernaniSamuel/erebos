@@ -24,7 +24,9 @@ pub const SCRATCH: usize = 0x8100_0000;
 
 // Writes one byte to the UART.
 pub fn putc(byte: u8) {
-    *UART = byte;
+    // Sound: `UART` is the address of the transmit register of the machine's
+    // UART, and a byte written there only sends it.
+    unsafe { *UART = byte; }
 }
 
 // Writes the bytes of `s` to the UART, in order, through `putc` (ADR 0117).
@@ -38,6 +40,8 @@ pub fn print(s: &[u8]) {
 
 // Stops QEMU: 0 passes, any other code fails with it as the exit status.
 pub fn exit(code: u32) -> ! {
-    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    // Sound: `FINISHER` is the address of the machine's test finisher, which
+    // stops QEMU with the code written.
+    unsafe { *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 }; }
     loop {}
 }

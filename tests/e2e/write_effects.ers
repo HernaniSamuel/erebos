@@ -83,70 +83,70 @@ entry fn main() -> ! {
 
     // `overrun` and `done` set, `count` 5: both flags are written 0, and
     // `start` and `level` ones.
-    *status = 0x0003_0500;
-    (*timer).status.enable = true;
+    unsafe { *status = 0x0003_0500; }
+    unsafe { (*timer).status.enable = true; }
     print(&b"field");
-    print_hex(*status);
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
     // Assigned, `overrun` gets its 1; `done` gets its neutral 0.
-    *status = 0x0003_0000;
-    (*timer).status.overrun = true;
+    unsafe { *status = 0x0003_0000; }
+    unsafe { (*timer).status.overrun = true; }
     print(&b"effect field");
-    print_hex(*status);
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
-    *status = 0x0003_0500;
-    (*timer).status.count += 2;
+    unsafe { *status = 0x0003_0500; }
+    unsafe { (*timer).status.count += 2; }
     print(&b"compound");
-    print_hex(*status);
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
     // Every bit of the old value is gone; reserved bits are 0.
-    *status = 0xFFFF_FFFF;
-    (*timer).status = Status { enable: true, .. };
+    unsafe { *status = 0xFFFF_FFFF; }
+    unsafe { (*timer).status = Status { enable: true, .. }; }
     print(&b"literal");
-    print_hex(*status);
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
     // Written back as read: both flags written 1.
-    *status = 0x0003_0500;
-    let read: Status = (*timer).status;
-    *status = 0;
-    (*timer).status = read;
+    unsafe { *status = 0x0003_0500; }
+    let read: Status = unsafe { (*timer).status };
+    unsafe { *status = 0; }
+    unsafe { (*timer).status = read; }
     print(&b"whole");
-    print_hex(*status);
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
-    *status = 0x0003_0500;
-    let mut copy: Status = (*timer).status;
+    unsafe { *status = 0x0003_0500; }
+    let mut copy: Status = unsafe { (*timer).status };
     copy.enable = true;
-    *status = 0;
-    (*timer).status = copy;
+    unsafe { *status = 0; }
+    unsafe { (*timer).status = copy; }
     print(&b"local");
     print_hex(copy as u32);
-    print_hex(*status);
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
     let v: *mut volatile Status = status as *mut volatile Status;
-    *status = 0x0003_0500;
-    (*v).enable = true;
+    unsafe { *status = 0x0003_0500; }
+    unsafe { (*v).enable = true; }
     print(&b"volatile");
-    print_hex(*status);
-    *status = 0x0003_0000;
-    (*v).done = true;
-    print_hex(*status);
+    unsafe { print_hex(*status); }
+    unsafe { *status = 0x0003_0000; }
+    unsafe { (*v).done = true; }
+    unsafe { print_hex(*status); }
     putc(b'\n');
 
     // 2 is no variant of `Mode`.
     let second: *mut volatile u32 = word(1);
-    *second = 2;
-    let mode: Mode = (*timer).mode;
+    unsafe { *second = 2; }
+    let mode: Mode = unsafe { (*timer).mode };
     print(&b"mode ");
     print_u64(mode as u64);
     print(mode_name(mode));
-    (*timer).mode = .Auto;
-    print_hex(*second);
+    unsafe { (*timer).mode = .Auto; }
+    unsafe { print_hex(*second); }
     putc(b'\n');
     exit(0)
 }

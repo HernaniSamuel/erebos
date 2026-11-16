@@ -10,8 +10,8 @@ struct Point { x: u32, y: u32 }
 struct Descriptor { addr: u32 }
 
 fn packed(h: *mut Header) -> u32 {
-    (*h).len = 1;
-    (*h).inner.y
+    unsafe { (*h).len = 1; }
+    unsafe { (*h).inner.y }
 }
 
 fn aligned() -> usize {

@@ -58,7 +58,7 @@ fn accepted(c: bool) -> u32 {
     let s: &u32 = loop {
         break &b;
     };
-    take(r) + take(&*p) + take(s)
+    unsafe { take(r) + take(&*p) + take(s) }
 }
 
 entry fn main() -> ! {

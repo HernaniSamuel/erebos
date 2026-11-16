@@ -38,7 +38,7 @@ comptime {
     assert(RUN_TIME as usize == 0x0C00_1100);
 }
 
-const THROUGH: u32 = (*SECOND).threshold;
+const THROUGH: u32 = unsafe { (*SECOND).threshold };
 
 const DIRECT: u32 = PLIC.priority[1];
 

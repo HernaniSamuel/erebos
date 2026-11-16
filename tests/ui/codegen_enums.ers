@@ -23,7 +23,7 @@ fn level(l: Level) -> Level {
 }
 
 fn select(reg: *mut volatile Port) {
-    *reg = Port::Data;
+    unsafe { *reg = Port::Data; }
 }
 
 fn set(m: Mode) {

@@ -307,10 +307,10 @@ ty::reference-position
   × a reference cannot be the type of a constant
      ╭─[returned_reference_signature_errors.ers:112:16]
  111 │ // The type of a constant or a static is not a return type.
- 112 │ const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+ 112 │ const MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
      ·                ────┬───
      ·                    ╰── `&mut u32` is a reference
- 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+ 113 │ const VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
      ╰────
   help: a static or a constant holds a value computed at compile time, which is never a reference
         (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
@@ -319,10 +319,10 @@ ty::non-copy-constant
   × the constant `MUTABLE` is of the non-copy type `&mut u32`
      ╭─[returned_reference_signature_errors.ers:112:16]
  111 │ // The type of a constant or a static is not a return type.
- 112 │ const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+ 112 │ const MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
      ·                ────┬───
      ·                    ╰── `&mut u32` is not copy
- 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+ 113 │ const VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
      ╰────
   help: mark `&mut u32` with `#[copy]` if its values may be duplicated, or declare a `static`,
         whose initializer may be of any type (ADR 0096)
@@ -330,11 +330,11 @@ ty::reference-position
 
   × a reference cannot be the type of a constant
      ╭─[returned_reference_signature_errors.ers:113:17]
- 112 │ const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
- 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+ 112 │ const MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
+ 113 │ const VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
      ·                 ──────┬──────
      ·                       ╰── `&volatile u32` is a reference
- 114 │ static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+ 114 │ static HELD_MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
      ╰────
   help: a static or a constant holds a value computed at compile time, which is never a reference
         (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
@@ -342,11 +342,11 @@ ty::reference-position
 
   × a reference cannot be the type of a static
      ╭─[returned_reference_signature_errors.ers:114:22]
- 113 │ const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
- 114 │ static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
+ 113 │ const VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
+ 114 │ static HELD_MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
      ·                      ────┬───
      ·                          ╰── `&mut u32` is a reference
- 115 │ static HELD_VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+ 115 │ static HELD_VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
      ╰────
   help: a static or a constant holds a value computed at compile time, which is never a reference
         (ADR 0094, 0105); keep a raw pointer, `*const T` or `*mut T`, instead
@@ -354,8 +354,8 @@ ty::reference-position
 
   × a reference cannot be the type of a static
      ╭─[returned_reference_signature_errors.ers:115:23]
- 114 │ static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
- 115 │ static HELD_VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+ 114 │ static HELD_MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
+ 115 │ static HELD_VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
      ·                       ──────┬──────
      ·                             ╰── `&volatile u32` is a reference
  116 │ 

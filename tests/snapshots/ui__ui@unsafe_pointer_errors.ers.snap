@@ -1,0 +1,1238 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_pointer_errors.ers
+---
+--- errors ---
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:56:20]
+ 55 │ fn reads(p: *const u32, pair: *const Pair, a: *const [u8; 4], s: *const [u8], i: usize) -> u32 {
+ 56 │     let one: u32 = *p;
+    ·                    ─┬
+    ·                     ╰── this dereferences a raw pointer
+ 57 │     let two: u32 = p[i];
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:57:20]
+ 56 │     let one: u32 = *p;
+ 57 │     let two: u32 = p[i];
+    ·                    ──┬─
+    ·                      ╰── this dereferences a raw pointer
+ 58 │     let three: u32 = (*pair).a;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:58:22]
+ 57 │     let two: u32 = p[i];
+ 58 │     let three: u32 = (*pair).a;
+    ·                      ───┬───
+    ·                         ╰── this dereferences a raw pointer
+ 59 │     let four: u8 = (*a)[i];
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:59:20]
+ 58 │     let three: u32 = (*pair).a;
+ 59 │     let four: u8 = (*a)[i];
+    ·                    ──┬─
+    ·                      ╰── this dereferences a raw pointer
+ 60 │     let five: u8 = (*s)[i];
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:60:20]
+ 59 │     let four: u8 = (*a)[i];
+ 60 │     let five: u8 = (*s)[i];
+    ·                    ──┬─
+    ·                      ╰── this dereferences a raw pointer
+ 61 │     one + two + three + four as u32 + five as u32
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:65:5]
+ 64 │ fn writes(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4], s: *mut [u8], i: usize) {
+ 65 │     *p = 1;
+    ·     ─┬
+    ·      ╰── this dereferences a raw pointer
+ 66 │     p[i] = 2;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:66:5]
+ 65 │     *p = 1;
+ 66 │     p[i] = 2;
+    ·     ──┬─
+    ·       ╰── this dereferences a raw pointer
+ 67 │     (*pair).b = 3;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:67:5]
+ 66 │     p[i] = 2;
+ 67 │     (*pair).b = 3;
+    ·     ───┬───
+    ·        ╰── this dereferences a raw pointer
+ 68 │     (*a)[i] = 4;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:68:5]
+ 67 │     (*pair).b = 3;
+ 68 │     (*a)[i] = 4;
+    ·     ──┬─
+    ·       ╰── this dereferences a raw pointer
+ 69 │     (*s)[i] = 5;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:69:5]
+ 68 │     (*a)[i] = 4;
+ 69 │     (*s)[i] = 5;
+    ·     ──┬─
+    ·       ╰── this dereferences a raw pointer
+ 70 │ }
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:73:5]
+ 72 │ fn updates(p: *mut u32, pair: *mut Pair, s: *mut [u8], i: usize) {
+ 73 │     *p += 1;
+    ·     ─┬
+    ·      ╰── this dereferences a raw pointer
+ 74 │     p[i] |= 2;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:74:5]
+ 73 │     *p += 1;
+ 74 │     p[i] |= 2;
+    ·     ──┬─
+    ·       ╰── this dereferences a raw pointer
+ 75 │     (*pair).a -= 1;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:75:5]
+ 74 │     p[i] |= 2;
+ 75 │     (*pair).a -= 1;
+    ·     ───┬───
+    ·        ╰── this dereferences a raw pointer
+ 76 │     (*s)[i] ^= 1;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:76:5]
+ 75 │     (*pair).a -= 1;
+ 76 │     (*s)[i] ^= 1;
+    ·     ──┬─
+    ·       ╰── this dereferences a raw pointer
+ 77 │ }
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:80:24]
+ 79 │ fn ranges(s: *const [u8], t: *mut [u8]) {
+ 80 │     let part: &[u8] = &(*s)[1..3];
+    ·                        ──┬─
+    ·                          ╰── this dereferences a raw pointer
+ 81 │     let from: &[u8] = &(*s)[2..];
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:81:24]
+ 80 │     let part: &[u8] = &(*s)[1..3];
+ 81 │     let from: &[u8] = &(*s)[2..];
+    ·                        ──┬─
+    ·                          ╰── this dereferences a raw pointer
+ 82 │     let upto: &mut [u8] = &mut (*t)[..2];
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:82:32]
+ 81 │     let from: &[u8] = &(*s)[2..];
+ 82 │     let upto: &mut [u8] = &mut (*t)[..2];
+    ·                                ──┬─
+    ·                                  ╰── this dereferences a raw pointer
+ 83 │ }
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:86:20]
+ 85 │ fn borrows(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4]) {
+ 86 │     let r: &u32 = &*p;
+    ·                    ─┬
+    ·                     ╰── this dereferences a raw pointer
+ 87 │     let m: &mut u32 = &mut *p;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:87:28]
+ 86 │     let r: &u32 = &*p;
+ 87 │     let m: &mut u32 = &mut *p;
+    ·                            ─┬
+    ·                             ╰── this dereferences a raw pointer
+ 88 │     let f: &mut u32 = &mut (*pair).a;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:88:28]
+ 87 │     let m: &mut u32 = &mut *p;
+ 88 │     let f: &mut u32 = &mut (*pair).a;
+    ·                            ───┬───
+    ·                               ╰── this dereferences a raw pointer
+ 89 │     let e: &mut u8 = &mut (*a)[1];
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:89:27]
+ 88 │     let f: &mut u32 = &mut (*pair).a;
+ 89 │     let e: &mut u8 = &mut (*a)[1];
+    ·                           ──┬─
+    ·                             ╰── this dereferences a raw pointer
+ 90 │ }
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:93:5]
+ 92 │ fn volatiles(v: *mut volatile u32, w: *const volatile [u8; 2]) -> u32 {
+ 93 │     *v = 1;
+    ·     ─┬
+    ·      ╰── this dereferences a raw pointer
+ 94 │     *v += 1;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:94:5]
+ 93 │     *v = 1;
+ 94 │     *v += 1;
+    ·     ─┬
+    ·      ╰── this dereferences a raw pointer
+ 95 │     let r: &volatile u32 = &*v;
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:95:29]
+ 94 │     *v += 1;
+ 95 │     let r: &volatile u32 = &*v;
+    ·                             ─┬
+    ·                              ╰── this dereferences a raw pointer
+ 96 │     (*w)[0] as u32
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+    ╭─[unsafe_pointer_errors.ers:96:5]
+ 95 │     let r: &volatile u32 = &*v;
+ 96 │     (*w)[0] as u32
+    ·     ──┬─
+    ·       ╰── this dereferences a raw pointer
+ 97 │ }
+    ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:100:5]
+  99 │ fn registers(u: *mut Uart, i: usize) -> u32 {
+ 100 │     (*u).ctrl = 1;
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 101 │     (*u).ctrl |= 2;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:101:5]
+ 100 │     (*u).ctrl = 1;
+ 101 │     (*u).ctrl |= 2;
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 102 │     (*u).data[i] = 7;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:102:5]
+ 101 │     (*u).ctrl |= 2;
+ 102 │     (*u).data[i] = 7;
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 103 │     (*u).status
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:103:5]
+ 102 │     (*u).data[i] = 7;
+ 103 │     (*u).status
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 104 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:107:5]
+ 106 │ fn methods(r: *mut Reg) -> u32 {
+ 107 │     (*r).set(1);
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 108 │     let a: u32 = (*r).get();
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:108:18]
+ 107 │     (*r).set(1);
+ 108 │     let a: u32 = (*r).get();
+     ·                  ──┬─
+     ·                    ╰── this dereferences a raw pointer
+ 109 │     let b: u32 = (*r).take();
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:109:18]
+ 108 │     let a: u32 = (*r).get();
+ 109 │     let b: u32 = (*r).take();
+     ·                  ──┬─
+     ·                    ╰── this dereferences a raw pointer
+ 110 │     a + b
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:115:20]
+ 114 │ fn two(p: *const u32, q: *const u32, n: *mut Node) -> u32 {
+ 115 │     let sum: u32 = *p + *q;
+     ·                    ─┬
+     ·                     ╰── this dereferences a raw pointer
+ 116 │     let second: u32 = (*(*n).next).value;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:115:25]
+ 114 │ fn two(p: *const u32, q: *const u32, n: *mut Node) -> u32 {
+ 115 │     let sum: u32 = *p + *q;
+     ·                         ─┬
+     ·                          ╰── this dereferences a raw pointer
+ 116 │     let second: u32 = (*(*n).next).value;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:116:23]
+ 115 │     let sum: u32 = *p + *q;
+ 116 │     let second: u32 = (*(*n).next).value;
+     ·                       ──────┬─────
+     ·                             ╰── this dereferences a raw pointer
+ 117 │     (*(*n).next).items[1] = 2;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:116:25]
+ 115 │     let sum: u32 = *p + *q;
+ 116 │     let second: u32 = (*(*n).next).value;
+     ·                         ──┬─
+     ·                           ╰── this dereferences a raw pointer
+ 117 │     (*(*n).next).items[1] = 2;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:117:5]
+ 116 │     let second: u32 = (*(*n).next).value;
+ 117 │     (*(*n).next).items[1] = 2;
+     ·     ──────┬─────
+     ·           ╰── this dereferences a raw pointer
+ 118 │     sum + second
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:117:7]
+ 116 │     let second: u32 = (*(*n).next).value;
+ 117 │     (*(*n).next).items[1] = 2;
+     ·       ──┬─
+     ·         ╰── this dereferences a raw pointer
+ 118 │     sum + second
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:122:5]
+ 121 │ fn pointer_to_pointer(pp: *const *const u32) -> u32 {
+ 122 │     **pp
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 123 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:122:6]
+ 121 │ fn pointer_to_pointer(pp: *const *const u32) -> u32 {
+ 122 │     **pp
+     ·      ─┬─
+     ·       ╰── this dereferences a raw pointer
+ 123 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × borrowing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:127:10]
+ 126 │ fn tied(r: &mut Pair, p: *mut Pair) -> &mut u32 {
+ 127 │     &mut (*p).b
+     ·          ──┬─
+     ·            ╰── this dereferences a raw pointer
+ 128 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:133:5]
+ 132 │ fn from_c() -> u32 {
+ 133 │     *c_pointer()
+     ·     ──────┬─────
+     ·           ╰── this dereferences a raw pointer
+ 134 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × calling `extern fn c_pointer` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:133:6]
+ 132 │ fn from_c() -> u32 {
+ 133 │     *c_pointer()
+     ·      ─────┬─────
+     ·           ╰── this calls an `extern fn`
+ 134 │ }
+     ╰────
+  help: the compiler checks nothing of what an `extern fn` does, or of whether its declaration
+        matches its definition: call it inside an `unsafe { }` block, after checking that it is
+        sound (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:137:5]
+ 136 │ fn from_c_static() -> u32 {
+ 137 │     c_cursor[0]
+     ·     ─────┬─────
+     ·          ╰── this dereferences a raw pointer
+ 138 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_cursor` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:137:5]
+ 136 │ fn from_c_static() -> u32 {
+ 137 │     c_cursor[0]
+     ·     ────┬───
+     ·         ╰── this reads an `extern static`
+ 138 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:141:5]
+ 140 │ fn write_through_c_static() {
+ 141 │     c_cursor[0] = 1;
+     ·     ─────┬─────
+     ·          ╰── this dereferences a raw pointer
+ 142 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading `extern static c_cursor` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:141:5]
+ 140 │ fn write_through_c_static() {
+ 141 │     c_cursor[0] = 1;
+     ·     ────┬───
+     ·         ╰── this reads an `extern static`
+ 142 │ }
+     ╰────
+  help: the compiler does not see what defines an `extern static`, or who else writes it: access
+        it inside an `unsafe { }` block, after checking that it is sound; `&raw const` of it needs
+        no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:147:5]
+ 146 │     unsafe { *p = 1; }
+ 147 │     *q = 2;
+     ·     ─┬
+     ·      ╰── this dereferences a raw pointer
+ 148 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:152:38]
+ 151 │ fn branches(p: *mut u32, flag: bool) -> u32 {
+ 152 │     if flag { unsafe { *p } } else { *p }
+     ·                                      ─┬
+     ·                                       ╰── this dereferences a raw pointer
+ 153 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:157:9]
+ 156 │     critical {
+ 157 │         *p += 1;
+     ·         ─┬
+     ·          ╰── this dereferences a raw pointer
+ 158 │     }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:162:5]
+ 161 │ unsafe fn contract(p: *mut u32, n: usize) {
+ 162 │     *p = 1;
+     ·     ─┬
+     ·      ╰── this dereferences a raw pointer
+ 163 │     p[n] = 2;
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119); the body of an `unsafe fn` is not an
+        `unsafe` block, so it needs its own
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:163:5]
+ 162 │     *p = 1;
+ 163 │     p[n] = 2;
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 164 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119); the body of an `unsafe fn` is not an
+        `unsafe` block, so it needs its own
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:168:5]
+ 167 │     unsafe { *p = 1; }
+ 168 │     p[n] = 2;
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 169 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119); the body of an `unsafe fn` is not an
+        `unsafe` block, so it needs its own
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:172:20]
+ 171 │ // At compile time too: the check is made before the evaluator runs.
+ 172 │ const FIRST: u32 = *(0x2000_0000 as *const u32);
+     ·                    ──────────────┬─────────────
+     ·                                  ╰── this dereferences a raw pointer
+ 173 │ static BYTES: [u8; 2] = [(0 as *const u8)[0], 0];
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:173:26]
+ 172 │ const FIRST: u32 = *(0x2000_0000 as *const u32);
+ 173 │ static BYTES: [u8; 2] = [(0 as *const u8)[0], 0];
+     ·                          ─────────┬─────────
+     ·                                   ╰── this dereferences a raw pointer
+ 174 │ 
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:175:22]
+ 174 │ 
+ 175 │ fn lengths() -> [u8; (*(0 as *const usize))] {
+     ·                      ───────────┬──────────
+     ·                                 ╰── this dereferences a raw pointer
+ 176 │     [0; 1]
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:187:23]
+ 186 │     let outside: u32 = *diverges();
+ 187 │     let inside: u32 = unsafe { *diverges() };
+     ·                       ───┬──
+     ·                          ╰── nothing in it needs `unsafe`
+ 188 │     outside + inside
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::slice-pointer-index
+
+  × cannot index the slice `*const [u8]` itself
+     ╭─[unsafe_pointer_errors.ers:194:23]
+ 193 │ fn not_indexable(s: *const [u8], u: *mut Uart) {
+ 194 │     let outside: u8 = s[0];
+     ·                       ┬
+     ·                       ╰── a slice, not a pointer to its elements
+ 195 │     let inside: u8 = unsafe { s[0] };
+     ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *const u8)[i]` (ADR 0031)
+ty::slice-pointer-index
+
+  × cannot index the slice `*const [u8]` itself
+     ╭─[unsafe_pointer_errors.ers:195:31]
+ 194 │     let outside: u8 = s[0];
+ 195 │     let inside: u8 = unsafe { s[0] };
+     ·                               ┬
+     ·                               ╰── a slice, not a pointer to its elements
+ 196 │     let range: *const [u8] = &raw const s[1..2];
+     ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *const u8)[i]` (ADR 0031)
+ty::slice-pointer-index
+
+  × cannot take a range of the slice `*const [u8]` itself
+     ╭─[unsafe_pointer_errors.ers:196:41]
+ 195 │     let inside: u8 = unsafe { s[0] };
+ 196 │     let range: *const [u8] = &raw const s[1..2];
+     ·                                         ┬
+     ·                                         ╰── a slice, not an array or a place of type `[T]`
+ 197 │     let register: u32 = u[1];
+     ╰────
+  help: take the range of what it points to, checked against its length: `(*s)[a..b]` (ADR 0031,
+        0108)
+ty::peripheral-index
+
+  × cannot index `*mut Uart`, a pointer to a peripheral type
+     ╭─[unsafe_pointer_errors.ers:197:25]
+ 196 │     let range: *const [u8] = &raw const s[1..2];
+ 197 │     let register: u32 = u[1];
+     ·                         ┬
+     ·                         ╰── `Uart` has no size, so no stride
+ 198 │ }
+     ╰────
+  help: a pointer to a peripheral type reaches one device, whose registers are reached as in
+        `(*u).NAME`; for another device of type `Uart`, use a pointer to it (ADR 0058)
+ty::no-fields
+
+  × `*mut Pair` has no fields
+     ╭─[unsafe_pointer_errors.ers:203:26]
+ 202 │ fn field_of_a_pointer(p: *mut Pair, u: *mut Uart) -> u32 {
+ 203 │     let outside: u32 = p.a;
+     ·                          ┬
+     ·                          ╰── no such field
+ 204 │     let inside: u32 = unsafe { p.a };
+     ╰────
+  help: dereference the pointer first: `(*p).a` (ADR 0021)
+ty::no-fields
+
+  × `*mut Pair` has no fields
+     ╭─[unsafe_pointer_errors.ers:204:34]
+ 203 │     let outside: u32 = p.a;
+ 204 │     let inside: u32 = unsafe { p.a };
+     ·                                  ┬
+     ·                                  ╰── no such field
+ 205 │     let register_outside: u32 = u.ctrl;
+     ╰────
+  help: dereference the pointer first: `(*p).a` (ADR 0021)
+ty::no-fields
+
+  × `*mut Uart` has no fields
+     ╭─[unsafe_pointer_errors.ers:205:35]
+ 204 │     let inside: u32 = unsafe { p.a };
+ 205 │     let register_outside: u32 = u.ctrl;
+     ·                                   ──┬─
+     ·                                     ╰── no such field
+ 206 │     let register_inside: u32 = unsafe { u.ctrl };
+     ╰────
+  help: dereference the pointer first: `(*p).ctrl` (ADR 0021)
+ty::no-fields
+
+  × `*mut Uart` has no fields
+     ╭─[unsafe_pointer_errors.ers:206:43]
+ 205 │     let register_outside: u32 = u.ctrl;
+ 206 │     let register_inside: u32 = unsafe { u.ctrl };
+     ·                                           ──┬─
+     ·                                             ╰── no such field
+ 207 │     outside + inside + register_outside + register_inside
+     ╰────
+  help: dereference the pointer first: `(*p).ctrl` (ADR 0021)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:216:5]
+ 215 │     }
+ 216 │     asm("nop {}", in(reg) *p);
+     ·     ────────────┬────────────
+     ·                 ╰── this `asm`
+ 217 │     asm("nop {}", out(reg) *p);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:216:27]
+ 215 │     }
+ 216 │     asm("nop {}", in(reg) *p);
+     ·                           ─┬
+     ·                            ╰── this dereferences a raw pointer
+ 217 │     asm("nop {}", out(reg) *p);
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:217:5]
+ 216 │     asm("nop {}", in(reg) *p);
+ 217 │     asm("nop {}", out(reg) *p);
+     ·     ─────────────┬────────────
+     ·                  ╰── this `asm`
+ 218 │     asm("nop {}", lateout(reg) (*pair).a);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:217:28]
+ 216 │     asm("nop {}", in(reg) *p);
+ 217 │     asm("nop {}", out(reg) *p);
+     ·                            ─┬
+     ·                             ╰── this dereferences a raw pointer
+ 218 │     asm("nop {}", lateout(reg) (*pair).a);
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:218:5]
+ 217 │     asm("nop {}", out(reg) *p);
+ 218 │     asm("nop {}", lateout(reg) (*pair).a);
+     ·     ──────────────────┬──────────────────
+     ·                       ╰── this `asm`
+ 219 │     asm("nop {}", inout(reg) p[1]);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:218:32]
+ 217 │     asm("nop {}", out(reg) *p);
+ 218 │     asm("nop {}", lateout(reg) (*pair).a);
+     ·                                ───┬───
+     ·                                   ╰── this dereferences a raw pointer
+ 219 │     asm("nop {}", inout(reg) p[1]);
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:219:5]
+ 218 │     asm("nop {}", lateout(reg) (*pair).a);
+ 219 │     asm("nop {}", inout(reg) p[1]);
+     ·     ───────────────┬──────────────
+     ·                    ╰── this `asm`
+ 220 │     asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:219:30]
+ 218 │     asm("nop {}", lateout(reg) (*pair).a);
+ 219 │     asm("nop {}", inout(reg) p[1]);
+     ·                              ──┬─
+     ·                                ╰── this dereferences a raw pointer
+ 220 │     asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:220:5]
+ 219 │     asm("nop {}", inout(reg) p[1]);
+ 220 │     asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+     ·     ──────────────────────┬──────────────────────
+     ·                           ╰── this `asm`
+ 221 │     asm("nop {}", inout(reg) *p => _);
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:220:42]
+ 219 │     asm("nop {}", inout(reg) p[1]);
+ 220 │     asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+     ·                                          ──┬─
+     ·                                            ╰── this dereferences a raw pointer
+ 221 │     asm("nop {}", inout(reg) *p => _);
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unsafe-required
+
+  × `asm` needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:221:5]
+ 220 │     asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+ 221 │     asm("nop {}", inout(reg) *p => _);
+     ·     ────────────────┬────────────────
+     ·                     ╰── this `asm`
+ 222 │ }
+     ╰────
+  help: `asm` can write any register or any memory, and the compiler checks none of it: put it
+        inside an `unsafe { }` block, after checking that it is sound where it is (ADR 0119); the
+        body of a `#[naked]` function needs no block
+ty::unsafe-required
+
+  × reading through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:221:30]
+ 220 │     asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+ 221 │     asm("nop {}", inout(reg) *p => _);
+     ·                              ─┬
+     ·                               ╰── this dereferences a raw pointer
+ 222 │ }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:226:25]
+ 225 │ fn only_safe_forms(p: *mut u32, s: *const [u8], i: usize) -> usize {
+ 226 │     let a: *const u32 = unsafe { &raw const p[i] };
+     ·                         ───┬──
+     ·                            ╰── nothing in it needs `unsafe`
+ 227 │     let b: *mut u32 = unsafe { &raw mut *p };
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:227:23]
+ 226 │     let a: *const u32 = unsafe { &raw const p[i] };
+ 227 │     let b: *mut u32 = unsafe { &raw mut *p };
+     ·                       ───┬──
+     ·                          ╰── nothing in it needs `unsafe`
+ 228 │     let c: usize = unsafe { len(s) };
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:228:20]
+ 227 │     let b: *mut u32 = unsafe { &raw mut *p };
+ 228 │     let c: usize = unsafe { len(s) };
+     ·                    ───┬──
+     ·                       ╰── nothing in it needs `unsafe`
+ 229 │     let d: usize = unsafe { p as usize };
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:229:20]
+ 228 │     let c: usize = unsafe { len(s) };
+ 229 │     let d: usize = unsafe { p as usize };
+     ·                    ───┬──
+     ·                       ╰── nothing in it needs `unsafe`
+ 230 │     a as usize + b as usize + c + d
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:234:18]
+ 233 │ fn through_references(r: &mut Pair, items: &[u8]) -> u32 {
+ 234 │     let a: u32 = unsafe { r.a };
+     ·                  ───┬──
+     ·                     ╰── nothing in it needs `unsafe`
+ 235 │     unsafe { (*r).b = items[0] as u32; }
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unused-unsafe
+
+  × this `unsafe` block holds no unsafe operation
+     ╭─[unsafe_pointer_errors.ers:235:5]
+ 234 │     let a: u32 = unsafe { r.a };
+ 235 │     unsafe { (*r).b = items[0] as u32; }
+     ·     ───┬──
+     ·        ╰── nothing in it needs `unsafe`
+ 236 │     a
+     ╰────
+  help: an `unsafe` block marks where the program relies on its own reasoning: remove it, or move
+        into it what needs it (ADR 0119)
+ty::unknown-method
+
+  × `*mut u32` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:242:27]
+ 241 │ fn operand_in_error(p: *mut u32, pair: *mut Pair) -> u32 {
+ 242 │     let outside: u32 = *p.missing();
+     ·                         ┬ ───┬───
+     ·                         │    ╰── no such method
+     ·                         ╰── this is a `*mut u32`
+ 243 │     let inside: u32 = unsafe { *p.missing() };
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut u32` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:243:35]
+ 242 │     let outside: u32 = *p.missing();
+ 243 │     let inside: u32 = unsafe { *p.missing() };
+     ·                                 ┬ ───┬───
+     ·                                 │    ╰── no such method
+     ·                                 ╰── this is a `*mut u32`
+ 244 │     let indexed: u32 = p[pair.missing()];
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:244:31]
+ 243 │     let inside: u32 = unsafe { *p.missing() };
+ 244 │     let indexed: u32 = p[pair.missing()];
+     ·                          ──┬─ ───┬───
+     ·                            │     ╰── no such method
+     ·                            ╰── this is a `*mut Pair`
+ 245 │     let indexed_inside: u32 = unsafe { p[pair.missing()] };
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:245:47]
+ 244 │     let indexed: u32 = p[pair.missing()];
+ 245 │     let indexed_inside: u32 = unsafe { p[pair.missing()] };
+     ·                                          ──┬─ ───┬───
+     ·                                            │     ╰── no such method
+     ·                                            ╰── this is a `*mut Pair`
+ 246 │     let field: u32 = (*pair.missing()).a;
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:246:29]
+ 245 │     let indexed_inside: u32 = unsafe { p[pair.missing()] };
+ 246 │     let field: u32 = (*pair.missing()).a;
+     ·                        ──┬─ ───┬───
+     ·                          │     ╰── no such method
+     ·                          ╰── this is a `*mut Pair`
+ 247 │     let field_inside: u32 = unsafe { (*pair.missing()).a };
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:247:45]
+ 246 │     let field: u32 = (*pair.missing()).a;
+ 247 │     let field_inside: u32 = unsafe { (*pair.missing()).a };
+     ·                                        ──┬─ ───┬───
+     ·                                          │     ╰── no such method
+     ·                                          ╰── this is a `*mut Pair`
+ 248 │     let address: *const u32 = unsafe { &raw const *p.missing() };
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut u32` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:248:54]
+ 247 │     let field_inside: u32 = unsafe { (*pair.missing()).a };
+ 248 │     let address: *const u32 = unsafe { &raw const *p.missing() };
+     ·                                                    ┬ ───┬───
+     ·                                                    │    ╰── no such method
+     ·                                                    ╰── this is a `*mut u32`
+ 249 │     outside + inside + indexed + indexed_inside + field + field_inside + address as usize as u32
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unsafe-required
+
+  × writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:255:5]
+ 254 │ fn value_in_error(p: *mut u32, pair: *mut Pair) {
+ 255 │     *p = pair.missing();
+     ·     ─┬
+     ·      ╰── this dereferences a raw pointer
+ 256 │     unsafe { *p = pair.missing(); }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:255:15]
+ 254 │ fn value_in_error(p: *mut u32, pair: *mut Pair) {
+ 255 │     *p = pair.missing();
+     ·          ──┬─ ───┬───
+     ·            │     ╰── no such method
+     ·            ╰── this is a `*mut Pair`
+ 256 │     unsafe { *p = pair.missing(); }
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:256:24]
+ 255 │     *p = pair.missing();
+ 256 │     unsafe { *p = pair.missing(); }
+     ·                   ──┬─ ───┬───
+     ·                     │     ╰── no such method
+     ·                     ╰── this is a `*mut Pair`
+ 257 │     p[1] += pair.missing();
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unsafe-required
+
+  × reading and writing through a raw pointer needs an `unsafe` block
+     ╭─[unsafe_pointer_errors.ers:257:5]
+ 256 │     unsafe { *p = pair.missing(); }
+ 257 │     p[1] += pair.missing();
+     ·     ──┬─
+     ·       ╰── this dereferences a raw pointer
+ 258 │     unsafe { p[1] += pair.missing(); }
+     ╰────
+  help: the compiler cannot check that a raw pointer is valid, aligned and in bounds: access
+        through it inside an `unsafe { }` block, after checking that it is; `&raw` of the place,
+        `len`, `slice` and casts need no block (ADR 0119)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:257:18]
+ 256 │     unsafe { *p = pair.missing(); }
+ 257 │     p[1] += pair.missing();
+     ·             ──┬─ ───┬───
+     ·               │     ╰── no such method
+     ·               ╰── this is a `*mut Pair`
+ 258 │     unsafe { p[1] += pair.missing(); }
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*mut Pair` has no method `missing`
+     ╭─[unsafe_pointer_errors.ers:258:27]
+ 257 │     p[1] += pair.missing();
+ 258 │     unsafe { p[1] += pair.missing(); }
+     ·                      ──┬─ ───┬───
+     ·                        │     ╰── no such method
+     ·                        ╰── this is a `*mut Pair`
+ 259 │ }
+     ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).missing(...)` (ADR 0114)

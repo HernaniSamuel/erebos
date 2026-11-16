@@ -6,11 +6,11 @@
 enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
 fn load(p: *const Mode) -> Mode {
-    *p
+    unsafe { *p }
 }
 
 fn every_variant(p: *const Mode) -> u32 {
-    match *p {
+    match unsafe { *p } {
         Mode::Off => 10,
         Mode::Run => 20,
         Mode::Sleep => 30,

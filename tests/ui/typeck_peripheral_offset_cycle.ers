@@ -32,7 +32,7 @@ peripheral Read {
     read a: u8 at 0,
     read b: u8 at {
         let p: *mut Read = 0x10 as *mut Read;
-        (*p).a as usize
+        unsafe { (*p).a as usize }
     },
 }
 
@@ -40,7 +40,7 @@ peripheral ReadEarly {
     read a: u8 at 0,
     read b: u8 at {
         let p: *mut ReadEarly = 0x10 as *mut ReadEarly;
-        (*p).a as usize
+        unsafe { (*p).a as usize }
     },
 }
 

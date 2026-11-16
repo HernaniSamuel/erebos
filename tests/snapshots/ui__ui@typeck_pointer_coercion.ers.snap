@@ -6,8 +6,9 @@ input_file: tests/ui/typeck_pointer_coercion.ers
 --- typeck ---
 struct View { data: *const u8 at 0 } size 4, align 4
 fn read(p: *const u8) -> u8
-    expr 0 deref 152..154: u8
-    expr 1 local p 153..154: *const u8
+    expr 0 unsafe 152..165: u8
+    expr 1 deref 161..163: u8
+    expr 2 local p 162..163: *const u8
 fn coercions(buf: *mut u8, other: *const u8, regs: *mut volatile u32) -> *const u8
     let a: u8
     let b: *const u8
@@ -16,26 +17,26 @@ fn coercions(buf: *mut u8, other: *const u8, regs: *mut volatile u32) -> *const 
     let same: bool
     let r: *const volatile u32
     let nested: *const *mut u8
-    expr 2 call 259..268: u8
-    expr 3 local buf 264..267: *mut u8
-    expr 4 local buf 293..296: *mut u8
-    expr 5 struct View 319..337: View
-    expr 6 local buf 332..335: *mut u8
-    expr 7 array 370..382: [*const u8; 2]
-    expr 8 local buf 371..374: *mut u8
-    expr 9 local other 376..381: *const u8
-    expr 10 logical && 405..433: bool
-    expr 11 binary == 405..417: bool
-    expr 12 local buf 405..408: *mut u8
-    expr 13 local other 412..417: *const u8
-    expr 14 binary == 421..433: bool
-    expr 15 local other 421..426: *const u8
-    expr 16 local buf 430..433: *mut u8
-    expr 17 local regs 468..472: *mut volatile u32
-    expr 18 &raw const 507..521: *const *mut u8
-    expr 19 local buf 518..521: *mut u8
-    expr 20 local buf 527..530: *mut u8
+    expr 3 call 270..279: u8
+    expr 4 local buf 275..278: *mut u8
+    expr 5 local buf 304..307: *mut u8
+    expr 6 struct View 330..348: View
+    expr 7 local buf 343..346: *mut u8
+    expr 8 array 381..393: [*const u8; 2]
+    expr 9 local buf 382..385: *mut u8
+    expr 10 local other 387..392: *const u8
+    expr 11 logical && 416..444: bool
+    expr 12 binary == 416..428: bool
+    expr 13 local buf 416..419: *mut u8
+    expr 14 local other 423..428: *const u8
+    expr 15 binary == 432..444: bool
+    expr 16 local other 432..437: *const u8
+    expr 17 local buf 441..444: *mut u8
+    expr 18 local regs 479..483: *mut volatile u32
+    expr 19 &raw const 518..532: *const *mut u8
+    expr 20 local buf 529..532: *mut u8
+    expr 21 local buf 538..541: *mut u8
 entry fn main() -> !
-    expr 21 loop 557..564: !
+    expr 22 loop 568..575: !
 panic fn on_panic() -> !
-    expr 22 loop 594..601: !
+    expr 23 loop 605..612: !

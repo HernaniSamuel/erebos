@@ -2,12 +2,12 @@
 // `p[i]` is the unchecked place at `p + i * size_of(T)`, and `&raw` takes
 // the address of any place (ADR 0021).
 fn element(p: *const u16, i: usize) -> u16 {
-    p[i] + p[0]
+    unsafe { p[i] + p[0] }
 }
 
 fn write(p: *mut u16, i: usize) {
-    p[i] = 1;
-    p[i + 1] += p[i];
+    unsafe { p[i] = 1; }
+    unsafe { p[i + 1] += p[i]; }
 }
 
 fn addresses(p: *mut u16) -> *const u16 {

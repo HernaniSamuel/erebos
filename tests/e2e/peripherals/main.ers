@@ -15,7 +15,7 @@ static CONSOLE: *mut devices::Uart16550 = &raw mut devices::UART0;
 fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        devices::putc(&mut *CONSOLE, s[i]);
+        unsafe { devices::putc(&mut *CONSOLE, s[i]); }
         i += 1;
     }
 }

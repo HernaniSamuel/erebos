@@ -12,7 +12,7 @@ static END: *const u32 = &raw const (&raw const TABLE as *const u32)[4];
 const FIRST: *const Node = &raw const A;
 
 fn second() -> u32 {
-    (*(*FIRST).next).value
+    unsafe { (*(*FIRST).next).value }
 }
 
 entry fn main() -> ! { loop {} }

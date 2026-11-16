@@ -7,7 +7,7 @@ input_file: tests/ui/returned_reference_shared_static.ers
 analysis::unprotected-static
 
   × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[returned_reference_shared_static.ers:19:7]
+    ╭─[returned_reference_shared_static.ers:19:16]
  14 │ interrupt fn tick() at Vector::MachineTimer {
  15 │     COUNT += 1;
     ·     ─────┬────
@@ -15,18 +15,18 @@ analysis::unprotected-static
  16 │ }
  17 │ 
  18 │ fn unprotected() -> &u32 {
- 19 │     &*(&raw const COUNT)
-    ·       ─────────┬────────
-    ·                ╰── reached here, outside `critical`
+ 19 │     unsafe { &*(&raw const COUNT) }
+    ·                ─────────┬────────
+    ·                         ╰── reached here, outside `critical`
  20 │ }
  21 │ 
  22 │ fn protected() -> &u32 {
  23 │     let p: *const u32 = critical { &raw const COUNT };
- 24 │     &*p
+ 24 │     unsafe { &*p }
  25 │ }
  26 │ 
  27 │ fn owned() -> &u32 {
- 28 │     &*(&raw const OWNED)
+ 28 │     unsafe { &*(&raw const OWNED) }
  29 │ }
  30 │ 
  31 │ entry fn main() -> ! {

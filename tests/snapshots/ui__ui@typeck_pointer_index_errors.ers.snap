@@ -12,27 +12,27 @@ ty::cannot-index
  3 │     n[0];
    ·     ┬
    ·     ╰── not an array or a pointer
- 4 │     p[n];
+ 4 │     unsafe { p[n]; }
    ╰────
 ty::mismatched-types
 
   × mismatched types
-   ╭─[typeck_pointer_index_errors.ers:4:7]
+   ╭─[typeck_pointer_index_errors.ers:4:16]
  3 │     n[0];
- 4 │     p[n];
-   ·       ┬
-   ·       ╰── expected `usize`, found `u32`
- 5 │     p[0] = 1;
+ 4 │     unsafe { p[n]; }
+   ·                ┬
+   ·                ╰── expected `usize`, found `u32`
+ 5 │     unsafe { p[0] = 1; }
    ╰────
   help: integer types never convert implicitly; use `as usize` (ADR 0008)
 ty::write-through-const
 
   × cannot write through a `*const` pointer
-   ╭─[typeck_pointer_index_errors.ers:5:5]
- 4 │     p[n];
- 5 │     p[0] = 1;
-   ·     ┬
-   ·     ╰── has type `*const u8`
+   ╭─[typeck_pointer_index_errors.ers:5:14]
+ 4 │     unsafe { p[n]; }
+ 5 │     unsafe { p[0] = 1; }
+   ·              ┬
+   ·              ╰── has type `*const u8`
  6 │     let a: *mut u8 = &raw mut x;
    ╰────
   help: only `*mut` pointers can be written through
@@ -47,7 +47,7 @@ ty::address-of-immutable
  3 │     n[0];
    ╰────
    ╭─[typeck_pointer_index_errors.ers:6:31]
- 5 │     p[0] = 1;
+ 5 │     unsafe { p[0] = 1; }
  6 │     let a: *mut u8 = &raw mut x;
    ·                               ┬
    ·                               ╰── address taken here
@@ -103,11 +103,11 @@ ty::not-a-place
 ty::volatile-too-wide
 
   × a volatile `u64` cannot be accessed in one instruction
-    ╭─[typeck_pointer_index_errors.ers:13:5]
+    ╭─[typeck_pointer_index_errors.ers:13:14]
  12 │ fn wide(clock: *mut volatile u64) -> u64 {
- 13 │     clock[1]
-    ·     ────┬───
-    ·         ╰── the widest single access is 32 bits
+ 13 │     unsafe { clock[1] }
+    ·              ────┬───
+    ·                  ╰── the widest single access is 32 bits
  14 │ }
     ╰────
   help: access it as `u32` halves, in the order the device needs (ADR 0023)

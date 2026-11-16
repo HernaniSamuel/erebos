@@ -6,7 +6,7 @@ fn address_of_block() -> u32 {
     let mut x: [u32; 2] = [1, 2];
     let p: *const u32 = &raw const ({ x })[0];
     x[0] = 9;
-    *p
+    unsafe { *p }
 }
 
 fn index_block() -> u32 {

@@ -27,7 +27,7 @@ fn print_u32(n: u32) {
 entry fn main() -> ! {
     // The doorbell, a word of RAM that no section occupies (ADR 0077).
     let doorbell: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
-    *doorbell = 0;
+    unsafe { *doorbell = 0; }
 
     let descriptor: &mut Descriptor = &mut DESCRIPTOR;
     descriptor.addr = 1000;
@@ -36,12 +36,12 @@ entry fn main() -> ! {
 
     // Every store above is visible before the doorbell is.
     core::arch::fence();
-    *doorbell = 7;
+    unsafe { *doorbell = 7; }
 
     // Neither read moves above the stores, whatever the optimizer thinks of
     // the memory it knows.
     core::arch::compiler_fence();
-    let seen_bell: u32 = *doorbell;
+    let seen_bell: u32 = unsafe { *doorbell };
     let seen_addr: u32 = descriptor.addr;
     let seen_len: u32 = descriptor.len;
     let seen_flags: u32 = descriptor.flags;

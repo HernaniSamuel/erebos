@@ -250,16 +250,16 @@ ty::no-fields
  45 │     let c: usize = offset_of(Mode, f);
     ·                                    ┬
     ·                                    ╰── no such field
- 46 │     let d: Wide = *p;
+ 46 │     let d: Wide = unsafe { *p };
     ╰────
 ty::volatile-too-wide
 
   × a volatile `Wide` cannot be accessed in one instruction
-    ╭─[typeck_enum_errors.ers:46:19]
+    ╭─[typeck_enum_errors.ers:46:28]
  45 │     let c: usize = offset_of(Mode, f);
- 46 │     let d: Wide = *p;
-    ·                   ─┬
-    ·                    ╰── the widest single access is 32 bits
+ 46 │     let d: Wide = unsafe { *p };
+    ·                            ─┬
+    ·                             ╰── the widest single access is 32 bits
  47 │ }
     ╰────
   help: an enum is accessed as its integer type, `u64`; declare it on an integer type of at most
@@ -308,30 +308,30 @@ ty::mismatched-types
  59 │     let d: bool = s.mode == 1;
     ·                             ┬
     ·                             ╰── expected `Mode`, found an integer
- 60 │     let e: bool = (*regs).mode == 1;
+ 60 │     let e: bool = unsafe { (*regs).mode == 1 };
     ╰────
   help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
         `s.mode as u8 == 1` (ADR 0035)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_enum_errors.ers:60:35]
+    ╭─[typeck_enum_errors.ers:60:44]
  59 │     let d: bool = s.mode == 1;
- 60 │     let e: bool = (*regs).mode == 1;
-    ·                                   ┬
-    ·                                   ╰── expected `Mode`, found an integer
- 61 │     let f: bool = *p == 1;
+ 60 │     let e: bool = unsafe { (*regs).mode == 1 };
+    ·                                            ┬
+    ·                                            ╰── expected `Mode`, found an integer
+ 61 │     let f: bool = unsafe { *p == 1 };
     ╰────
   help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
         `(*regs).mode as u8 == 1` (ADR 0035)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_enum_errors.ers:61:25]
- 60 │     let e: bool = (*regs).mode == 1;
- 61 │     let f: bool = *p == 1;
-    ·                         ┬
-    ·                         ╰── expected `Mode`, found an integer
+    ╭─[typeck_enum_errors.ers:61:34]
+ 60 │     let e: bool = unsafe { (*regs).mode == 1 };
+ 61 │     let f: bool = unsafe { *p == 1 };
+    ·                                  ┬
+    ·                                  ╰── expected `Mode`, found an integer
  62 │     let g: bool = 3 == mode;
     ╰────
   help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in `*p
@@ -340,7 +340,7 @@ ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_enum_errors.ers:62:19]
- 61 │     let f: bool = *p == 1;
+ 61 │     let f: bool = unsafe { *p == 1 };
  62 │     let g: bool = 3 == mode;
     ·                   ┬
     ·                   ╰── expected `Mode`, found an integer

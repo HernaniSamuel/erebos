@@ -2,8 +2,8 @@
 // The index is fixed in a temporary before the access, and the pointer is
 // read first when the index could change it (ADR 0018).
 fn index(mut p: *mut u32, i: usize) -> u32 {
-    p[i] = 5;
-    p[{ p = p; i }]
+    unsafe { p[i] = 5; }
+    unsafe { p[{ p = p; i }] }
 }
 
 fn address(p: *mut u32) -> *mut u32 {

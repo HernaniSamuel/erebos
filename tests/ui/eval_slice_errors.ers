@@ -20,7 +20,7 @@ static IN_ARRAY: [*const [u16]; 2] = [&raw const TABLE, slice(&raw const TABLE[3
 static DATA: [u8; 4] = [1, 2, 3, 4];
 fn pointer_in_length() -> *const [u8] {
     let mut s: *const [u8] = &raw const DATA;
-    (&raw mut s as *mut *const u8)[1] = &raw const DATA as *const u8;
+    unsafe { (&raw mut s as *mut *const u8)[1] = &raw const DATA as *const u8; }
     s
 }
 static LENGTH_POINTER: *const [u8] = pointer_in_length();

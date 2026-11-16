@@ -55,10 +55,10 @@ fn strict(m: Msg) -> &[u8] {
 
 entry fn main() -> ! {
     let msgs: *const Msg = &raw const BYTES as *const Msg;
-    print(handled(msgs[0]));
-    print(handled(msgs[1]));
-    print(strict(msgs[2]));
-    print(strict(msgs[1]));
+    unsafe { print(handled(msgs[0])); }
+    unsafe { print(handled(msgs[1])); }
+    unsafe { print(strict(msgs[2])); }
+    unsafe { print(strict(msgs[1])); }
     exit(0)
 }
 

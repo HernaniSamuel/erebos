@@ -22,14 +22,14 @@ mod timer {
     pub mod machine {
         pub interrupt fn tick() at core::arch::Vector::MachineTimer {
             super::super::TICKS += 1;
-            *super::super::MTIMECMP_LOW = *super::super::MTIME + super::super::PERIOD;
+            unsafe { *super::super::MTIMECMP_LOW = *super::super::MTIME + super::super::PERIOD; }
         }
     }
 }
 
 entry fn main() -> ! {
-    *MTIMECMP_HIGH = 0;
-    *MTIMECMP_LOW = *MTIME + PERIOD;
+    unsafe { *MTIMECMP_HIGH = 0; }
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     let mut seen: u32 = 0;

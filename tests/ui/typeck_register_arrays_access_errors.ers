@@ -53,9 +53,9 @@ fn wholes(p: *mut dev::Plic, c: *mut dev::Context) -> u32 {
     PLIC.ctx[1] = PLIC.ctx[0];
     let e: u32 = PLIC.one;
     PLIC.one = 1;
-    let f: u32 = (*p).data;
-    (*p).ctx[0] = (*p).ctx[1];
-    (*c).threshold
+    let f: u32 = unsafe { (*p).data };
+    unsafe { (*p).ctx[0] = (*p).ctx[1]; }
+    unsafe { (*c).threshold }
 }
 
 fn addresses(p: *const dev::Plic) {

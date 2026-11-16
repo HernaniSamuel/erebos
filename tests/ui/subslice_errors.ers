@@ -50,7 +50,7 @@ fn whole(mut buf: [u8; 4], s: &mut [u8], t: &[u8]) {
 fn immutable(buf: [u8; 4], r: &[u8], s: *const [u8]) {
     let a: &mut [u8] = &mut (*r)[1..];
     let b: *mut [u8] = &raw mut (*s)[..2];
-    let c: &mut [u8] = &mut (*s)[..2];
+    let c: &mut [u8] = unsafe { &mut (*s)[..2] };
     let d: &mut [u8] = &mut buf[1..];
     let e: *mut [u8] = &raw mut buf[1..];
     let f: &mut [u8] = &mut TABLE[1..];
@@ -84,8 +84,8 @@ fn addresses(h: *mut Packed, n: usize) {
     let c: &[u32] = &UART.data[0..2];
     let d: *const [u32] = &raw const UART.data[0..2];
     let e: *const [u32] = &raw const (*h).words[1..];
-    let f: &[u32] = &(*h).words[1..];
-    let g: &[u8] = &(*h).bytes[1..];
+    let f: &[u32] = unsafe { &(*h).words[1..] };
+    let g: &[u8] = unsafe { &(*h).bytes[1..] };
     let j: *const [u32] = &raw const COUNTS[1..n];
 }
 

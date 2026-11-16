@@ -15,7 +15,7 @@ entry fn main() -> ! {
     let s: *const [u8] = slice(&raw const a[1], 2);
     let mut i: usize = 0;
     while i <= 2 {
-        putc(b'0' + (*s)[i]);
+        unsafe { putc(b'0' + (*s)[i]); }
         putc(b'\n');
         i += 1;
     }

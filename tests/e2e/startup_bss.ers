@@ -22,8 +22,8 @@ const MAGIC: u32 = 0x5EC0_4D00;
 
 entry fn main() -> ! {
     let marker: *mut volatile u32 = MARKER as *mut volatile u32;
-    if *marker != MAGIC {
-        *marker = MAGIC;
+    if unsafe { *marker } != MAGIC {
+        unsafe { *marker = MAGIC; }
         COUNTER = 0xFFFF_FFFF;
         TABLE[4] = 9;
         INITIAL = 3;

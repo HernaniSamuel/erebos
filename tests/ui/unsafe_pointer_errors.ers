@@ -1,0 +1,267 @@
+// emit: typeck
+// An access through a raw pointer outside an `unsafe` block is
+// `ty::unsafe-required` (ADR 0119, operation 1), one error for each access,
+// and the message says how the place is touched: a read, a write, a compound
+// assignment (both) or a borrow (`&`, `&mut`, a method taking `&self` or
+// `&mut self`). Every form of place: `*p`, `p[i]`, `(*p).f`, `(*s)[i]`, a
+// range of `*s`, a volatile pointer, a pointer to a peripheral type. An
+// expression with two accesses gives two errors, the pointer read from a
+// field being one. A place reached through a reference is safe, and so is
+// `&raw` of any place. The body of an `unsafe fn`, `critical`, a `const`
+// initializer and an array length are not blocks. A block holding only safe
+// forms is `ty::unused-unsafe`. An access whose pointer or index is already in
+// error is reported for that error only, and counts as unsafe for the block
+// around it; the value written through a pointer is not an operand of the
+// write, so a write of a value in error is still reported outside a block.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Node {
+    value: u32,
+    next: *mut Node,
+    items: [u8; 4],
+}
+
+#[copy]
+struct Reg {
+    n: u32,
+}
+
+impl Reg {
+    fn get(&self) -> u32 {
+        self.n
+    }
+
+    fn set(&mut self, n: u32) {
+        self.n = n;
+    }
+
+    fn take(self) -> u32 {
+        self.n
+    }
+}
+
+peripheral Uart {
+    read write ctrl: u32 at 0,
+    read status: u32 at 4,
+    read write data: [u8; 4] at 8,
+}
+
+extern fn c_pointer() -> *mut u32;
+extern static mut c_cursor: *mut u32;
+
+fn reads(p: *const u32, pair: *const Pair, a: *const [u8; 4], s: *const [u8], i: usize) -> u32 {
+    let one: u32 = *p;
+    let two: u32 = p[i];
+    let three: u32 = (*pair).a;
+    let four: u8 = (*a)[i];
+    let five: u8 = (*s)[i];
+    one + two + three + four as u32 + five as u32
+}
+
+fn writes(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4], s: *mut [u8], i: usize) {
+    *p = 1;
+    p[i] = 2;
+    (*pair).b = 3;
+    (*a)[i] = 4;
+    (*s)[i] = 5;
+}
+
+fn updates(p: *mut u32, pair: *mut Pair, s: *mut [u8], i: usize) {
+    *p += 1;
+    p[i] |= 2;
+    (*pair).a -= 1;
+    (*s)[i] ^= 1;
+}
+
+fn ranges(s: *const [u8], t: *mut [u8]) {
+    let part: &[u8] = &(*s)[1..3];
+    let from: &[u8] = &(*s)[2..];
+    let upto: &mut [u8] = &mut (*t)[..2];
+}
+
+fn borrows(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4]) {
+    let r: &u32 = &*p;
+    let m: &mut u32 = &mut *p;
+    let f: &mut u32 = &mut (*pair).a;
+    let e: &mut u8 = &mut (*a)[1];
+}
+
+fn volatiles(v: *mut volatile u32, w: *const volatile [u8; 2]) -> u32 {
+    *v = 1;
+    *v += 1;
+    let r: &volatile u32 = &*v;
+    (*w)[0] as u32
+}
+
+fn registers(u: *mut Uart, i: usize) -> u32 {
+    (*u).ctrl = 1;
+    (*u).ctrl |= 2;
+    (*u).data[i] = 7;
+    (*u).status
+}
+
+fn methods(r: *mut Reg) -> u32 {
+    (*r).set(1);
+    let a: u32 = (*r).get();
+    let b: u32 = (*r).take();
+    a + b
+}
+
+// Two accesses in one expression, and one of them is the pointer of the other.
+fn two(p: *const u32, q: *const u32, n: *mut Node) -> u32 {
+    let sum: u32 = *p + *q;
+    let second: u32 = (*(*n).next).value;
+    (*(*n).next).items[1] = 2;
+    sum + second
+}
+
+fn pointer_to_pointer(pp: *const *const u32) -> u32 {
+    **pp
+}
+
+// A returned reference made through a raw pointer needs the block too.
+fn tied(r: &mut Pair, p: *mut Pair) -> &mut u32 {
+    &mut (*p).b
+}
+
+// The pointer comes from an `extern fn` and from an `extern static`: each is
+// an operation of its own, and so is the access through the pointer.
+fn from_c() -> u32 {
+    *c_pointer()
+}
+
+fn from_c_static() -> u32 {
+    c_cursor[0]
+}
+
+fn write_through_c_static() {
+    c_cursor[0] = 1;
+}
+
+// The first is covered, the second is not.
+fn beside_a_block(p: *mut u32, q: *mut u32) {
+    unsafe { *p = 1; }
+    *q = 2;
+}
+
+// A branch of an `if` next to a covered one.
+fn branches(p: *mut u32, flag: bool) -> u32 {
+    if flag { unsafe { *p } } else { *p }
+}
+
+fn in_critical(p: *mut u32) {
+    critical {
+        *p += 1;
+    }
+}
+
+unsafe fn contract(p: *mut u32, n: usize) {
+    *p = 1;
+    p[n] = 2;
+}
+
+unsafe fn contract_with_a_block(p: *mut u32, n: usize) {
+    unsafe { *p = 1; }
+    p[n] = 2;
+}
+
+// At compile time too: the check is made before the evaluator runs.
+const FIRST: u32 = *(0x2000_0000 as *const u32);
+static BYTES: [u8; 2] = [(0 as *const u8)[0], 0];
+
+fn lengths() -> [u8; (*(0 as *const usize))] {
+    [0; 1]
+}
+
+// A pointer of type `!` is never computed, so nothing is accessed through it:
+// not an operation outside a block, and not one that uses a block.
+fn diverges() -> ! {
+    loop {}
+}
+
+fn never_pointer(n: usize) -> u32 {
+    let outside: u32 = *diverges();
+    let inside: u32 = unsafe { *diverges() };
+    outside + inside
+}
+
+// Pointers to a slice or a peripheral type are not indexed, which was
+// reported: not an access to report again, and a use for the block around it.
+fn not_indexable(s: *const [u8], u: *mut Uart) {
+    let outside: u8 = s[0];
+    let inside: u8 = unsafe { s[0] };
+    let range: *const [u8] = &raw const s[1..2];
+    let register: u32 = u[1];
+}
+
+// A field of a pointer is `ty::no-fields`, which was reported: no access to
+// report again, and a use for the block around it.
+fn field_of_a_pointer(p: *mut Pair, u: *mut Uart) -> u32 {
+    let outside: u32 = p.a;
+    let inside: u32 = unsafe { p.a };
+    let register_outside: u32 = u.ctrl;
+    let register_inside: u32 = unsafe { u.ctrl };
+    outside + inside + register_outside + register_inside
+}
+
+// An `asm` operand that is a place touches it as the operand says, and the
+// message says which.
+fn asm_operands(p: *mut u32, pair: *mut Pair, s: *mut [u32]) {
+    unsafe {
+        asm("nop {}", in(reg) *p);
+    }
+    asm("nop {}", in(reg) *p);
+    asm("nop {}", out(reg) *p);
+    asm("nop {}", lateout(reg) (*pair).a);
+    asm("nop {}", inout(reg) p[1]);
+    asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+    asm("nop {}", inout(reg) *p => _);
+}
+
+// Safe forms: a block that holds only those is not used.
+fn only_safe_forms(p: *mut u32, s: *const [u8], i: usize) -> usize {
+    let a: *const u32 = unsafe { &raw const p[i] };
+    let b: *mut u32 = unsafe { &raw mut *p };
+    let c: usize = unsafe { len(s) };
+    let d: usize = unsafe { p as usize };
+    a as usize + b as usize + c + d
+}
+
+fn through_references(r: &mut Pair, items: &[u8]) -> u32 {
+    let a: u32 = unsafe { r.a };
+    unsafe { (*r).b = items[0] as u32; }
+    a
+}
+
+// An access whose pointer or index is in error was reported for that error:
+// not again, and the block around it is used.
+fn operand_in_error(p: *mut u32, pair: *mut Pair) -> u32 {
+    let outside: u32 = *p.missing();
+    let inside: u32 = unsafe { *p.missing() };
+    let indexed: u32 = p[pair.missing()];
+    let indexed_inside: u32 = unsafe { p[pair.missing()] };
+    let field: u32 = (*pair.missing()).a;
+    let field_inside: u32 = unsafe { (*pair.missing()).a };
+    let address: *const u32 = unsafe { &raw const *p.missing() };
+    outside + inside + indexed + indexed_inside + field + field_inside + address as usize as u32
+}
+
+// The value written is not an operand of the write: the write is reported
+// outside a block, and inside one only the value's error is.
+fn value_in_error(p: *mut u32, pair: *mut Pair) {
+    *p = pair.missing();
+    unsafe { *p = pair.missing(); }
+    p[1] += pair.missing();
+    unsafe { p[1] += pair.missing(); }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

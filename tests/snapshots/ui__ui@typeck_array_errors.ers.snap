@@ -44,27 +44,27 @@ ty::invalid-operand
  7 │     let f: bool = c == c;
    ·                   ───┬──
    ·                      ╰── has type `[u8; 2]`
- 8 │     let g: [u8; 2] = *vp;
+ 8 │     let g: [u8; 2] = unsafe { *vp };
    ╰────
 ty::volatile-aggregate
 
   × a volatile `[u8; 2]` cannot be accessed as a whole
-   ╭─[typeck_array_errors.ers:8:22]
+   ╭─[typeck_array_errors.ers:8:31]
  7 │     let f: bool = c == c;
- 8 │     let g: [u8; 2] = *vp;
-   ·                      ─┬─
-   ·                       ╰── access its elements or fields one at a time
- 9 │     *vp = c;
+ 8 │     let g: [u8; 2] = unsafe { *vp };
+   ·                               ─┬─
+   ·                                ╰── access its elements or fields one at a time
+ 9 │     unsafe { *vp = c; }
    ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
 ty::volatile-aggregate
 
   × a volatile `[u8; 2]` cannot be accessed as a whole
-    ╭─[typeck_array_errors.ers:9:5]
-  8 │     let g: [u8; 2] = *vp;
-  9 │     *vp = c;
-    ·     ─┬─
-    ·      ╰── access its elements or fields one at a time
+    ╭─[typeck_array_errors.ers:9:14]
+  8 │     let g: [u8; 2] = unsafe { *vp };
+  9 │     unsafe { *vp = c; }
+    ·              ─┬─
+    ·               ╰── access its elements or fields one at a time
  10 │     [b'a', 2][0] = 3;
     ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
@@ -72,7 +72,7 @@ ty::not-assignable
 
   × cannot assign to part of a temporary value
     ╭─[typeck_array_errors.ers:10:5]
-  9 │     *vp = c;
+  9 │     unsafe { *vp = c; }
  10 │     [b'a', 2][0] = 3;
     ·     ────┬────
     ·         ╰── this value lives in no variable
@@ -141,17 +141,17 @@ ty::too-large
  25 │     let a: u8 = [b'a'; 3_000_000_000][0];
     ·                 ──────────┬──────────
     ·                           ╰── this value does not fit in the address space
- 26 │     let b: u8 = (*p)[1];
+ 26 │     let b: u8 = unsafe { (*p)[1] };
     ╰────
   help: objects are limited to 2147483647 bytes on this target
 ty::too-large
 
   × `[u8; 3000000000]` is too large
-    ╭─[typeck_array_errors.ers:27:17]
- 26 │     let b: u8 = (*p)[1];
- 27 │     let c: u8 = p[1][0];
-    ·                 ┬
-    ·                 ╰── the distance between elements does not fit in the address space
+    ╭─[typeck_array_errors.ers:27:26]
+ 26 │     let b: u8 = unsafe { (*p)[1] };
+ 27 │     let c: u8 = unsafe { p[1][0] };
+    ·                          ┬
+    ·                          ╰── the distance between elements does not fit in the address space
  28 │     b
     ╰────
   help: objects are limited to 2147483647 bytes on this target

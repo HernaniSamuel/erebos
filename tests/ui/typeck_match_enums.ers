@@ -9,7 +9,7 @@ enum Level: i8 { Low = -1, Mid = 0, High = 1 }
 
 // The byte 7, which is no variant of `Mode`.
 static BYTES: [u8; 1] = [7];
-const ODD: Mode = *(&raw const BYTES as *const Mode);
+const ODD: Mode = unsafe { *(&raw const BYTES as *const Mode) };
 const RUNNING: Mode = Mode::Run;
 
 fn every_variant(m: Mode) -> u8 {

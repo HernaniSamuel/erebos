@@ -304,8 +304,8 @@ const UART_CTRL: *mut volatile u32 = 0x4000_4008 as *mut volatile u32;
 const UART_BAUDDIV: *mut volatile u32 = 0x4000_4010 as *mut volatile u32;
 
 entry fn main() -> ! {
-    *UART_BAUDDIV = 1;
-    *UART_CTRL = 1;
+    unsafe { *UART_BAUDDIV = 1; }
+    unsafe { *UART_CTRL = 1; }
     board::exit(0)
 }
 
@@ -320,7 +320,7 @@ mod board;
 const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
 
 entry fn main() -> ! {
-    *FINISHER = 0x1234;
+    unsafe { *FINISHER = 0x1234; }
     board::exit(0)
 }
 

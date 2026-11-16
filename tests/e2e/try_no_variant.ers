@@ -38,8 +38,8 @@ fn show(o: Option(u32)) {
 
 entry fn main() -> ! {
     let options: *const Option(u32) = &raw const BYTES as *const Option(u32);
-    show(plus_one(options[0]));
-    show(plus_one(options[1]));
+    unsafe { show(plus_one(options[0])); }
+    unsafe { show(plus_one(options[1])); }
     exit(0)
 }
 

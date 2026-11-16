@@ -17,7 +17,7 @@ fn element(a: [u8; 4], i: usize) -> u8 {
 // An `assert` with a message fills a `PanicInfo` in its frame instead, on
 // the failing path, with the message computed there (ADR 0053).
 fn checked(x: u32, m: *const [u8]) {
-    assert(x < 10, &*m);
+    unsafe { assert(x < 10, &*m); }
 }
 
 extern fn report(info: &core::PanicInfo);

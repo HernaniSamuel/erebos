@@ -25,15 +25,15 @@ fn arrays(mut buf: [u8; 8], mut pair: Pair, grid: [[u8; 4]; 2], p: *mut [u8; 8],
     let d: &mut [u8] = &mut buf[1..n];
     let e: &mut [u8] = &mut pair.items[..2];
     let f: &[u8] = &grid[1][2..];
-    let g: &mut [u8] = &mut (*p)[3..4];
+    let g: &mut [u8] = unsafe { &mut (*p)[3..4] };
     let h: *const [u8] = &raw const buf[n..n];
     let i: *mut [u8] = &raw mut pair.items[1..];
 }
 
 // What a slice points to, raw and by reference, and a sub-slice of one.
 fn slices(s: *const [u8], t: *mut [u8], r: &[u8], u: &mut [u8], n: usize) {
-    let a: &[u8] = &(*s)[1..n];
-    let b: &mut [u8] = &mut (*t)[..n];
+    let a: &[u8] = unsafe { &(*s)[1..n] };
+    let b: &mut [u8] = unsafe { &mut (*t)[..n] };
     let c: &[u8] = &(*r)[n..];
     let d: &mut [u8] = &mut (*u)[2..n];
     let e: *const [u8] = &raw const (*s)[..2];

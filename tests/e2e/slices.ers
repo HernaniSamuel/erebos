@@ -30,7 +30,7 @@ fn print(s: *const [u8]) {
     let bytes: *const u8 = s as *const u8;
     let mut i: usize = 0;
     while i < len(s) {
-        putc(bytes[i]);
+        unsafe { putc(bytes[i]); }
         i += 1;
     }
 }

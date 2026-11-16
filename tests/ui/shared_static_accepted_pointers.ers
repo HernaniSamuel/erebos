@@ -23,25 +23,25 @@ fn taken() -> *mut u32 {
 }
 
 fn shared() {
-    *CONST_POINTER = 3;
-    *comptime_pointer() = 3;
-    *STATIC_POINTER = 3;
-    *taken() = 3;
+    unsafe { *CONST_POINTER = 3; }
+    unsafe { *comptime_pointer() = 3; }
+    unsafe { *STATIC_POINTER = 3; }
+    unsafe { *taken() = 3; }
 }
 
 interrupt fn tick() at Vector::MachineTimer {
-    *CONST_POINTER = 1;
-    *comptime_pointer() = 1;
-    *STATIC_POINTER = 1;
-    *taken() = 1;
+    unsafe { *CONST_POINTER = 1; }
+    unsafe { *comptime_pointer() = 1; }
+    unsafe { *STATIC_POINTER = 1; }
+    unsafe { *taken() = 1; }
     shared();
 }
 
 entry fn main() -> ! {
-    *CONST_POINTER = 2;
-    *comptime_pointer() = 2;
-    *STATIC_POINTER = 2;
-    *taken() = 2;
+    unsafe { *CONST_POINTER = 2; }
+    unsafe { *comptime_pointer() = 2; }
+    unsafe { *STATIC_POINTER = 2; }
+    unsafe { *taken() = 2; }
     shared();
     loop {}
 }

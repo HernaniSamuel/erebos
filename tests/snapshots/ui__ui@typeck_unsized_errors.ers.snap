@@ -192,30 +192,30 @@ ty::unsized
  38 │     let whole: u8 = *s;
     ·                     ─┬
     ·                      ╰── what a slice points to, read whole
- 39 │     *m = 0;
+ 39 │     unsafe { *m = 0; }
     ╰────
   help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
         length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time
-    ╭─[typeck_unsized_errors.ers:39:5]
+    ╭─[typeck_unsized_errors.ers:39:14]
  38 │     let whole: u8 = *s;
- 39 │     *m = 0;
-    ·     ─┬
-    ·      ╰── what a slice points to, written whole
- 40 │     *m += 1;
+ 39 │     unsafe { *m = 0; }
+    ·              ─┬
+    ·               ╰── what a slice points to, written whole
+ 40 │     unsafe { *m += 1; }
     ╰────
   help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
         length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time
-    ╭─[typeck_unsized_errors.ers:40:5]
- 39 │     *m = 0;
- 40 │     *m += 1;
-    ·     ─┬
-    ·      ╰── what a slice points to, written whole
+    ╭─[typeck_unsized_errors.ers:40:14]
+ 39 │     unsafe { *m = 0; }
+ 40 │     unsafe { *m += 1; }
+    ·              ─┬
+    ·               ╰── what a slice points to, written whole
  41 │     let length: usize = len(*s);
     ╰────
   help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
@@ -224,7 +224,7 @@ ty::unsized
 
   × `[u8]` has no size known at compile time
     ╭─[typeck_unsized_errors.ers:41:29]
- 40 │     *m += 1;
+ 40 │     unsafe { *m += 1; }
  41 │     let length: usize = len(*s);
     ·                             ─┬
     ·                              ╰── what a slice points to, read whole

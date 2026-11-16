@@ -16,7 +16,7 @@ eval::volatile-access
  7 │ const WRITE: u32 = write_through();
    ╰────
     ╭─[volatile_reference_eval.ers:19:5]
- 18 │     let r: &volatile u32 = &*p;
+ 18 │     let r: &volatile u32 = unsafe { &*p };
  19 │     *r
     ·     ─┬
     ·      ╰── accessed here
@@ -35,7 +35,7 @@ eval::volatile-access
  8 │ const FIELD: u32 = field_through();
    ╰────
     ╭─[volatile_reference_eval.ers:25:5]
- 24 │     let r: &mut volatile u32 = &mut *p;
+ 24 │     let r: &mut volatile u32 = unsafe { &mut *p };
  25 │     *r = 1;
     ·     ───┬──
     ·        ╰── accessed here

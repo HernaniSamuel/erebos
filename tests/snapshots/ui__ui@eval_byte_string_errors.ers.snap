@@ -92,12 +92,12 @@ eval::read-only-write
    ·         ╰── while evaluating the constant `WRITE`
  9 │ const TWO_STRINGS: bool = &raw const b"ab" == &raw const b"cd";
    ╰────
-    ╭─[eval_byte_string_errors.ers:19:5]
+    ╭─[eval_byte_string_errors.ers:19:14]
  18 │     let p: *mut u8 = &raw const b"abc" as *mut u8;
- 19 │     p[1] = b'x';
-    ·     ─────┬─────
-    ·          ╰── written here
- 20 │     p[1]
+ 19 │     unsafe { p[1] = b'x'; }
+    ·              ─────┬─────
+    ·                   ╰── written here
+ 20 │     unsafe { p[1] }
     ╰────
   help: this code runs at compile time (ADR 0027)
 eval::pointer-compare
@@ -116,8 +116,8 @@ eval::pointer-compare
  16 │ 
  17 │ fn write() -> u8 {
  18 │     let p: *mut u8 = &raw const b"abc" as *mut u8;
- 19 │     p[1] = b'x';
- 20 │     p[1]
+ 19 │     unsafe { p[1] = b'x'; }
+ 20 │     unsafe { p[1] }
  21 │ }
  22 │ 
  23 │ fn with_local() -> bool {

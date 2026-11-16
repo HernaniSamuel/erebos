@@ -30,7 +30,7 @@ fn wide(x: u64) -> u32 {
 }
 
 fn status(p: *const volatile Uart) -> u32 {
-    match (*p).status {
+    match unsafe { (*p).status } {
         0 => 0,
         1 | 2 => 1,
         _ => 2,

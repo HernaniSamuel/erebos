@@ -18,7 +18,7 @@ static mut COUNT: u32 = 0;
 const CALLS: *mut volatile u32 = &raw mut COUNT as *mut volatile u32;
 
 interrupt fn service() at Vector::SVCall {
-    *CALLS += 1;
+    unsafe { *CALLS += 1; }
 }
 
 entry fn main() -> ! {
@@ -26,7 +26,7 @@ entry fn main() -> ! {
     unsafe { asm("svc #0"); }
     unsafe { asm("svc #0"); }
     putc(b's'); putc(b'v'); putc(b'c'); putc(b' ');
-    putc(b'0' + *CALLS as u8);
+    unsafe { putc(b'0' + *CALLS as u8); }
     putc(b' '); putc(b'a'); putc(b'f'); putc(b't'); putc(b'e'); putc(b'r'); putc(b'\n');
     exit(0)
 }

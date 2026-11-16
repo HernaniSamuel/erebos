@@ -5,7 +5,7 @@
 fn arrays(v: u8, i: usize, p: *mut [u8; 4]) -> u8 {
     let a: [u8; 2] = [v, 7];
     let b: [u8; 4] = [v; 4];
-    (*p)[i] = a[1];
+    unsafe { (*p)[i] = a[1]; }
     b[i]
 }
 

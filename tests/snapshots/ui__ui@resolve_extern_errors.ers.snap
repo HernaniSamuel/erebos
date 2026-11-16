@@ -25,12 +25,12 @@ resolve::duplicate-symbol
    ·              ╰── given here, to `memcpy`
  4 │ extern fn c_add(a: u32) -> u32;
    ╰────
-    ╭─[rt/builtins.ers:21:8]
- 20 │ #[export]
- 21 │ pub fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
-    ·        ───┬──
-    ·           ╰── and here, in `core`, to `core::builtins::memcpy`
- 22 │     let mut i: usize = 0;
+    ╭─[rt/builtins.ers:28:15]
+ 27 │ #[export]
+ 28 │ pub unsafe fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    ·               ───┬──
+    ·                  ╰── and here, in `core`, to `core::builtins::memcpy`
+ 29 │     let mut i: usize = 0;
     ╰────
   help: `core::memcpy` has this symbol (ADR 0052): call it rather than declaring another, or give
         this item another name (ADR 0051)

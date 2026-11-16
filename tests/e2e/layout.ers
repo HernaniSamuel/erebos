@@ -93,10 +93,10 @@ entry fn main() -> ! {
     // `u32` straddles words.
     let buffer: *mut u8 = (board::SCRATCH + 1) as *mut u8;
     let header: *mut Header = buffer as *mut Header;
-    (*header).kind = 171;
-    (*header).len = 0x1234_5678;
-    (*header).tag = 0xBEEF;
-    let copy: Header = *header;
+    unsafe { (*header).kind = 171; }
+    unsafe { (*header).len = 0x1234_5678; }
+    unsafe { (*header).tag = 0xBEEF; }
+    let copy: Header = unsafe { *header };
     let packed: [u8; 7] = [b'p', b'a', b'c', b'k', b'e', b'd', b' '];
     print(&packed);
     print_u32(copy.len);
@@ -104,9 +104,9 @@ entry fn main() -> ! {
     print_u32(copy.kind as u32);
     putc(b'\n');
     // The bytes are where the layout says, little-endian.
-    check(90, buffer[1] as usize, 0x78);
-    check(91, buffer[4] as usize, 0x12);
-    check(92, buffer[5] as usize, 0xEF);
+    unsafe { check(90, buffer[1] as usize, 0x78); }
+    unsafe { check(91, buffer[4] as usize, 0x12); }
+    unsafe { check(92, buffer[5] as usize, 0xEF); }
 
     // Over-aligned locals are placed at aligned addresses.
     let pad: u8 = 1;

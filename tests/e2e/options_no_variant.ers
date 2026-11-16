@@ -46,10 +46,10 @@ fn strict(o: Option(u32)) -> &[u8] {
 
 entry fn main() -> ! {
     let options: *const Option(u32) = &raw const BYTES as *const Option(u32);
-    print(handled(options[0]));
-    print(handled(options[1]));
-    print(strict(options[0]));
-    print(strict(options[1]));
+    unsafe { print(handled(options[0])); }
+    unsafe { print(handled(options[1])); }
+    unsafe { print(strict(options[0])); }
+    unsafe { print(strict(options[1])); }
     exit(0)
 }
 

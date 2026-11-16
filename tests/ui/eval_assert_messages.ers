@@ -12,7 +12,7 @@ comptime {
 }
 
 comptime {
-    assert(false, &*BYTES);
+    unsafe { assert(false, &*BYTES); }
 }
 
 comptime {
@@ -24,15 +24,15 @@ comptime {
 }
 
 comptime {
-    assert(false, &*gone());
+    unsafe { assert(false, &*gone()); }
 }
 
 comptime {
-    assert(false, &*slice((&raw const b"ab") as *const u8, 3));
+    unsafe { assert(false, &*slice((&raw const b"ab") as *const u8, 3)); }
 }
 
 comptime {
-    assert(false, &*slice(0x1000 as *const u8, 1));
+    unsafe { assert(false, &*slice(0x1000 as *const u8, 1)); }
 }
 
 comptime {

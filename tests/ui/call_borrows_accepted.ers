@@ -36,7 +36,7 @@ fn only_through(r: &mut u32) {
 }
 
 fn through_pointer(r: &mut u32) {
-    *COUNT_POINTER = 1;
+    unsafe { *COUNT_POINTER = 1; }
     *r += 1;
 }
 

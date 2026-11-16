@@ -31,7 +31,7 @@ fn literal(x: u32) -> u32 {
 }
 
 fn register(x: u32) -> u32 {
-    x >> *CTRL
+    unsafe { x >> *CTRL }
 }
 
 entry fn main() -> ! { loop {} }

@@ -207,7 +207,7 @@ entry fn main() -> ! {
     print_u32(read(&*r));
     space();
     let q: *mut u32 = &raw mut c;
-    let t: &mut u32 = &mut *q;
+    let t: &mut u32 = unsafe { &mut *q };
     increment(&mut *t);
     print_u32(*t - 1);
     space();
@@ -233,16 +233,16 @@ entry fn main() -> ! {
     let mut m: u32 = 7;
     let n: u32 = 2;
     let p: *mut u32 = &mut m as *mut u32;
-    *p = *p + 1;
+    unsafe { *p = *p + 1; }
     let s: *const u32 = &n as *const u32;
     let u: *const u32 = &mut m as *const u32;
-    print_u32(*s);
+    unsafe { print_u32(*s); }
     space();
     print_u32(read(&WORDS[0]));
     space();
     print_u32(read(&WORDS[1]));
     space();
-    print_u32(*u);
+    unsafe { print_u32(*u); }
     newline();
 
     // Referents of zero size.

@@ -7,13 +7,13 @@ use core::memcpy;
 
 mod fill {
     pub fn zero(dest: *mut u8, n: usize) {
-        core::memset(dest, 0, n);
+        unsafe { core::memset(dest, 0, n); }
     }
 }
 
 entry fn main() -> ! {
     let buf: *mut u8 = 0x8000_0000 as *mut u8;
-    memcpy(buf, &raw const buf[4], 4);
+    unsafe { memcpy(buf, &raw const buf[4], 4); }
     fill::zero(buf, 8);
     loop {}
 }

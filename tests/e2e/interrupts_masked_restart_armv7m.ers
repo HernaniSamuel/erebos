@@ -16,11 +16,11 @@ use board::{exit, putc};
 const RUNS: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
 
 entry fn main() -> ! {
-    if *RUNS == 0 {
+    if unsafe { *RUNS } == 0 {
         if core::arch::interrupts_enabled() {
             exit(1)
         }
-        *RUNS = 1;
+        unsafe { *RUNS = 1; }
         core::arch::enable_interrupts();
         if !core::arch::interrupts_enabled() {
             exit(2)

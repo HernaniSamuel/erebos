@@ -22,9 +22,9 @@ fn from_peripheral() -> u8 {
 }
 
 fn through_pointer(u: *mut Uart) -> u8 {
-    (*u).thr = 0x68;
-    (*u).ier |= 1;
-    (*u).rbr
+    unsafe { (*u).thr = 0x68; }
+    unsafe { (*u).ier |= 1; }
+    unsafe { (*u).rbr }
 }
 
 fn addresses() -> *const Uart {

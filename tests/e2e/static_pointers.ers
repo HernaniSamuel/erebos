@@ -33,19 +33,19 @@ entry fn main() -> ! {
         if i > 0 {
             putc(b' ');
         }
-        print_u32((*node).value);
-        node = (*node).next;
+        unsafe { print_u32((*node).value); }
+        unsafe { node = (*node).next; }
         i += 1;
     }
     putc(b'\n');
 
     print_u32(ENTRY.tag as u32);
     putc(b' ');
-    print_u32(*THIRD);
+    unsafe { print_u32(*THIRD); }
     putc(b'\n');
 
-    CURSOR = (*CURSOR).next;
-    print_u32((*CURSOR).value);
+    unsafe { CURSOR = (*CURSOR).next; }
+    unsafe { print_u32((*CURSOR).value); }
     putc(b'\n');
     exit(0)
 }

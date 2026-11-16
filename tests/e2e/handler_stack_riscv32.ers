@@ -34,7 +34,7 @@ interrupt fn tick() at Vector::MachineTimer {
     WIDE = widen(0x8000_0001 - 0x7fff_ffff);
     // The next tick, so that one that came before the `wfi` does not leave it
     // waiting for ever.
-    *MTIMECMP_LOW = *MTIME + 1000;
+    unsafe { *MTIMECMP_LOW = *MTIME + 1000; }
 }
 
 fn print_u64(value: u64) {
@@ -57,8 +57,8 @@ fn print_u64(value: u64) {
 }
 
 entry fn main() -> ! {
-    *MTIMECMP_HIGH = 0;
-    *MTIMECMP_LOW = *MTIME + 1000;
+    unsafe { *MTIMECMP_HIGH = 0; }
+    unsafe { *MTIMECMP_LOW = *MTIME + 1000; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     // `sp` is aligned to 16 while it waits, as the compiler leaves it.

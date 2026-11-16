@@ -31,9 +31,9 @@ interrupt fn tick() at Vector::SysTick {
 }
 
 entry fn main() -> ! {
-    *SYST_RVR = 20;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 20; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     let mut i: u32 = 0;
     while i < INCREMENTS {
@@ -56,7 +56,7 @@ entry fn main() -> ! {
             exit(1)
         }
     }
-    *SYST_CSR = 0;
+    unsafe { *SYST_CSR = 0; }
     putc(b'r'); putc(b'a'); putc(b'c'); putc(b'e'); putc(b' ');
     putc(b'o'); putc(b'k'); putc(b'\n');
     exit(0)

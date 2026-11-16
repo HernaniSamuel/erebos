@@ -35,10 +35,10 @@ fn failed_target(s: *const [u8]) {
 struct Regs { data: *const [u8], status: u32 }
 
 fn volatile_slices(regs: *mut volatile Regs, table: *const volatile *const [u8]) {
-    let read: *const [u8] = (*regs).data;
-    (*regs).data = read;
-    let stored: *const [u8] = *table;
-    let status: u32 = (*regs).status;
+    let read: *const [u8] = unsafe { (*regs).data };
+    unsafe { (*regs).data = read; }
+    let stored: *const [u8] = unsafe { *table };
+    let status: u32 = unsafe { (*regs).status };
 }
 
 fn builtins(s: *const [u8], p: *const u8, x: u32) {

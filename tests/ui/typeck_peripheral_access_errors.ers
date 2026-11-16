@@ -53,8 +53,8 @@ fn modes(c: *const Uart) {
     let y: u8 = UART0.thr + 1;
     UART0.thr;
     UART0.thr += 1;
-    (*c).ier = 1;
-    (*c).rbr = 1;
+    unsafe { (*c).ier = 1; }
+    unsafe { (*c).rbr = 1; }
 }
 
 // A private register of another module's peripheral type, and a `pub` one
@@ -97,9 +97,9 @@ fn wholes(u: *mut Uart, c: *const Uart) {
     take(UART0);
     take(*u);
     UART0 = 0;
-    *u = 0;
+    unsafe { *u = 0; }
     UART0 += 1;
-    *c = 0;
+    unsafe { *c = 0; }
 }
 
 entry fn main() -> ! { loop {} }

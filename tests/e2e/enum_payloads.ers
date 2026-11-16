@@ -31,7 +31,7 @@ fn h() -> u32 {
 }
 
 fn byte(m: *const Msg, at: usize) -> u64 {
-    (m as *const u8)[at] as u64
+    unsafe { (m as *const u8)[at] as u64 }
 }
 
 fn half(m: *const Msg, at: usize) -> u64 {

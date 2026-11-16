@@ -65,17 +65,17 @@ ty::mut-borrow-of-immutable
  42 │     let e: &mut u32 = &mut *r;
     ·                             ┬
     ·                             ╰── has type `&u32`
- 43 │     let f: &mut u32 = &mut *p;
+ 43 │     let f: &mut u32 = unsafe { &mut *p };
     ╰────
   help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
 ty::mut-borrow-of-immutable
 
   × cannot borrow as `&mut` through a `*const` pointer
-    ╭─[reference_errors.ers:43:29]
+    ╭─[reference_errors.ers:43:38]
  42 │     let e: &mut u32 = &mut *r;
- 43 │     let f: &mut u32 = &mut *p;
-    ·                             ┬
-    ·                             ╰── has type `*const u32`
+ 43 │     let f: &mut u32 = unsafe { &mut *p };
+    ·                                      ┬
+    ·                                      ╰── has type `*const u32`
  44 │     let g: &mut u32 = unsafe { &mut EXTERNAL };
     ╰────
   help: only `*mut` pointers can be borrowed through as `&mut`
@@ -90,7 +90,7 @@ ty::mut-borrow-of-immutable
  8 │ static TABLE: [u32; 2] = [1, 2];
    ╰────
     ╭─[reference_errors.ers:44:37]
- 43 │     let f: &mut u32 = &mut *p;
+ 43 │     let f: &mut u32 = unsafe { &mut *p };
  44 │     let g: &mut u32 = unsafe { &mut EXTERNAL };
     ·                                     ────┬───
     ·                                         ╰── borrowed here
@@ -122,7 +122,7 @@ ty::mut-borrow-of-immutable
  40 │     let c: &mut [u8; 3] = &mut b"abc";
  41 │     let d: &mut Pair = &mut make();
  42 │     let e: &mut u32 = &mut *r;
- 43 │     let f: &mut u32 = &mut *p;
+ 43 │     let f: &mut u32 = unsafe { &mut *p };
  44 │     let g: &mut u32 = unsafe { &mut EXTERNAL };
  45 │     let h: &mut u32 = &mut make().a;
  46 │     let i: &mut u32 = &mut pair.a;

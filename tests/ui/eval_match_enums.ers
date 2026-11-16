@@ -11,7 +11,7 @@ const SLEEPING: Mode = Mode::Sleep;
 
 fn mode(i: usize) -> Mode {
     let modes: *const [Mode; 4] = &raw const BYTES as *const [Mode; 4];
-    (*modes)[i]
+    unsafe { (*modes)[i] }
 }
 
 fn describe(m: Mode) -> u8 {

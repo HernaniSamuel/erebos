@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_field_modes.ers
 ---
@@ -73,49 +72,52 @@ fn allowed(p: *mut volatile Status) -> ()
     expr 56 bit field mode 1505..1516: u8
     expr 57 register ro 1505..1511: Status
     expr 58 peripheral DEV 1505..1508: Device
-    expr 59 assign 1522..1539: ()
-    expr 60 bit field start 1522..1532: bool
-    expr 61 deref 1522..1526: Status
-    expr 62 local p 1524..1525: *mut volatile Status
-    expr 63 bool true 1535..1539: bool
-    expr 64 bit field busy 1559..1568: bool
-    expr 65 deref 1559..1563: Status
-    expr 66 local p 1561..1562: *mut volatile Status
-    expr 67 assign += 1574..1588: ()
-    expr 68 bit field mode 1574..1583: u8
-    expr 69 deref 1574..1578: Status
-    expr 70 local p 1576..1577: *mut volatile Status
-    expr 71 int 1 1587..1588: u8
-    expr 72 assign += 1594..1608: ()
-    expr 73 register plain 1594..1603: u32
-    expr 74 peripheral DEV 1594..1597: Device
-    expr 75 int 1 1607..1608: u32
+    expr 59 unsafe 1522..1551: ()
+    expr 60 assign 1531..1548: ()
+    expr 61 bit field start 1531..1541: bool
+    expr 62 deref 1531..1535: Status
+    expr 63 local p 1533..1534: *mut volatile Status
+    expr 64 bool true 1544..1548: bool
+    expr 65 unsafe 1570..1590: bool
+    expr 66 bit field busy 1579..1588: bool
+    expr 67 deref 1579..1583: Status
+    expr 68 local p 1581..1582: *mut volatile Status
+    expr 69 unsafe 1596..1622: ()
+    expr 70 assign += 1605..1619: ()
+    expr 71 bit field mode 1605..1614: u8
+    expr 72 deref 1605..1609: Status
+    expr 73 local p 1607..1608: *mut volatile Status
+    expr 74 int 1 1618..1619: u8
+    expr 75 assign += 1627..1641: ()
+    expr 76 register plain 1627..1636: u32
+    expr 77 peripheral DEV 1627..1630: Device
+    expr 78 int 1 1640..1641: u32
 fn whole() -> ()
-    expr 76 assign 1760..1840: ()
-    expr 77 register rw 1760..1766: Status
-    expr 78 peripheral DEV 1760..1763: Device
-    expr 79 struct Status 1769..1840: Status
-    expr 80 bool true 1784..1788: bool
-    expr 81 bool false 1797..1802: bool
-    expr 82 int 0 1810..1811: u8
-    expr 83 bool false 1820..1825: bool
-    expr 84 bool false 1833..1838: bool
-    expr 85 assign 1846..1881: ()
-    expr 86 register wo 1846..1852: Status
-    expr 87 peripheral DEV 1846..1849: Device
-    expr 88 struct Status .. 1855..1881: Status
-    expr 89 bool true 1871..1875: bool
+    expr 79 assign 1793..1873: ()
+    expr 80 register rw 1793..1799: Status
+    expr 81 peripheral DEV 1793..1796: Device
+    expr 82 struct Status 1802..1873: Status
+    expr 83 bool true 1817..1821: bool
+    expr 84 bool false 1830..1835: bool
+    expr 85 int 0 1843..1844: u8
+    expr 86 bool false 1853..1858: bool
+    expr 87 bool false 1866..1871: bool
+    expr 88 assign 1879..1914: ()
+    expr 89 register wo 1879..1885: Status
+    expr 90 peripheral DEV 1879..1882: Device
+    expr 91 struct Status .. 1888..1914: Status
+    expr 92 bool true 1904..1908: bool
 entry fn main() -> !
-    expr 90 loop 1909..1916: !
+    expr 93 loop 1942..1949: !
 panic fn on_panic() -> !
-    expr 91 loop 1946..1953: !
+    expr 94 loop 1979..1986: !
 comptime fn SHADOW() -> Status
-    expr 92 struct Status 969..1041: Status
-    expr 93 bool false 984..989: bool
-    expr 94 bool false 998..1003: bool
-    expr 95 int 0 1011..1012: u8
-    expr 96 bool false 1021..1026: bool
-    expr 97 bool false 1034..1039: bool
+    expr 95 struct Status 969..1041: Status
+    expr 96 bool false 984..989: bool
+    expr 97 bool false 998..1003: bool
+    expr 98 int 0 1011..1012: u8
+    expr 99 bool false 1021..1026: bool
+    expr 100 bool false 1034..1039: bool
 comptime fn default() -> bool
     expr 0 bool false 278..283: bool
 comptime fn default() -> bool

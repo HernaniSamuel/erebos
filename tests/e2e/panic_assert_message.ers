@@ -57,10 +57,10 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
     print(reason(info.reason));
     if len(info.message) > 0 {
         print(&b": ");
-        print(&*info.message);
+        unsafe { print(&*info.message); }
     }
     print(&b" at ");
-    print(&*info.file);
+    unsafe { print(&*info.file); }
     print(&b":");
     print_u32(info.line);
     print(&b":");

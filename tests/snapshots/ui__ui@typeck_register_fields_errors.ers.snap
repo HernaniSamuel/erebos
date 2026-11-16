@@ -278,7 +278,7 @@ ty::read-with-effects
  73 │     UART0.lsr.count += 1;
     ·     ───────┬───────
     ·            ╰── read by this compound assignment
- 74 │     (*l).data_ready = false;
+ 74 │     unsafe { (*l).data_ready = false; }
     ╰────
   help: the read would go unseen, and what it returned lost; read the value into a `let` first,
         which shows the read, then write the whole value meant (ADR 0060)
@@ -292,12 +292,12 @@ ty::read-with-effects
     ·                                 ╰── a read has effects
  23 │     pub count: u8 at 4..=6,
     ╰────
-    ╭─[typeck_register_fields_errors.ers:74:5]
+    ╭─[typeck_register_fields_errors.ers:74:14]
  73 │     UART0.lsr.count += 1;
- 74 │     (*l).data_ready = false;
-    ·     ───────┬───────
-    ·            ╰── read by this field assignment
- 75 │     (*l).count += 1;
+ 74 │     unsafe { (*l).data_ready = false; }
+    ·              ───────┬───────
+    ·                     ╰── read by this field assignment
+ 75 │     unsafe { (*l).count += 1; }
     ╰────
   help: the read would go unseen, and what it returned lost; read the value into a `let` first,
         which shows the read, then write the whole value meant (ADR 0060)
@@ -311,11 +311,11 @@ ty::read-with-effects
     ·                                 ╰── a read has effects
  23 │     pub count: u8 at 4..=6,
     ╰────
-    ╭─[typeck_register_fields_errors.ers:75:5]
- 74 │     (*l).data_ready = false;
- 75 │     (*l).count += 1;
-    ·     ─────┬────
-    ·          ╰── read by this compound assignment
+    ╭─[typeck_register_fields_errors.ers:75:14]
+ 74 │     unsafe { (*l).data_ready = false; }
+ 75 │     unsafe { (*l).count += 1; }
+    ·              ─────┬────
+    ·                   ╰── read by this compound assignment
  76 │ }
     ╰────
   help: the read would go unseen, and what it returned lost; read the value into a `let` first,
@@ -354,7 +354,7 @@ ty::compound-write-effect
  82 │     TIMER0.pending.flip ^= true;
     ·     ─────────┬─────────
     ·              ╰── read and written back to the register
- 83 │     (*p).mask += 1;
+ 83 │     unsafe { (*p).mask += 1; }
     ╰────
   help: every `0` written to it toggles its bit, so writing back the bits read toggles each one
         read as `0`; assign the field the bits meant with `=` (ADR 0060)
@@ -368,11 +368,11 @@ ty::compound-write-effect
     ·                                   ╰── declared here
  29 │     pub flip: bool at 16 write 0 toggles,
     ╰────
-    ╭─[typeck_register_fields_errors.ers:83:5]
+    ╭─[typeck_register_fields_errors.ers:83:14]
  82 │     TIMER0.pending.flip ^= true;
- 83 │     (*p).mask += 1;
-    ·     ────┬────
-    ·         ╰── read and written back through a volatile pointer
+ 83 │     unsafe { (*p).mask += 1; }
+    ·              ────┬────
+    ·                  ╰── read and written back through a volatile pointer
  84 │     local.mask |= 1 << 3;
     ╰────
   help: every `1` written to it clears its bit, so writing back the bits read clears each one read
@@ -447,8 +447,8 @@ ty::read-with-effects
  71 │     UART0.data += 1;
  72 │     UART0.lsr.data_ready = false;
  73 │     UART0.lsr.count += 1;
- 74 │     (*l).data_ready = false;
- 75 │     (*l).count += 1;
+ 74 │     unsafe { (*l).data_ready = false; }
+ 75 │     unsafe { (*l).count += 1; }
  76 │ }
  77 │ 
  78 │ // Compound assignments to fields with write effects, in a register and
@@ -456,7 +456,7 @@ ty::read-with-effects
  80 │ fn write_effects(p: *mut volatile Pending, mut local: Pending) {
  81 │     TIMER0.pending.mask |= 1 << 3;
  82 │     TIMER0.pending.flip ^= true;
- 83 │     (*p).mask += 1;
+ 83 │     unsafe { (*p).mask += 1; }
  84 │     local.mask |= 1 << 3;
  85 │ }
  86 │ 
@@ -525,8 +525,8 @@ ty::read-of-write-only
  71 │     UART0.data += 1;
  72 │     UART0.lsr.data_ready = false;
  73 │     UART0.lsr.count += 1;
- 74 │     (*l).data_ready = false;
- 75 │     (*l).count += 1;
+ 74 │     unsafe { (*l).data_ready = false; }
+ 75 │     unsafe { (*l).count += 1; }
  76 │ }
  77 │ 
  78 │ // Compound assignments to fields with write effects, in a register and
@@ -534,7 +534,7 @@ ty::read-of-write-only
  80 │ fn write_effects(p: *mut volatile Pending, mut local: Pending) {
  81 │     TIMER0.pending.mask |= 1 << 3;
  82 │     TIMER0.pending.flip ^= true;
- 83 │     (*p).mask += 1;
+ 83 │     unsafe { (*p).mask += 1; }
  84 │     local.mask |= 1 << 3;
  85 │ }
  86 │ 

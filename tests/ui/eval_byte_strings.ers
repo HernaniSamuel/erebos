@@ -28,8 +28,8 @@ fn answers() -> u32 {
     let h: u8 = comptime HELLO[0];
     let o: u8 = comptime HELLO[4];
     let second: u8 = SECOND;
-    let k: u8 = comptime (*OK)[1];
-    let i: u8 = comptime (*MESSAGES[0])[1];
+    let k: u8 = unsafe { comptime (*OK)[1] };
+    let i: u8 = unsafe { comptime (*MESSAGES[0])[1] };
     let same: bool = SAME_OCCURRENCE;
     let equal: bool = comptime OFFSETS[0];
     let ordered: bool = comptime OFFSETS[1];

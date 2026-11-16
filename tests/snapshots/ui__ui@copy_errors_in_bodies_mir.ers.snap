@@ -106,11 +106,11 @@ ty::non-copy-repeat
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Handle` out of a place through a pointer
-    ╭─[copy_errors_in_bodies_mir.ers:69:5]
+    ╭─[copy_errors_in_bodies_mir.ers:69:14]
  68 │ fn from_pointer(p: *mut Handle) -> Handle {
- 69 │     *p
-    ·     ─┬
-    ·      ╰── `Handle` is not copy, and this is a place through a pointer
+ 69 │     unsafe { *p }
+    ·              ─┬
+    ·               ╰── `Handle` is not copy, and this is a place through a pointer
  70 │ }
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)

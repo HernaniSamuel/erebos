@@ -10,7 +10,7 @@ use board::{exit, putc};
 fn fill(buf: *mut u8, n: usize, first: u8) {
     let mut i: usize = 0;
     while i < n {
-        buf[i] = first + i as u8;
+        unsafe { buf[i] = first + i as u8; }
         i += 1;
     }
 }
@@ -21,33 +21,33 @@ entry fn main() -> ! {
     fill(buf, 5, b'a');
     let mut i: usize = 0;
     while i < 5 {
-        putc(buf[i]);
+        unsafe { putc(buf[i]); }
         i += 1;
     }
     let third: *mut u8 = &raw mut buf[2];
     putc(b' ');
-    putc(*third);
+    unsafe { putc(*third); }
     putc(b'\n');
 
     let mut x: u32 = 5;
     let p: *mut u32 = &raw mut x;
-    *p = 7;
+    unsafe { *p = 7; }
     putc(b'0' + x as u8);
     putc(b' ');
 
     // A `bool` in memory reads `true` for any nonzero byte (ADR 0022).
     let mut flag: bool = false;
     let byte: *mut u8 = &raw mut flag as *mut u8;
-    *byte = 2;
+    unsafe { *byte = 2; }
     putc(if flag { b'T' } else { b'F' });
     putc(b'\n');
 
     // Indexing a volatile pointer stores and loads at once, in order.
     let cell: *mut volatile u8 = board::SCRATCH as *mut volatile u8;
-    cell[0] = b'!';
-    putc(cell[0]);
-    cell[0] = b'\n';
-    putc(cell[0]);
+    unsafe { cell[0] = b'!'; }
+    unsafe { putc(cell[0]); }
+    unsafe { cell[0] = b'\n'; }
+    unsafe { putc(cell[0]); }
     exit(0)
 }
 

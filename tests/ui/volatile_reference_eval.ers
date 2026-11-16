@@ -15,20 +15,20 @@ struct Ring {
 
 fn read_through() -> u32 {
     let p: *mut volatile u32 = 0x2000_0000 as *mut volatile u32;
-    let r: &volatile u32 = &*p;
+    let r: &volatile u32 = unsafe { &*p };
     *r
 }
 
 fn write_through() -> u32 {
     let p: *mut volatile u32 = 0x2000_0000 as *mut volatile u32;
-    let r: &mut volatile u32 = &mut *p;
+    let r: &mut volatile u32 = unsafe { &mut *p };
     *r = 1;
     0
 }
 
 fn field_through() -> u32 {
     let p: *mut volatile Ring = 0x2000_0000 as *mut volatile Ring;
-    let r: &mut volatile Ring = &mut *p;
+    let r: &mut volatile Ring = unsafe { &mut *p };
     let t: &volatile u32 = &(*r).tail;
     *t
 }

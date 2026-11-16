@@ -71,8 +71,8 @@ fn read_effects(l: *mut volatile Lsr) {
     UART0.data += 1;
     UART0.lsr.data_ready = false;
     UART0.lsr.count += 1;
-    (*l).data_ready = false;
-    (*l).count += 1;
+    unsafe { (*l).data_ready = false; }
+    unsafe { (*l).count += 1; }
 }
 
 // Compound assignments to fields with write effects, in a register and
@@ -80,7 +80,7 @@ fn read_effects(l: *mut volatile Lsr) {
 fn write_effects(p: *mut volatile Pending, mut local: Pending) {
     TIMER0.pending.mask |= 1 << 3;
     TIMER0.pending.flip ^= true;
-    (*p).mask += 1;
+    unsafe { (*p).mask += 1; }
     local.mask |= 1 << 3;
 }
 

@@ -17,11 +17,19 @@
 // at `-O` so do copy and fill loops. Byte by byte: small and obviously
 // right; speed can come later.
 
+// The memory functions write through raw pointers they cannot check, so each
+// is an `unsafe fn` (ADR 0119): the caller vouches for the pointers, and the
+// accesses in the bodies are in `unsafe` blocks of their own. C and the code
+// LLVM generates call them as before.
+
+// Safety: `dest` is valid for writes of `n` bytes, `src` for reads of `n`
+// bytes, and the two areas do not overlap.
 #[export]
-pub fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+pub unsafe fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     let mut i: usize = 0;
     while i < n {
-        dest[i] = src[i];
+        // Sound: `i < n`, and the caller vouches for `n` bytes at both.
+        unsafe { dest[i] = src[i]; }
         i += 1;
     }
     dest
@@ -29,26 +37,36 @@ pub fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
 
 // Like `memcpy`, but the two areas may overlap: copying backwards when the
 // destination is above the source never overwrites bytes not yet copied.
+//
+// Safety: `dest` is valid for writes of `n` bytes and `src` for reads of `n`
+// bytes; the areas may overlap.
 #[export]
-pub fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+pub unsafe fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     if (dest as usize) < (src as usize) {
-        return memcpy(dest, src, n);
+        // Sound: the caller's contract is `memcpy`'s but for the overlap, and
+        // with `dest` below `src` the forward byte-by-byte copy `memcpy` makes
+        // never overwrites a byte not yet read.
+        return unsafe { memcpy(dest, src, n) };
     }
     let mut i: usize = n;
     while i > 0 {
         i -= 1;
-        dest[i] = src[i];
+        // Sound: `i < n`, and the caller vouches for `n` bytes at both.
+        unsafe { dest[i] = src[i]; }
     }
     dest
 }
 
 // `c` is a C `int`; only its low byte is stored.
+//
+// Safety: `dest` is valid for writes of `n` bytes.
 #[export]
-pub fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
+pub unsafe fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
     let byte: u8 = c as u8;
     let mut i: usize = 0;
     while i < n {
-        dest[i] = byte;
+        // Sound: `i < n`, and the caller vouches for `n` bytes at `dest`.
+        unsafe { dest[i] = byte; }
         i += 1;
     }
     dest
@@ -63,67 +81,96 @@ pub fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
 // its `4` and `8` forms (a destination, and a source, aligned to 4 or 8
 // bytes): byte by byte, it needs none. None returns a value.
 
+// Each is an `unsafe fn` with the contract of the function it calls, which the
+// caller vouches for, so each call is sound in its own block (ADR 0119).
+
+// Safety: that of `memcpy`.
 #[export]
-fn __aeabi_memcpy(dest: *mut u8, src: *const u8, n: usize) {
-    memcpy(dest, src, n);
+unsafe fn __aeabi_memcpy(dest: *mut u8, src: *const u8, n: usize) {
+    // Sound: the caller upholds the contract of `memcpy`, which is this one.
+    unsafe { memcpy(dest, src, n); }
 }
 
+// Safety: that of `memcpy`.
 #[export]
-fn __aeabi_memcpy4(dest: *mut u8, src: *const u8, n: usize) {
-    memcpy(dest, src, n);
+unsafe fn __aeabi_memcpy4(dest: *mut u8, src: *const u8, n: usize) {
+    // Sound: the caller upholds the contract of `memcpy`, which is this one.
+    unsafe { memcpy(dest, src, n); }
 }
 
+// Safety: that of `memcpy`.
 #[export]
-fn __aeabi_memcpy8(dest: *mut u8, src: *const u8, n: usize) {
-    memcpy(dest, src, n);
+unsafe fn __aeabi_memcpy8(dest: *mut u8, src: *const u8, n: usize) {
+    // Sound: the caller upholds the contract of `memcpy`, which is this one.
+    unsafe { memcpy(dest, src, n); }
 }
 
+// Safety: that of `memmove`.
 #[export]
-fn __aeabi_memmove(dest: *mut u8, src: *const u8, n: usize) {
-    memmove(dest, src, n);
+unsafe fn __aeabi_memmove(dest: *mut u8, src: *const u8, n: usize) {
+    // Sound: the caller upholds the contract of `memmove`, which is this one.
+    unsafe { memmove(dest, src, n); }
 }
 
+// Safety: that of `memmove`.
 #[export]
-fn __aeabi_memmove4(dest: *mut u8, src: *const u8, n: usize) {
-    memmove(dest, src, n);
+unsafe fn __aeabi_memmove4(dest: *mut u8, src: *const u8, n: usize) {
+    // Sound: the caller upholds the contract of `memmove`, which is this one.
+    unsafe { memmove(dest, src, n); }
 }
 
+// Safety: that of `memmove`.
 #[export]
-fn __aeabi_memmove8(dest: *mut u8, src: *const u8, n: usize) {
-    memmove(dest, src, n);
+unsafe fn __aeabi_memmove8(dest: *mut u8, src: *const u8, n: usize) {
+    // Sound: the caller upholds the contract of `memmove`, which is this one.
+    unsafe { memmove(dest, src, n); }
 }
 
 // `memset`'s `n` and `c` swapped: the EABI puts the length before the value.
 // Only the low byte of `c` is stored.
+//
+// Safety: that of `memset`.
 #[export]
-fn __aeabi_memset(dest: *mut u8, n: usize, c: i32) {
-    memset(dest, c, n);
+unsafe fn __aeabi_memset(dest: *mut u8, n: usize, c: i32) {
+    // Sound: the caller upholds the contract of `memset`, which is this one.
+    unsafe { memset(dest, c, n); }
 }
 
+// Safety: that of `memset`.
 #[export]
-fn __aeabi_memset4(dest: *mut u8, n: usize, c: i32) {
-    memset(dest, c, n);
+unsafe fn __aeabi_memset4(dest: *mut u8, n: usize, c: i32) {
+    // Sound: the caller upholds the contract of `memset`, which is this one.
+    unsafe { memset(dest, c, n); }
 }
 
+// Safety: that of `memset`.
 #[export]
-fn __aeabi_memset8(dest: *mut u8, n: usize, c: i32) {
-    memset(dest, c, n);
+unsafe fn __aeabi_memset8(dest: *mut u8, n: usize, c: i32) {
+    // Sound: the caller upholds the contract of `memset`, which is this one.
+    unsafe { memset(dest, c, n); }
 }
 
 // A fill with zero: no value argument.
+//
+// Safety: that of `memset`.
 #[export]
-fn __aeabi_memclr(dest: *mut u8, n: usize) {
-    memset(dest, 0, n);
+unsafe fn __aeabi_memclr(dest: *mut u8, n: usize) {
+    // Sound: the caller upholds the contract of `memset`, which is this one.
+    unsafe { memset(dest, 0, n); }
 }
 
+// Safety: that of `memset`.
 #[export]
-fn __aeabi_memclr4(dest: *mut u8, n: usize) {
-    memset(dest, 0, n);
+unsafe fn __aeabi_memclr4(dest: *mut u8, n: usize) {
+    // Sound: the caller upholds the contract of `memset`, which is this one.
+    unsafe { memset(dest, 0, n); }
 }
 
+// Safety: that of `memset`.
 #[export]
-fn __aeabi_memclr8(dest: *mut u8, n: usize) {
-    memset(dest, 0, n);
+unsafe fn __aeabi_memclr8(dest: *mut u8, n: usize) {
+    // Sound: the caller upholds the contract of `memset`, which is this one.
+    unsafe { memset(dest, 0, n); }
 }
 
 // --- 64-bit division --------------------------------------------------------

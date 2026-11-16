@@ -149,25 +149,25 @@ ty::read-of-write-only
  55 │     UART0.thr += 1;
     ·     ────┬────
     ·         ╰── read and written by this compound assignment
- 56 │     (*c).ier = 1;
+ 56 │     unsafe { (*c).ier = 1; }
     ╰────
   help: a `write` register can only be assigned with `=`, since a compound assignment reads it
         first; declare it `read write` if the device also lets it be read (ADR 0058)
 ty::write-through-const
 
   × cannot write through a `*const` pointer
-    ╭─[typeck_peripheral_access_errors.ers:56:7]
+    ╭─[typeck_peripheral_access_errors.ers:56:16]
  55 │     UART0.thr += 1;
- 56 │     (*c).ier = 1;
-    ·       ┬
-    ·       ╰── has type `*const Uart`
- 57 │     (*c).rbr = 1;
+ 56 │     unsafe { (*c).ier = 1; }
+    ·                ┬
+    ·                ╰── has type `*const Uart`
+ 57 │     unsafe { (*c).rbr = 1; }
     ╰────
   help: only `*mut` pointers can be written through
 ty::write-to-read-only
 
   × the register `rbr` of `Uart` is read-only
-    ╭─[typeck_peripheral_access_errors.ers:57:5]
+    ╭─[typeck_peripheral_access_errors.ers:57:14]
  40 │ peripheral Uart {
  41 │     read rbr: u8 at 0,
     ·          ─┬─
@@ -186,10 +186,10 @@ ty::write-to-read-only
  53 │     let y: u8 = UART0.thr + 1;
  54 │     UART0.thr;
  55 │     UART0.thr += 1;
- 56 │     (*c).ier = 1;
- 57 │     (*c).rbr = 1;
-    ·     ────┬───
-    ·         ╰── written here
+ 56 │     unsafe { (*c).ier = 1; }
+ 57 │     unsafe { (*c).rbr = 1; }
+    ·              ────┬───
+    ·                  ╰── written here
  58 │ }
     ╰────
   help: a `read` register can only be read; declare it `read write` if the device also lets it be
@@ -197,11 +197,11 @@ ty::write-to-read-only
 ty::write-through-const
 
   × cannot write through a `*const` pointer
-    ╭─[typeck_peripheral_access_errors.ers:57:7]
- 56 │     (*c).ier = 1;
- 57 │     (*c).rbr = 1;
-    ·       ┬
-    ·       ╰── has type `*const Uart`
+    ╭─[typeck_peripheral_access_errors.ers:57:16]
+ 56 │     unsafe { (*c).ier = 1; }
+ 57 │     unsafe { (*c).rbr = 1; }
+    ·                ┬
+    ·                ╰── has type `*const Uart`
  58 │ }
     ╰────
   help: only `*mut` pointers can be written through
@@ -417,18 +417,18 @@ ty::peripheral-by-value
   99 │     UART0 = 0;
      ·     ──┬──
      ·       ╰── a device, written as a whole
- 100 │     *u = 0;
+ 100 │     unsafe { *u = 0; }
      ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
         function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
 ty::peripheral-by-value
 
   × `Uart` is a peripheral type, which no value has
-     ╭─[typeck_peripheral_access_errors.ers:100:5]
+     ╭─[typeck_peripheral_access_errors.ers:100:14]
   99 │     UART0 = 0;
- 100 │     *u = 0;
-     ·     ─┬
-     ·      ╰── a device, written as a whole
+ 100 │     unsafe { *u = 0; }
+     ·              ─┬
+     ·               ╰── a device, written as a whole
  101 │     UART0 += 1;
      ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
@@ -437,22 +437,22 @@ ty::peripheral-by-value
 
   × `Uart` is a peripheral type, which no value has
      ╭─[typeck_peripheral_access_errors.ers:101:5]
- 100 │     *u = 0;
+ 100 │     unsafe { *u = 0; }
  101 │     UART0 += 1;
      ·     ──┬──
      ·       ╰── a device, read and written as a whole
- 102 │     *c = 0;
+ 102 │     unsafe { *c = 0; }
      ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
         function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
 ty::peripheral-by-value
 
   × `Uart` is a peripheral type, which no value has
-     ╭─[typeck_peripheral_access_errors.ers:102:5]
+     ╭─[typeck_peripheral_access_errors.ers:102:14]
  101 │     UART0 += 1;
- 102 │     *c = 0;
-     ·     ─┬
-     ·      ╰── a device, written as a whole
+ 102 │     unsafe { *c = 0; }
+     ·              ─┬
+     ·               ╰── a device, written as a whole
  103 │ }
      ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a

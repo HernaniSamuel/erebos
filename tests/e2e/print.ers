@@ -29,9 +29,9 @@ fn part(s: &[u8], start: usize, n: usize) -> &[u8] {
 
 static GREETING: *const [u8] = &raw const b"hello from erebos";
 static MESSAGES: [*const [u8]; 3] = [
-    part(&*TOPICS, 0, 7) as *const [u8],
-    part(&*TOPICS, 9, 12) as *const [u8],
-    part(&*TOPICS, 23, 6) as *const [u8],
+    part(unsafe { &*TOPICS }, 0, 7) as *const [u8],
+    part(unsafe { &*TOPICS }, 9, 12) as *const [u8],
+    part(unsafe { &*TOPICS }, 23, 6) as *const [u8],
 ];
 
 // The length of the longest message, computed from the static table.
@@ -84,7 +84,7 @@ fn print_hex(value: u32) {
     let mut digits: [u8; 10] = b"0x00000000";
     let mut i: usize = 0;
     while i < 8 {
-        digits[9 - i] = (*HEX_DIGITS)[((value >> (4 * i as u32)) & 0xF) as usize];
+        unsafe { digits[9 - i] = (*HEX_DIGITS)[((value >> (4 * i as u32)) & 0xF) as usize]; }
         i += 1;
     }
     print(&digits);
@@ -98,12 +98,12 @@ fn print_number(value: u32) {
 }
 
 entry fn main() -> ! {
-    print(&*GREETING);
+    unsafe { print(&*GREETING); }
     print(&b"\n");
 
     let mut i: usize = 0;
     while i < len(&MESSAGES) {
-        print(&*MESSAGES[i]);
+        unsafe { print(&*MESSAGES[i]); }
         print(&b" ");
         print_u32(len(MESSAGES[i]) as u32);
         print(&b"\n");

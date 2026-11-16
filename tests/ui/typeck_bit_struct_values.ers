@@ -64,12 +64,12 @@ fn writes(p: *mut Lcr, v: *mut volatile Control) {
     u.lcr.break_control = true;
     u.control.count += 1;
     u.control.limit = 0x1234;
-    (*p).dlab = false;
-    (*p).two_stop_bits ^= true;
-    (*v).count = 3;
-    (*v).count -= 1;
-    (*v).enable = (*v).limit > 10;
-    *v = Control { enable: true, .. };
+    unsafe { (*p).dlab = false; }
+    unsafe { (*p).two_stop_bits ^= true; }
+    unsafe { (*v).count = 3; }
+    unsafe { (*v).count -= 1; }
+    unsafe { (*v).enable = (*v).limit > 10; }
+    unsafe { *v = Control { enable: true, .. }; }
 }
 
 fn casts(l: Lcr, x: u8) -> u64 {

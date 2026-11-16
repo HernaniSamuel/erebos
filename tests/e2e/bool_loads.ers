@@ -14,9 +14,9 @@ fn scratch() -> *mut u8 {
 
 fn show(byte: u8) {
     let p: *mut u8 = scratch();
-    *p = byte;
+    unsafe { *p = byte; }
     let flag: *const bool = p as *const bool;
-    putc(if *flag { b'T' } else { b'F' });
+    unsafe { putc(if *flag { b'T' } else { b'F' }); }
 }
 
 entry fn main() -> ! {
@@ -28,8 +28,8 @@ entry fn main() -> ! {
 
     // Writing a `bool` stores exactly 1.
     let flag: *mut bool = scratch() as *mut bool;
-    *flag = true;
-    putc(b'0' + *scratch());
+    unsafe { *flag = true; }
+    unsafe { putc(b'0' + *scratch()); }
     putc(b'\n');
     exit(0)
 }

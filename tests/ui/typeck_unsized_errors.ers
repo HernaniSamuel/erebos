@@ -36,8 +36,8 @@ fn never() {
 // `&raw`, but not read or written whole, nor passed on as a value.
 fn places(s: *const [u8], m: *mut [u8]) {
     let whole: u8 = *s;
-    *m = 0;
-    *m += 1;
+    unsafe { *m = 0; }
+    unsafe { *m += 1; }
     let length: usize = len(*s);
     let block: u8 = { *s };
 }

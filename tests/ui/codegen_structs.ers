@@ -5,9 +5,9 @@
 struct Regs { data: u8, status: u8, control: u32 }
 
 fn device(regs: *mut volatile Regs) -> u8 {
-    (*regs).control = 1;
-    (*regs).data = (*regs).status;
-    (*regs).data
+    unsafe { (*regs).control = 1; }
+    unsafe { (*regs).data = (*regs).status; }
+    unsafe { (*regs).data }
 }
 
 fn local() -> u32 {

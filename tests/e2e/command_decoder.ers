@@ -158,7 +158,7 @@ fn print_hex(value: u32, digits: u32) {
     let mut i: u32 = digits;
     while i > 0 {
         i -= 1;
-        board::putc((*HEX_DIGITS)[((value >> (4 * i)) & 0xF) as usize]);
+        unsafe { board::putc((*HEX_DIGITS)[((value >> (4 * i)) & 0xF) as usize]); }
     }
 }
 

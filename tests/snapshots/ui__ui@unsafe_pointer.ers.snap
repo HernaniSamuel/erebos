@@ -1,0 +1,422 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_pointer.ers
+---
+--- typeck ---
+peripheral Uart { read write ctrl: u32 at 0x0, read status: u32 at 0x4, read write data: [u8; 4] at 0x8 step 0x1 } extent 12, align 4
+struct Pair { a: u32 at 0, b: u32 at 4 } size 8, align 4
+struct Node { value: u32 at 0, next: *mut Node at 4, items: [u8; 4] at 8 } size 12, align 4
+struct Reg { n: u32 at 0 } size 4, align 4
+enum Mode: u8 { Off = 0, On = 1 }
+fn Reg::get(self: &Reg) -> u32
+    expr 0 field n 793..799: u32
+    expr 1 local self 793..797: &Reg, dereferenced
+fn Reg::set(self: &mut Reg, n: u32) -> ()
+    expr 2 assign 847..857: ()
+    expr 3 field n 847..853: u32
+    expr 4 local self 847..851: &mut Reg, dereferenced
+    expr 5 local n 856..857: u32
+fn Reg::take(self: Reg) -> u32
+    expr 6 field n 901..907: u32
+    expr 7 local self 901..905: Reg
+fn reads(p: *const u32, q: *mut u32, pair: *const Pair, a: *const [u8; 4], s: *const [u8], i: usize) -> u32
+    let one: u32
+    let two: u32
+    let three: u32
+    let four: u32
+    let five: u8
+    let six: u8
+    expr 8 unsafe 1204..1217: u32
+    expr 9 deref 1213..1215: u32
+    expr 10 local p 1214..1215: *const u32
+    expr 11 unsafe 1238..1253: u32
+    expr 12 index 1247..1251: u32
+    expr 13 local p 1247..1248: *const u32
+    expr 14 local i 1249..1250: usize
+    expr 15 unsafe 1276..1291: u32
+    expr 16 index 1285..1289: u32
+    expr 17 local q 1285..1286: *mut u32
+    expr 18 int 2 1287..1288: usize
+    expr 19 unsafe 1313..1333: u32
+    expr 20 field a 1322..1331: u32
+    expr 21 deref 1322..1329: Pair
+    expr 22 local pair 1324..1328: *const Pair
+    expr 23 unsafe 1354..1372: u8
+    expr 24 index 1363..1370: u8
+    expr 25 deref 1363..1367: [u8; 4]
+    expr 26 local a 1365..1366: *const [u8; 4]
+    expr 27 local i 1368..1369: usize
+    expr 28 unsafe 1392..1410: u8
+    expr 29 index 1401..1408: u8
+    expr 30 deref 1401..1405: [u8]
+    expr 31 local s 1403..1404: *const [u8]
+    expr 32 local i 1406..1407: usize
+    expr 33 binary + 1416..1467: u32
+    expr 34 binary + 1416..1454: u32
+    expr 35 binary + 1416..1440: u32
+    expr 36 binary + 1416..1433: u32
+    expr 37 binary + 1416..1425: u32
+    expr 38 local one 1416..1419: u32
+    expr 39 local two 1422..1425: u32
+    expr 40 local three 1428..1433: u32
+    expr 41 local four 1436..1440: u32
+    expr 42 as u32 1443..1454: u32
+    expr 43 local five 1443..1447: u8
+    expr 44 as u32 1457..1467: u32
+    expr 45 local six 1457..1460: u8
+fn writes(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4], s: *mut [u8], i: usize) -> ()
+    expr 46 unsafe 1558..1576: ()
+    expr 47 assign 1567..1573: ()
+    expr 48 deref 1567..1569: u32
+    expr 49 local p 1568..1569: *mut u32
+    expr 50 int 1 1572..1573: u32
+    expr 51 unsafe 1581..1601: ()
+    expr 52 assign 1590..1598: ()
+    expr 53 index 1590..1594: u32
+    expr 54 local p 1590..1591: *mut u32
+    expr 55 local i 1592..1593: usize
+    expr 56 int 2 1597..1598: u32
+    expr 57 unsafe 1606..1631: ()
+    expr 58 assign 1615..1628: ()
+    expr 59 field b 1615..1624: u32
+    expr 60 deref 1615..1622: Pair
+    expr 61 local pair 1617..1621: *mut Pair
+    expr 62 int 3 1627..1628: u32
+    expr 63 unsafe 1636..1659: ()
+    expr 64 assign 1645..1656: ()
+    expr 65 index 1645..1652: u8
+    expr 66 deref 1645..1649: [u8; 4]
+    expr 67 local a 1647..1648: *mut [u8; 4]
+    expr 68 local i 1650..1651: usize
+    expr 69 int 4 1655..1656: u8
+    expr 70 unsafe 1664..1687: ()
+    expr 71 assign 1673..1684: ()
+    expr 72 index 1673..1680: u8
+    expr 73 deref 1673..1677: [u8]
+    expr 74 local s 1675..1676: *mut [u8]
+    expr 75 local i 1678..1679: usize
+    expr 76 int 5 1683..1684: u8
+fn updates(p: *mut u32, pair: *mut Pair, s: *mut [u8], i: usize) -> ()
+    expr 77 unsafe 1805..1824: ()
+    expr 78 assign += 1814..1821: ()
+    expr 79 deref 1814..1816: u32
+    expr 80 local p 1815..1816: *mut u32
+    expr 81 int 1 1820..1821: u32
+    expr 82 unsafe 1829..1850: ()
+    expr 83 assign |= 1838..1847: ()
+    expr 84 index 1838..1842: u32
+    expr 85 local p 1838..1839: *mut u32
+    expr 86 local i 1840..1841: usize
+    expr 87 int 2 1846..1847: u32
+    expr 88 unsafe 1855..1881: ()
+    expr 89 assign -= 1864..1878: ()
+    expr 90 field a 1864..1873: u32
+    expr 91 deref 1864..1871: Pair
+    expr 92 local pair 1866..1870: *mut Pair
+    expr 93 int 1 1877..1878: u32
+    expr 94 unsafe 1886..1910: ()
+    expr 95 assign ^= 1895..1907: ()
+    expr 96 index 1895..1902: u8
+    expr 97 deref 1895..1899: [u8]
+    expr 98 local s 1897..1898: *mut [u8]
+    expr 99 local i 1900..1901: usize
+    expr 100 int 1 1906..1907: u8
+fn ranges(s: *const [u8], t: *mut [u8]) -> usize
+    let part: &[u8]
+    let from: &[u8]
+    let upto: &mut [u8]
+    expr 101 unsafe 2061..2083: &[u8]
+    expr 102 & 2070..2081: &[u8]
+    expr 103 subslice 2071..2081: [u8]
+    expr 104 deref 2071..2075: [u8]
+    expr 105 local s 2073..2074: *const [u8]
+    expr 106 int 1 2076..2077: usize
+    expr 107 int 3 2079..2080: usize
+    expr 108 unsafe 2107..2128: &[u8]
+    expr 109 & 2116..2126: &[u8]
+    expr 110 subslice 2117..2126: [u8]
+    expr 111 deref 2117..2121: [u8]
+    expr 112 local s 2119..2120: *const [u8]
+    expr 113 int 2 2122..2123: usize
+    expr 114 unsafe 2156..2181: &mut [u8]
+    expr 115 &mut 2165..2179: &mut [u8]
+    expr 116 subslice 2170..2179: [u8]
+    expr 117 deref 2170..2174: [u8]
+    expr 118 local t 2172..2173: *mut [u8]
+    expr 119 int 2 2177..2178: usize
+    expr 120 binary + 2187..2220: usize
+    expr 121 binary + 2187..2208: usize
+    expr 122 len 2187..2196: usize
+    expr 123 local part 2191..2195: &[u8]
+    expr 124 len 2199..2208: usize
+    expr 125 local from 2203..2207: &[u8]
+    expr 126 len 2211..2220: usize
+    expr 127 local upto 2215..2219: &mut [u8]
+fn borrows(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4]) -> u32
+    let r: &u32
+    let m: &mut u32
+    let f: &mut u32
+    let e: &mut u8
+    expr 128 unsafe 2424..2438: &u32
+    expr 129 & 2433..2436: &u32
+    expr 130 deref 2434..2436: u32
+    expr 131 local p 2435..2436: *mut u32
+    expr 132 unsafe 2462..2480: &mut u32
+    expr 133 &mut 2471..2478: &mut u32
+    expr 134 deref 2476..2478: u32
+    expr 135 local p 2477..2478: *mut u32
+    expr 136 unsafe 2504..2529: &mut u32
+    expr 137 &mut 2513..2527: &mut u32
+    expr 138 field a 2518..2527: u32
+    expr 139 deref 2518..2525: Pair
+    expr 140 local pair 2520..2524: *mut Pair
+    expr 141 unsafe 2552..2575: &mut u8
+    expr 142 &mut 2561..2573: &mut u8
+    expr 143 index 2566..2573: u8
+    expr 144 deref 2566..2570: [u8; 4]
+    expr 145 local a 2568..2569: *mut [u8; 4]
+    expr 146 int 1 2571..2572: usize
+    expr 147 assign 2581..2605: ()
+    expr 148 deref 2581..2583: u32
+    expr 149 local m 2582..2583: &mut u32
+    expr 150 binary + 2586..2605: u32
+    expr 151 binary + 2586..2593: u32
+    expr 152 deref 2586..2588: u32
+    expr 153 local r 2587..2588: &u32
+    expr 154 deref 2591..2593: u32
+    expr 155 local f 2592..2593: &mut u32
+    expr 156 as u32 2596..2605: u32
+    expr 157 deref 2596..2598: u8
+    expr 158 local e 2597..2598: &mut u8
+    expr 159 deref 2611..2613: u32
+    expr 160 local m 2612..2613: &mut u32
+fn volatiles(v: *mut volatile u32, w: *const volatile [u8; 2]) -> u32
+    let r: &volatile u32
+    expr 161 unsafe 2693..2711: ()
+    expr 162 assign 2702..2708: ()
+    expr 163 deref 2702..2704: u32
+    expr 164 local v 2703..2704: *mut volatile u32
+    expr 165 int 1 2707..2708: u32
+    expr 166 unsafe 2716..2735: ()
+    expr 167 assign += 2725..2732: ()
+    expr 168 deref 2725..2727: u32
+    expr 169 local v 2726..2727: *mut volatile u32
+    expr 170 int 1 2731..2732: u32
+    expr 171 unsafe 2763..2777: &volatile u32
+    expr 172 & 2772..2775: &volatile u32
+    expr 173 deref 2773..2775: u32
+    expr 174 local v 2774..2775: *mut volatile u32
+    expr 175 binary + 2783..2813: u32
+    expr 176 deref 2783..2785: u32
+    expr 177 local r 2784..2785: &volatile u32
+    expr 178 as u32 2788..2813: u32
+    expr 179 unsafe 2788..2806: u8
+    expr 180 index 2797..2804: u8
+    expr 181 deref 2797..2801: [u8; 2]
+    expr 182 local w 2799..2800: *const volatile [u8; 2]
+    expr 183 int 0 2802..2803: usize
+fn registers(u: *mut Uart, i: usize) -> u32
+    expr 184 unsafe 2867..2892: ()
+    expr 185 assign 2876..2889: ()
+    expr 186 register ctrl 2876..2885: u32
+    expr 187 deref 2876..2880: Uart
+    expr 188 local u 2878..2879: *mut Uart
+    expr 189 int 1 2888..2889: u32
+    expr 190 unsafe 2897..2923: ()
+    expr 191 assign |= 2906..2920: ()
+    expr 192 register ctrl 2906..2915: u32
+    expr 193 deref 2906..2910: Uart
+    expr 194 local u 2908..2909: *mut Uart
+    expr 195 int 2 2919..2920: u32
+    expr 196 unsafe 2928..2956: ()
+    expr 197 assign 2937..2953: ()
+    expr 198 index 2937..2949: u8
+    expr 199 register data 2937..2946: [u8; 4]
+    expr 200 deref 2937..2941: Uart
+    expr 201 local u 2939..2940: *mut Uart
+    expr 202 local i 2947..2948: usize
+    expr 203 int 7 2952..2953: u8
+    expr 204 unsafe 2961..3005: u32
+    expr 205 binary + 2970..3003: u32
+    expr 206 register status 2970..2981: u32
+    expr 207 deref 2970..2974: Uart
+    expr 208 local u 2972..2973: *mut Uart
+    expr 209 as u32 2984..3003: u32
+    expr 210 index 2984..2996: u8
+    expr 211 register data 2984..2993: [u8; 4]
+    expr 212 deref 2984..2988: Uart
+    expr 213 local u 2986..2987: *mut Uart
+    expr 214 local i 2994..2995: usize
+fn methods(r: *mut Reg) -> u32
+    let a: u32
+    let b: u32
+    expr 215 unsafe 3046..3069: ()
+    expr 216 method Reg::set (&mut self) 3055..3066: ()
+    expr 217 deref 3055..3059: Reg
+    expr 218 local r 3057..3058: *mut Reg
+    expr 219 int 1 3064..3065: u32
+    expr 220 unsafe 3087..3108: u32
+    expr 221 method Reg::get (&self) 3096..3106: u32
+    expr 222 deref 3096..3100: Reg
+    expr 223 local r 3098..3099: *mut Reg
+    expr 224 unsafe 3127..3149: u32
+    expr 225 method Reg::take (self) 3136..3147: u32
+    expr 226 deref 3136..3140: Reg
+    expr 227 local r 3138..3139: *mut Reg
+    expr 228 binary + 3155..3160: u32
+    expr 229 local a 3155..3156: u32
+    expr 230 local b 3159..3160: u32
+fn chain(n: *mut Node) -> u32
+    let second: u32
+    expr 231 unsafe 3317..3346: u32
+    expr 232 field value 3326..3344: u32
+    expr 233 deref 3326..3338: Node
+    expr 234 field next 3328..3337: *mut Node
+    expr 235 deref 3328..3332: Node
+    expr 236 local n 3330..3331: *mut Node
+    expr 237 unsafe 3352..3389: ()
+    expr 238 assign 3361..3386: ()
+    expr 239 index 3361..3382: u8
+    expr 240 field items 3361..3379: [u8; 4]
+    expr 241 deref 3361..3373: Node
+    expr 242 field next 3363..3372: *mut Node
+    expr 243 deref 3363..3367: Node
+    expr 244 local n 3365..3366: *mut Node
+    expr 245 int 1 3380..3381: usize
+    expr 246 int 2 3385..3386: u8
+    expr 247 unsafe 3394..3435: ()
+    expr 248 assign 3403..3432: ()
+    expr 249 field next 3403..3412: *mut Node
+    expr 250 deref 3403..3407: Node
+    expr 251 local n 3405..3406: *mut Node
+    expr 252 field next 3415..3432: *mut Node
+    expr 253 deref 3415..3427: Node
+    expr 254 field next 3417..3426: *mut Node
+    expr 255 deref 3417..3421: Node
+    expr 256 local n 3419..3420: *mut Node
+    expr 257 local second 3440..3446: u32
+fn matches(m: *const Mode) -> u32
+    expr 258 unsafe 3490..3588: u32
+    expr 259 match 3507..3582: u32
+    expr 260 deref 3513..3515: Mode
+    expr 261 local m 3514..3515: *const Mode
+    expr 262 int 0 3543..3544: u32
+    expr 263 int 1 3570..3571: u32
+fn pointer_to_pointer(pp: *const *const u32) -> u32
+    expr 264 unsafe 3650..3665: u32
+    expr 265 deref 3659..3663: u32
+    expr 266 deref 3660..3663: *const u32
+    expr 267 local pp 3661..3663: *const *const u32
+fn counter() -> &u32
+    expr 268 unsafe 3862..3893: &u32
+    expr 269 & 3871..3891: &u32
+    expr 270 deref 3872..3891: u32
+    expr 271 &raw const 3873..3891: *const u32
+    expr 272 static OWNED 3885..3890: u32
+fn tied(r: &mut Pair, p: *mut Pair) -> &mut u32
+    expr 273 unsafe 3951..3973: &mut u32
+    expr 274 &mut 3960..3971: &mut u32
+    expr 275 field b 3965..3971: u32
+    expr 276 deref 3965..3969: Pair
+    expr 277 local p 3967..3968: *mut Pair
+fn whole(r: &Pair, p: *const Pair) -> &Pair
+    expr 278 unsafe 4027..4041: &Pair
+    expr 279 & 4036..4039: &Pair
+    expr 280 deref 4037..4039: Pair
+    expr 281 local p 4038..4039: *const Pair
+fn blocks(p: *mut u32, q: *mut u32) -> u32
+    let inner: u32
+    let v: u32
+    expr 282 unsafe 4189..4240: ()
+    expr 283 assign 4206..4212: ()
+    expr 284 deref 4206..4208: u32
+    expr 285 local p 4207..4208: *mut u32
+    expr 286 int 1 4211..4212: u32
+    expr 287 assign 4222..4233: ()
+    expr 288 deref 4222..4224: u32
+    expr 289 local q 4223..4224: *mut u32
+    expr 290 binary + 4227..4233: u32
+    expr 291 deref 4227..4229: u32
+    expr 292 local p 4228..4229: *mut u32
+    expr 293 int 1 4232..4233: u32
+    expr 294 unsafe 4258..4331: u32
+    expr 295 unsafe 4292..4305: u32
+    expr 296 deref 4301..4303: u32
+    expr 297 local p 4302..4303: *mut u32
+    expr 298 binary + 4315..4325: u32
+    expr 299 local inner 4315..4320: u32
+    expr 300 deref 4323..4325: u32
+    expr 301 local q 4324..4325: *mut u32
+    expr 302 unsafe 4337..4401: ()
+    expr 303 critical 4354..4395: ()
+    expr 304 assign += 4377..4384: ()
+    expr 305 deref 4377..4379: u32
+    expr 306 local p 4378..4379: *mut u32
+    expr 307 int 1 4383..4384: u32
+    expr 308 critical 4406..4450: ()
+    expr 309 unsafe 4425..4444: ()
+    expr 310 assign += 4434..4441: ()
+    expr 311 deref 4434..4436: u32
+    expr 312 local q 4435..4436: *mut u32
+    expr 313 int 1 4440..4441: u32
+    expr 314 local v 4455..4456: u32
+fn fill(dest: *mut u8, c: u8, n: usize) -> ()
+    let mut i: usize
+    expr 315 int 0 4583..4584: usize
+    expr 316 while 4590..4657: ()
+    expr 317 binary < 4596..4601: bool
+    expr 318 local i 4596..4597: usize
+    expr 319 local n 4600..4601: usize
+    expr 320 unsafe 4612..4635: ()
+    expr 321 assign 4621..4632: ()
+    expr 322 index 4621..4628: u8
+    expr 323 local dest 4621..4625: *mut u8
+    expr 324 local i 4626..4627: usize
+    expr 325 local c 4631..4632: u8
+    expr 326 assign += 4644..4650: ()
+    expr 327 local i 4644..4645: usize
+    expr 328 int 1 4649..4650: usize
+fn through_static() -> u32
+    expr 329 unsafe 4851..4869: u32
+    expr 330 deref 4860..4867: u32
+    expr 331 static CURSOR 4861..4867: *mut u32
+fn asm_operands(p: *mut u32, pair: *mut Pair, s: *mut [u32]) -> ()
+    expr 332 unsafe 5158..5428: ()
+    expr 333 asm 5175..5200: ()
+    expr 334 deref 5197..5199: u32
+    expr 335 local p 5198..5199: *mut u32
+    expr 336 asm 5210..5236: ()
+    expr 337 deref 5233..5235: u32
+    expr 338 local p 5234..5235: *mut u32
+    expr 339 asm 5246..5283: ()
+    expr 340 field a 5273..5282: u32
+    expr 341 deref 5273..5280: Pair
+    expr 342 local pair 5275..5279: *mut Pair
+    expr 343 asm 5293..5323: ()
+    expr 344 index 5318..5322: u32
+    expr 345 local p 5318..5319: *mut u32
+    expr 346 int 1 5320..5321: usize
+    expr 347 asm 5333..5378: ()
+    expr 348 as u32 5358..5366: u32
+    expr 349 int 1 5358..5359: u32
+    expr 350 index 5370..5377: u32
+    expr 351 deref 5370..5374: [u32]
+    expr 352 local s 5372..5373: *mut [u32]
+    expr 353 int 0 5375..5376: usize
+    expr 354 asm 5388..5421: ()
+    expr 355 deref 5413..5415: u32
+    expr 356 local p 5414..5415: *mut u32
+entry fn main() -> !
+    expr 357 loop 5459..5466: !
+panic fn on_panic() -> !
+    expr 358 loop 5501..5508: !
+comptime fn OWNED() -> u32
+    expr 359 int 0 3831..3832: u32
+comptime fn CURSOR() -> *mut u32
+    expr 360 as *mut u32 4802..4815: *mut u32
+    expr 361 int 0 4802..4803: usize
+comptime fn Mode::Off() -> u8
+    expr 362 int 0 943..944: u8
+comptime fn Mode::On() -> u8
+    expr 363 int 1 955..956: u8

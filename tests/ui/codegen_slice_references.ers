@@ -18,7 +18,7 @@ fn length(s: &[u16]) -> usize {
 }
 
 fn reborrow(raw: *const [u8], i: usize) -> u8 {
-    let s: &[u8] = &*raw;
+    let s: &[u8] = unsafe { &*raw };
     read(s, i)
 }
 

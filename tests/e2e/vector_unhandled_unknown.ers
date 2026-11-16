@@ -37,7 +37,7 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
         _ => exit(3),
     }
     print(&b": ");
-    print(&*info.message);
+    unsafe { print(&*info.message); }
     let mut cause: u32 = 0;
     unsafe { asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags)); }
     print(&b" mcause ");

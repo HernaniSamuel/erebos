@@ -50,16 +50,16 @@ fn different_codes() {
 
 // Through a volatile pointer.
 fn through_a_pointer(p: *mut volatile Status) {
-    (*p).busy = true;
-    (*p).busy |= true;
-    (*p).start |= true;
-    let a: bool = (*p).start;
+    unsafe { (*p).busy = true; }
+    unsafe { (*p).busy |= true; }
+    unsafe { (*p).start |= true; }
+    let a: bool = unsafe { (*p).start };
 }
 
 // Indexing a field is no read of it: only `ty::cannot-index`, as through a
 // register.
 fn indexed(p: *mut volatile Status) {
-    let a: u8 = (*p).m[0];
+    let a: u8 = unsafe { (*p).m[0] };
     let b: u8 = DEV.rw.m[0];
 }
 

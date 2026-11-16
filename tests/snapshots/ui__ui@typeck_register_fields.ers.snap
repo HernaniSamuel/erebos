@@ -108,132 +108,143 @@ fn fields() -> bool
     expr 93 peripheral TIMER0 3101..3107: Timer
     expr 94 int 4 3123..3124: u8
 fn through(u: *mut Uart, t: *mut Timer) -> u8
-    expr 95 assign 3234..3257: ()
-    expr 96 bit field parity 3234..3249: bool
-    expr 97 register lcr 3234..3242: Lcr
-    expr 98 deref 3234..3238: Uart
-    expr 99 local u 3236..3237: *mut Uart
-    expr 100 bool false 3252..3257: bool
-    expr 101 assign |= 3263..3284: ()
-    expr 102 bit field dlab 3263..3276: bool
-    expr 103 register lcr 3263..3271: Lcr
-    expr 104 deref 3263..3267: Uart
-    expr 105 local u 3265..3266: *mut Uart
-    expr 106 bool true 3280..3284: bool
-    expr 107 assign -= 3290..3312: ()
-    expr 108 bit field count 3290..3307: u8
-    expr 109 register status 3290..3301: Status
-    expr 110 deref 3290..3294: Timer
-    expr 111 local t 3292..3293: *mut Timer
-    expr 112 int 1 3311..3312: u8
-    expr 113 assign 3318..3341: ()
-    expr 114 bit field done 3318..3334: bool
-    expr 115 register status 3318..3329: Status
-    expr 116 deref 3318..3322: Timer
-    expr 117 local t 3320..3321: *mut Timer
-    expr 118 bool true 3337..3341: bool
-    expr 119 bit field count 3347..3364: u8
-    expr 120 register status 3347..3358: Status
-    expr 121 deref 3347..3351: Timer
-    expr 122 local t 3349..3350: *mut Timer
+    expr 95 unsafe 3234..3269: ()
+    expr 96 assign 3243..3266: ()
+    expr 97 bit field parity 3243..3258: bool
+    expr 98 register lcr 3243..3251: Lcr
+    expr 99 deref 3243..3247: Uart
+    expr 100 local u 3245..3246: *mut Uart
+    expr 101 bool false 3261..3266: bool
+    expr 102 unsafe 3274..3307: ()
+    expr 103 assign |= 3283..3304: ()
+    expr 104 bit field dlab 3283..3296: bool
+    expr 105 register lcr 3283..3291: Lcr
+    expr 106 deref 3283..3287: Uart
+    expr 107 local u 3285..3286: *mut Uart
+    expr 108 bool true 3300..3304: bool
+    expr 109 unsafe 3312..3346: ()
+    expr 110 assign -= 3321..3343: ()
+    expr 111 bit field count 3321..3338: u8
+    expr 112 register status 3321..3332: Status
+    expr 113 deref 3321..3325: Timer
+    expr 114 local t 3323..3324: *mut Timer
+    expr 115 int 1 3342..3343: u8
+    expr 116 unsafe 3351..3386: ()
+    expr 117 assign 3360..3383: ()
+    expr 118 bit field done 3360..3376: bool
+    expr 119 register status 3360..3371: Status
+    expr 120 deref 3360..3364: Timer
+    expr 121 local t 3362..3363: *mut Timer
+    expr 122 bool true 3379..3383: bool
+    expr 123 unsafe 3391..3419: u8
+    expr 124 bit field count 3400..3417: u8
+    expr 125 register status 3400..3411: Status
+    expr 126 deref 3400..3404: Timer
+    expr 127 local t 3402..3403: *mut Timer
 fn effects() -> u8
     let byte: u8
     let lsr: Lsr
-    expr 123 register rbr 3531..3540: u8
-    expr 124 peripheral UART0 3531..3536: Uart
-    expr 125 register lsr 3561..3570: Lsr
-    expr 126 peripheral UART0 3561..3566: Uart
-    expr 127 while 3576..3605: ()
-    expr 128 not 3582..3602: bool
-    expr 129 bit field thr_empty 3583..3602: bool
-    expr 130 register lsr 3583..3592: Lsr
-    expr 131 peripheral UART0 3583..3588: Uart
-    expr 132 if 3610..3667: ()
-    expr 133 bit field data_ready 3613..3633: bool
-    expr 134 register lsr 3613..3622: Lsr
-    expr 135 peripheral UART0 3613..3618: Uart
-    expr 136 return 3644..3660: !
-    expr 137 register rbr 3651..3660: u8
-    expr 138 peripheral UART0 3651..3656: Uart
-    expr 139 assign 3672..3710: ()
-    expr 140 register fcr 3672..3681: Fcr
-    expr 141 peripheral UART0 3672..3677: Uart
-    expr 142 struct Fcr .. 3684..3710: Fcr
-    expr 143 bool true 3700..3704: bool
-    expr 144 assign 3716..3732: ()
-    expr 145 register thr 3716..3725: u8
-    expr 146 peripheral UART0 3716..3721: Uart
-    expr 147 local byte 3728..3732: u8
-    expr 148 if 3738..3769: u8
-    expr 149 bit field overrun 3741..3752: bool
-    expr 150 local lsr 3741..3744: Lsr
-    expr 151 int 1 3755..3756: u8
-    expr 152 block 3764..3769: u8
-    expr 153 int 0 3766..3767: u8
+    expr 128 register rbr 3586..3595: u8
+    expr 129 peripheral UART0 3586..3591: Uart
+    expr 130 register lsr 3616..3625: Lsr
+    expr 131 peripheral UART0 3616..3621: Uart
+    expr 132 while 3631..3660: ()
+    expr 133 not 3637..3657: bool
+    expr 134 bit field thr_empty 3638..3657: bool
+    expr 135 register lsr 3638..3647: Lsr
+    expr 136 peripheral UART0 3638..3643: Uart
+    expr 137 if 3665..3722: ()
+    expr 138 bit field data_ready 3668..3688: bool
+    expr 139 register lsr 3668..3677: Lsr
+    expr 140 peripheral UART0 3668..3673: Uart
+    expr 141 return 3699..3715: !
+    expr 142 register rbr 3706..3715: u8
+    expr 143 peripheral UART0 3706..3711: Uart
+    expr 144 assign 3727..3765: ()
+    expr 145 register fcr 3727..3736: Fcr
+    expr 146 peripheral UART0 3727..3732: Uart
+    expr 147 struct Fcr .. 3739..3765: Fcr
+    expr 148 bool true 3755..3759: bool
+    expr 149 assign 3771..3787: ()
+    expr 150 register thr 3771..3780: u8
+    expr 151 peripheral UART0 3771..3776: Uart
+    expr 152 local byte 3783..3787: u8
+    expr 153 if 3793..3824: u8
+    expr 154 bit field overrun 3796..3807: bool
+    expr 155 local lsr 3796..3799: Lsr
+    expr 156 int 1 3810..3811: u8
+    expr 157 block 3819..3824: u8
+    expr 158 int 0 3821..3822: u8
 fn through_volatile(l: *mut volatile Lsr, s: *mut volatile Status, c: *mut volatile Lcr) -> bool
     let lsr: Lsr
-    expr 154 deref 4076..4078: Lsr
-    expr 155 local l 4077..4078: *mut volatile Lsr
-    expr 156 assign 4084..4092: ()
-    expr 157 deref 4084..4086: Lsr
-    expr 158 local l 4085..4086: *mut volatile Lsr
-    expr 159 local lsr 4089..4092: Lsr
-    expr 160 assign += 4098..4113: ()
-    expr 161 bit field count 4098..4108: u8
-    expr 162 deref 4098..4102: Status
-    expr 163 local s 4100..4101: *mut volatile Status
-    expr 164 int 1 4112..4113: u8
-    expr 165 assign 4119..4138: ()
-    expr 166 bit field overrun 4119..4131: bool
-    expr 167 deref 4119..4123: Status
-    expr 168 local s 4121..4122: *mut volatile Status
-    expr 169 bool true 4134..4138: bool
-    expr 170 assign 4144..4160: ()
-    expr 171 bit field dlab 4144..4153: bool
-    expr 172 deref 4144..4148: Lcr
-    expr 173 local c 4146..4147: *mut volatile Lcr
-    expr 174 bool true 4156..4160: bool
-    expr 175 bit field overrun 4166..4178: bool
-    expr 176 deref 4166..4170: Lsr
-    expr 177 local l 4168..4169: *mut volatile Lsr
+    expr 159 unsafe 4131..4144: Lsr
+    expr 160 deref 4140..4142: Lsr
+    expr 161 local l 4141..4142: *mut volatile Lsr
+    expr 162 unsafe 4150..4170: ()
+    expr 163 assign 4159..4167: ()
+    expr 164 deref 4159..4161: Lsr
+    expr 165 local l 4160..4161: *mut volatile Lsr
+    expr 166 local lsr 4164..4167: Lsr
+    expr 167 unsafe 4175..4202: ()
+    expr 168 assign += 4184..4199: ()
+    expr 169 bit field count 4184..4194: u8
+    expr 170 deref 4184..4188: Status
+    expr 171 local s 4186..4187: *mut volatile Status
+    expr 172 int 1 4198..4199: u8
+    expr 173 unsafe 4207..4238: ()
+    expr 174 assign 4216..4235: ()
+    expr 175 bit field overrun 4216..4228: bool
+    expr 176 deref 4216..4220: Status
+    expr 177 local s 4218..4219: *mut volatile Status
+    expr 178 bool true 4231..4235: bool
+    expr 179 unsafe 4243..4271: ()
+    expr 180 assign 4252..4268: ()
+    expr 181 bit field dlab 4252..4261: bool
+    expr 182 deref 4252..4256: Lcr
+    expr 183 local c 4254..4255: *mut volatile Lcr
+    expr 184 bool true 4264..4268: bool
+    expr 185 unsafe 4276..4299: bool
+    expr 186 bit field overrun 4285..4297: bool
+    expr 187 deref 4285..4289: Lsr
+    expr 188 local l 4287..4288: *mut volatile Lsr
 fn ordinary(status: Status, lsr: Lsr) -> Status
-    expr 178 assign |= 4288..4310: ()
-    expr 179 bit field overrun 4288..4302: bool
-    expr 180 local status 4288..4294: Status
-    expr 181 bool true 4306..4310: bool
-    expr 182 assign += 4316..4333: ()
-    expr 183 bit field count 4316..4328: u8
-    expr 184 local status 4316..4322: Status
-    expr 185 int 1 4332..4333: u8
-    expr 186 assign 4339..4358: ()
-    expr 187 bit field overrun 4339..4350: bool
-    expr 188 local lsr 4339..4342: Lsr
-    expr 189 bool false 4353..4358: bool
-    expr 190 assign |= 4364..4386: ()
-    expr 191 bit field data_ready 4364..4378: bool
-    expr 192 local lsr 4364..4367: Lsr
-    expr 193 bool true 4382..4386: bool
-    expr 194 local status 4392..4398: Status
+    expr 189 assign |= 4409..4431: ()
+    expr 190 bit field overrun 4409..4423: bool
+    expr 191 local status 4409..4415: Status
+    expr 192 bool true 4427..4431: bool
+    expr 193 assign += 4437..4454: ()
+    expr 194 bit field count 4437..4449: u8
+    expr 195 local status 4437..4443: Status
+    expr 196 int 1 4453..4454: u8
+    expr 197 assign 4460..4479: ()
+    expr 198 bit field overrun 4460..4471: bool
+    expr 199 local lsr 4460..4463: Lsr
+    expr 200 bool false 4474..4479: bool
+    expr 201 assign |= 4485..4507: ()
+    expr 202 bit field data_ready 4485..4499: bool
+    expr 203 local lsr 4485..4488: Lsr
+    expr 204 bool true 4503..4507: bool
+    expr 205 local status 4513..4519: Status
 entry fn main() -> !
-    expr 195 loop 4425..4432: !
+    expr 206 loop 4546..4553: !
 panic fn on_panic() -> !
-    expr 196 loop 4462..4469: !
+    expr 207 loop 4583..4590: !
 comptime fn WordLength::Five() -> u8
-    expr 197 int 0 1048..1049: u8
+    expr 208 int 0 1048..1049: u8
 comptime fn WordLength::Six() -> u8
-    expr 198 int 1 1057..1058: u8
+    expr 209 int 1 1057..1058: u8
 comptime fn WordLength::Seven() -> u8
-    expr 199 int 2 1068..1069: u8
+    expr 210 int 2 1068..1069: u8
 comptime fn WordLength::Eight() -> u8
-    expr 200 int 3 1079..1080: u8
+    expr 211 int 3 1079..1080: u8
 comptime fn Mode::Off() -> u8
-    expr 201 int 0 1106..1107: u8
+    expr 212 int 0 1106..1107: u8
 comptime fn Mode::On() -> u8
-    expr 202 int 1 1114..1115: u8
+    expr 213 int 1 1114..1115: u8
 comptime fn Speed::Slow() -> u16
-    expr 203 int 0 1144..1145: u16
+    expr 214 int 0 1144..1145: u16
 comptime fn Speed::Fast() -> u16
-    expr 204 int 256 1154..1159: u16
+    expr 215 int 256 1154..1159: u16
 comptime fn default() -> WordLength
     expr 0 variant .Five (WordLength::Five) 1223..1228: WordLength
 comptime fn default() -> bool

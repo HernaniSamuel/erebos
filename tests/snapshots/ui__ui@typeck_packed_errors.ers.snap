@@ -99,24 +99,24 @@ ty::packed-field-address
 ty::volatile-packed-field
 
   × a volatile `u32` here may be misaligned
-    ╭─[typeck_packed_errors.ers:36:5]
+    ╭─[typeck_packed_errors.ers:36:14]
  35 │     let kind: *mut u8 = &raw mut (*h).kind;
- 36 │     (*vp).len = 1;
-    ·     ────┬────
-    ·         ╰── reached through a field of a `#[packed]` struct
- 37 │     let y: u32 = (*vp).inner.y;
+ 36 │     unsafe { (*vp).len = 1; }
+    ·              ────┬────
+    ·                  ╰── reached through a field of a `#[packed]` struct
+ 37 │     let y: u32 = unsafe { (*vp).inner.y };
     ╰────
   help: it would be split into several accesses; register blocks use the default layout, with
         explicit padding fields (ADR 0022, 0023)
 ty::volatile-packed-field
 
   × a volatile `u32` here may be misaligned
-    ╭─[typeck_packed_errors.ers:37:18]
- 36 │     (*vp).len = 1;
- 37 │     let y: u32 = (*vp).inner.y;
-    ·                  ──────┬──────
-    ·                        ╰── reached through a field of a `#[packed]` struct
- 38 │     let byte: u8 = (*vp).bytes[i];
+    ╭─[typeck_packed_errors.ers:37:27]
+ 36 │     unsafe { (*vp).len = 1; }
+ 37 │     let y: u32 = unsafe { (*vp).inner.y };
+    ·                           ──────┬──────
+    ·                                 ╰── reached through a field of a `#[packed]` struct
+ 38 │     let byte: u8 = unsafe { (*vp).bytes[i] };
     ╰────
   help: it would be split into several accesses; register blocks use the default layout, with
         explicit padding fields (ADR 0022, 0023)

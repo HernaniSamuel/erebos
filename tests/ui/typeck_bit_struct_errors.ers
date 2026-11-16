@@ -61,7 +61,7 @@ fn operators(l: Lcr, m: Lcr) -> u8 {
 }
 
 fn through_const(p: *const Lcr) {
-    (*p).dlab = true;
+    unsafe { (*p).dlab = true; }
 }
 
 fn immutable(l: Lcr) {
@@ -86,11 +86,11 @@ fn without_deref(p: *mut Lcr) -> bool {
 }
 
 fn volatile_accesses(w: *mut volatile Wide, p: *mut volatile Packed) -> u32 {
-    let whole: Wide = *w;
-    (*w).low = 1;
-    (*p).status = Status { ready: true, count: 0 };
-    let ready: bool = (*p).status.ready;
-    (*w).high
+    let whole: Wide = unsafe { *w };
+    unsafe { (*w).low = 1; }
+    unsafe { (*p).status = Status { ready: true, count: 0 }; }
+    let ready: bool = unsafe { (*p).status.ready };
+    unsafe { (*w).high }
 }
 
 entry fn main() -> ! { loop {} }

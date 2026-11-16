@@ -9,7 +9,7 @@ static mut COUNT: u32 = 0;
 
 fn padding() -> u8 {
     let bytes: *const u8 = &raw const PADDED as *const u8;
-    bytes[1]
+    unsafe { bytes[1] }
 }
 
 fn compare() -> [bool; 3] {

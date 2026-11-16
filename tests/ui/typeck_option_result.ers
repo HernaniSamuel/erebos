@@ -45,7 +45,7 @@ fn parse(s: *const [u8]) -> Result(u32, ParseError) {
     if len(s) == 0 {
         return .Err(.Empty);
     }
-    match digit((*s)[0]) {
+    match digit(unsafe { (*s)[0] }) {
         .Ok(let v: u32) => .Ok(v),
         .Err(.Empty) => .Err(.Empty),
         .Err(.BadDigit(let b: u8)) => .Err(.BadDigit(b)),

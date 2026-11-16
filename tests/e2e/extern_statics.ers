@@ -36,7 +36,7 @@ entry fn main() -> ! {
     putc(b' ');
     print_u32(unsafe { crc_lookup[3] } as u32);
     putc(b' ');
-    print_u32(*THIRD as u32);
+    unsafe { print_u32(*THIRD as u32); }
     putc(b'\n');
     exit(0)
 }

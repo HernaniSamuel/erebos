@@ -23,13 +23,13 @@ mod uart {
     // A private register, read from a module inside its type's module.
     mod status {
         pub fn ready(u: *const super::Uart16550) -> bool {
-            ((*u).lsr & 0x20) != 0
+            unsafe { ((*u).lsr & 0x20) != 0 }
         }
     }
 
     pub fn putc(u: *mut Uart16550, byte: u8) {
         while !status::ready(u) {}
-        (*u).thr = byte;
+        unsafe { (*u).thr = byte; }
     }
 }
 
@@ -57,23 +57,23 @@ fn from_peripheral() -> u32 {
 
 // Through `*mut` and `*const` pointers: a `*const` pointer reads.
 fn through_pointers(t: *mut Timer, c: *const Timer) -> u16 {
-    (*t).ctrl = 2;
-    (*t).ctrl <<= 1;
-    (*t).reload = (*c).count;
-    (*c).count + (*t).count
+    unsafe { (*t).ctrl = 2; }
+    unsafe { (*t).ctrl <<= 1; }
+    unsafe { (*t).reload = (*c).count; }
+    unsafe { (*c).count + (*t).count }
 }
 
 // The `pub` registers of a peripheral type of another module, brought in
 // with `use`, through a pointer and from that module's peripheral.
 fn other_module(u: *mut Uart16550) -> u8 {
-    (*u).thr = 0x41;
-    (*u).ier |= 1;
-    uart::UART0.scr = (*u).rbr;
+    unsafe { (*u).thr = 0x41; }
+    unsafe { (*u).ier |= 1; }
+    unsafe { uart::UART0.scr = (*u).rbr; }
     uart::UART0.rbr
 }
 
 fn count(t: *const Timer) -> u16 {
-    (*t).count
+    unsafe { (*t).count }
 }
 
 // `&raw mut` and `&raw const` of a peripheral, passed to drivers and kept
@@ -103,7 +103,7 @@ fn reads() -> u32 {
 // A pointer made with `as` from an integer, without a peripheral.
 fn from_integer() {
     let t: *mut Timer = 0x2000_1000 as *mut Timer;
-    (*t).ctrl = 1;
+    unsafe { (*t).ctrl = 1; }
 }
 
 entry fn main() -> ! { loop {} }

@@ -50,7 +50,7 @@ static GREETING: [u8; 4] = [b'e', b'r', b'e', b'b'];
 fn print(s: &[u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        *UART = s[i];
+        unsafe { *UART = s[i]; }
         i += 1;
     }
 }
@@ -60,7 +60,7 @@ fn print_hex(value: usize) {
     let mut shift: usize = 32;
     while shift > 0 {
         shift -= 4;
-        *UART = (*HEX_DIGITS)[(value >> shift) & 0xF];
+        unsafe { *UART = (*HEX_DIGITS)[(value >> shift) & 0xF]; }
     }
 }
 
@@ -83,7 +83,7 @@ fn check(what: &[u8], fine: bool, address: usize) -> u32 {
 }
 
 fn exit(code: u32) -> ! {
-    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    unsafe { *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 }; }
     loop {}
 }
 

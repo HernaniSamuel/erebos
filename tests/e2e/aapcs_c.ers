@@ -42,7 +42,7 @@ fn report(name: &[u8], ok: bool) {
 fn fill(p: *mut u8, n: usize, seed: u8) {
     let mut i: usize = 0;
     while i < n {
-        p[i] = seed + (i as u8) * 7 + 1;
+        unsafe { p[i] = seed + (i as u8) * 7 + 1; }
         i += 1;
     }
 }
@@ -50,7 +50,7 @@ fn fill(p: *mut u8, n: usize, seed: u8) {
 fn check(p: *const u8, n: usize, seed: u8) -> bool {
     let mut i: usize = 0;
     while i < n {
-        if p[i] != seed + (i as u8) * 7 + 1 {
+        if unsafe { p[i] } != seed + (i as u8) * 7 + 1 {
             return false;
         }
         i += 1;

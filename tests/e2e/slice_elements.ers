@@ -16,8 +16,8 @@ fn cell() -> *mut volatile [u8] {
 }
 
 fn putc(byte: u8) {
-    (*cell())[0] = byte;
-    board::putc((*cell())[0]);
+    unsafe { (*cell())[0] = byte; }
+    unsafe { board::putc((*cell())[0]); }
 }
 
 fn print(s: &[u8]) {
@@ -32,7 +32,7 @@ fn sum(s: *const [u8]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += (*s)[i] as u32;
+        unsafe { total += (*s)[i] as u32; }
         i += 1;
     }
     total
@@ -43,14 +43,14 @@ fn print_u32(value: u32) {
     let mut n: usize = 0;
     let mut rest: u32 = value;
     loop {
-        (*(&raw mut digits as *mut [u8]))[9 - n] = b'0' + (rest % 10) as u8;
+        unsafe { (*(&raw mut digits as *mut [u8]))[9 - n] = b'0' + (rest % 10) as u8; }
         n += 1;
         rest /= 10;
         if rest == 0 {
             break;
         }
     }
-    print(&*slice(&raw const digits[10 - n], n));
+    unsafe { print(&*slice(&raw const digits[10 - n], n)); }
 }
 
 entry fn main() -> ! {
@@ -61,7 +61,7 @@ entry fn main() -> ! {
     let middle: *mut [u8] = slice(&raw mut line[2], 3);
     let mut i: usize = 0;
     while i < len(middle) {
-        (*middle)[i] = b'a' + i as u8;
+        unsafe { (*middle)[i] = b'a' + i as u8; }
         i += 1;
     }
     print(&line);
@@ -73,10 +73,10 @@ entry fn main() -> ! {
     // `&raw` of an element points into the buffer, and `&raw` of `*s` is
     // the slice itself.
     let element: *mut u8 = &raw mut (*middle)[1];
-    *element = b'X';
+    unsafe { *element = b'X'; }
     let same: *const [u8] = &raw const *middle;
     let mut failures: u32 = 0;
-    if line[3] != b'X' || (*same)[1] != b'X' || len(same) != 3 {
+    if line[3] != b'X' || unsafe { (*same)[1] } != b'X' || len(same) != 3 {
         failures += 1;
     }
     if (same as *const u8) != (&raw const line[2]) {

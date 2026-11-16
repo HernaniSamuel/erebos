@@ -21,14 +21,14 @@ eval::assertion-failed
 eval::assertion-failed
 
   × assertion failed: tab\x09, nul \x00, del \x7f, high \xff, "quote" and \
-    ╭─[eval_assert_messages.ers:15:5]
+    ╭─[eval_assert_messages.ers:15:14]
  13 │ 
  14 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 15 │     assert(false, &*BYTES);
-    ·     ───────────┬──────────
-    ·                ╰── assertion failed
+ 15 │     unsafe { assert(false, &*BYTES); }
+    ·              ───────────┬──────────
+    ·                         ╰── assertion failed
  16 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -63,28 +63,28 @@ eval::static-mut
 eval::dangling-pointer
 
   × this pointer points to a variable of a call that has returned
-    ╭─[eval_assert_messages.ers:27:19]
+    ╭─[eval_assert_messages.ers:27:28]
  25 │ 
  26 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 27 │     assert(false, &*gone());
-    ·                   ────┬───
-    ·                       ╰── accessed here
+ 27 │     unsafe { assert(false, &*gone()); }
+    ·                            ────┬───
+    ·                                ╰── accessed here
  28 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
 eval::invalid-access
 
   × this access reaches outside the object it points into
-    ╭─[eval_assert_messages.ers:31:19]
+    ╭─[eval_assert_messages.ers:31:28]
  29 │ 
  30 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 31 │     assert(false, &*slice((&raw const b"ab") as *const u8, 3));
-    ·                   ─────────────────────┬─────────────────────
-    ·                                        ╰── accessed here
+ 31 │     unsafe { assert(false, &*slice((&raw const b"ab") as *const u8, 3)); }
+    ·                            ─────────────────────┬─────────────────────
+    ·                                                 ╰── accessed here
  32 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -92,14 +92,14 @@ eval::invalid-access
 
   × address 0x1000 only exists when the program runs, so it cannot be read or written at compile
   │ time
-    ╭─[eval_assert_messages.ers:35:19]
+    ╭─[eval_assert_messages.ers:35:28]
  33 │ 
  34 │ comptime {
     · ────┬───
     ·     ╰── while evaluating this `comptime` block
- 35 │     assert(false, &*slice(0x1000 as *const u8, 1));
-    ·                   ───────────────┬───────────────
-    ·                                  ╰── accessed here
+ 35 │     unsafe { assert(false, &*slice(0x1000 as *const u8, 1)); }
+    ·                            ───────────────┬───────────────
+    ·                                           ╰── accessed here
  36 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)

@@ -140,17 +140,17 @@ ty::address-of-immutable
  52 │     let b: *mut [u8] = &raw mut (*s)[..2];
     ·                                   ┬
     ·                                   ╰── has type `*const [u8]`
- 53 │     let c: &mut [u8] = &mut (*s)[..2];
+ 53 │     let c: &mut [u8] = unsafe { &mut (*s)[..2] };
     ╰────
   help: use `&raw const`, or a `*mut` pointer
 ty::mut-borrow-of-immutable
 
   × cannot borrow as `&mut` through a `*const` pointer
-    ╭─[subslice_errors.ers:53:31]
+    ╭─[subslice_errors.ers:53:40]
  52 │     let b: *mut [u8] = &raw mut (*s)[..2];
- 53 │     let c: &mut [u8] = &mut (*s)[..2];
-    ·                               ┬
-    ·                               ╰── has type `*const [u8]`
+ 53 │     let c: &mut [u8] = unsafe { &mut (*s)[..2] };
+    ·                                        ┬
+    ·                                        ╰── has type `*const [u8]`
  54 │     let d: &mut [u8] = &mut buf[1..];
     ╰────
   help: only `*mut` pointers can be borrowed through as `&mut`
@@ -164,7 +164,7 @@ ty::mut-borrow-of-immutable
     ·               ╰── help: declare it `let mut buf`
  51 │     let a: &mut [u8] = &mut (*r)[1..];
  52 │     let b: *mut [u8] = &raw mut (*s)[..2];
- 53 │     let c: &mut [u8] = &mut (*s)[..2];
+ 53 │     let c: &mut [u8] = unsafe { &mut (*s)[..2] };
  54 │     let d: &mut [u8] = &mut buf[1..];
     ·                             ────┬───
     ·                                 ╰── borrowed here
@@ -180,7 +180,7 @@ ty::address-of-immutable
     ·               ╰── help: declare it `let mut buf`
  51 │     let a: &mut [u8] = &mut (*r)[1..];
  52 │     let b: *mut [u8] = &raw mut (*s)[..2];
- 53 │     let c: &mut [u8] = &mut (*s)[..2];
+ 53 │     let c: &mut [u8] = unsafe { &mut (*s)[..2] };
  54 │     let d: &mut [u8] = &mut buf[1..];
  55 │     let e: *mut [u8] = &raw mut buf[1..];
     ·                                 ────┬───
@@ -368,19 +368,19 @@ ty::packed-field-address
  86 │     let e: *const [u32] = &raw const (*h).words[1..];
     ·                                      ───────┬───────
     ·                                             ╰── reached through a field of a `#[packed]` struct
- 87 │     let f: &[u32] = &(*h).words[1..];
+ 87 │     let f: &[u32] = unsafe { &(*h).words[1..] };
     ╰────
   help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
         array into a `let` first (ADR 0022, 0108)
 ty::packed-field-address
 
   × cannot take the address of a `[u32]` that may be misaligned
-    ╭─[subslice_errors.ers:87:22]
+    ╭─[subslice_errors.ers:87:31]
  86 │     let e: *const [u32] = &raw const (*h).words[1..];
- 87 │     let f: &[u32] = &(*h).words[1..];
-    ·                      ───────┬───────
-    ·                             ╰── reached through a field of a `#[packed]` struct
- 88 │     let g: &[u8] = &(*h).bytes[1..];
+ 87 │     let f: &[u32] = unsafe { &(*h).words[1..] };
+    ·                               ───────┬───────
+    ·                                      ╰── reached through a field of a `#[packed]` struct
+ 88 │     let g: &[u8] = unsafe { &(*h).bytes[1..] };
     ╰────
   help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
         array into a `let` first (ADR 0022, 0108)

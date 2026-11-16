@@ -22,16 +22,16 @@ interrupt fn tick() at Vector::SysTick {
 }
 
 entry fn main() -> ! {
-    *SYST_RVR = 10_000;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 10_000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     loop {
         if critical { DONE } {
             break;
         }
     }
-    *SYST_CSR = 0;
+    unsafe { *SYST_CSR = 0; }
     putc(b's'); putc(b'p'); putc(b'i'); putc(b'n'); putc(b' ');
     putc(b'd'); putc(b'o'); putc(b'n'); putc(b'e'); putc(b'\n');
     exit(0)

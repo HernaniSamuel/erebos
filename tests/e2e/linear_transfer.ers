@@ -37,7 +37,7 @@ mod dma {
             if LEFT[c] != 0 {
                 let from: *const u8 = SRC[c] as *const u8;
                 let to: *mut u8 = DST[c] as *mut u8;
-                *to = *from;
+                unsafe { *to = *from; }
                 SRC[c] += 1;
                 DST[c] += 1;
                 LEFT[c] -= 1;

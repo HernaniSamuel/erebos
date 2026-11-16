@@ -17,11 +17,11 @@ ty::deref-non-pointer
 ty::write-through-const
 
   × cannot write through a `*const` pointer
-   ╭─[typeck_pointer_errors.ers:6:6]
+   ╭─[typeck_pointer_errors.ers:6:15]
  5 │     let c: *const u8 = 0x10 as *const u8;
- 6 │     *c = 1;
-   ·      ┬
-   ·      ╰── has type `*const u8`
+ 6 │     unsafe { *c = 1; }
+   ·               ┬
+   ·               ╰── has type `*const u8`
  7 │     (x + 1) = 2;
    ╰────
   help: only `*mut` pointers can be written through
@@ -29,7 +29,7 @@ ty::not-assignable
 
   × cannot assign to this expression
    ╭─[typeck_pointer_errors.ers:7:5]
- 6 │     *c = 1;
+ 6 │     unsafe { *c = 1; }
  7 │     (x + 1) = 2;
    ·     ───┬───
    ·        ╰── not a variable, `*pointer` or `a[index]`

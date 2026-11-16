@@ -3,7 +3,7 @@
 // to a static cannot become an integer; a pointer in a result must point
 // into its static or one past its end (ADR 0030).
 struct Node { next: *const Node, value: u32 }
-static SELF: Node = Node { next: &raw const SELF, value: (*(&raw const SELF)).value };
+static SELF: Node = unsafe { Node { next: &raw const SELF, value: (*(&raw const SELF)).value } };
 static TABLE: [u32; 2] = [1, 2];
 
 const ADDRESS: usize = &raw const TABLE as usize;

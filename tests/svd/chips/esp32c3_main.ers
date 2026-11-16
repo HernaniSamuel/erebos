@@ -13,7 +13,7 @@ use generated::{AES, DMA, RNG, SHA, UART0, UART1};
 // A field of a register reached through a pointer to the peripheral type:
 // `UART0` and `UART1` are two peripherals of the one type `Uart0`.
 fn rx_byte(uart: *mut Uart0) -> u8 {
-    (*uart).fifo.rxfifo_rd_byte
+    unsafe { (*uart).fifo.rxfifo_rd_byte }
 }
 
 entry fn main() -> ! {

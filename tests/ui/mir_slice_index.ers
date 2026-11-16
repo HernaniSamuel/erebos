@@ -4,15 +4,15 @@
 // then reached through the address of the first one. `&raw` of `*s` is the
 // slice itself.
 fn read(s: *const [u8], i: usize) -> u8 {
-    (*s)[i]
+    unsafe { (*s)[i] }
 }
 
 fn write(m: *mut [u32], i: usize) {
-    (*m)[i] = 7;
+    unsafe { (*m)[i] = 7; }
 }
 
 fn literal(s: *const [u8]) -> u8 {
-    (*s)[0]
+    unsafe { (*s)[0] }
 }
 
 fn addresses(m: *mut [u16], i: usize) -> *const [u16] {
@@ -22,13 +22,13 @@ fn addresses(m: *mut [u16], i: usize) -> *const [u16] {
 
 // The address part keeps the slice's volatility (ADR 0023).
 fn volatile_read(regs: *const volatile [u32], i: usize) -> u32 {
-    (*regs)[i]
+    unsafe { (*regs)[i] }
 }
 
 // The slice is read before the index is evaluated (ADR 0018).
 fn order(s: *const [u8], t: *const [u8]) -> u8 {
     let mut p: *const [u8] = s;
-    (*p)[{ p = t; 0 }]
+    unsafe { (*p)[{ p = t; 0 }] }
 }
 
 entry fn main() -> ! { loop {} }

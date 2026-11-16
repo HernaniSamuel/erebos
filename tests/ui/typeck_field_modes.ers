@@ -44,9 +44,9 @@ fn allowed(p: *mut volatile Status) {
     let b: bool = DEV.rw.done;
     let c: bool = DEV.ro.busy;
     let d: u8 = DEV.ro.mode;
-    (*p).start = true;
-    let e: bool = (*p).busy;
-    (*p).mode += 1;
+    unsafe { (*p).start = true; }
+    let e: bool = unsafe { (*p).busy };
+    unsafe { (*p).mode += 1; }
     DEV.plain += 1;
 }
 

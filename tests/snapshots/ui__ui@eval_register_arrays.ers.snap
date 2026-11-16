@@ -26,11 +26,11 @@ eval::panic
 eval::volatile-access
 
   × a volatile access cannot happen at compile time
-    ╭─[eval_register_arrays.ers:41:22]
+    ╭─[eval_register_arrays.ers:41:31]
  40 │ 
- 41 │ const THROUGH: u32 = (*SECOND).threshold;
-    ·       ───┬───        ─────────┬─────────
-    ·          │                    ╰── accessed here
+ 41 │ const THROUGH: u32 = unsafe { (*SECOND).threshold };
+    ·       ───┬───                 ─────────┬─────────
+    ·          │                             ╰── accessed here
     ·          ╰── while evaluating the constant `THROUGH`
  42 │ 
     ╰────

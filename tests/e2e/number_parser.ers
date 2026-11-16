@@ -73,49 +73,49 @@ fn parse(s: &[u8]) -> Result(u32, ParseError) {
 
 comptime {
     assert(
-        match parse(&*INPUTS[0]) {
+        match parse(unsafe { &*INPUTS[0] }) {
             .Ok(0) => true,
             _ => false,
         },
         &b"\"0\" is 0",
     );
     assert(
-        match parse(&*INPUTS[1]) {
+        match parse(unsafe { &*INPUTS[1] }) {
             .Ok(42) => true,
             _ => false,
         },
         &b"\"42\" is 42",
     );
     assert(
-        match parse(&*INPUTS[2]) {
+        match parse(unsafe { &*INPUTS[2] }) {
             .Ok(4_294_967_295) => true,
             _ => false,
         },
         &b"\"4294967295\" is the largest u32",
     );
     assert(
-        match parse(&*INPUTS[3]) {
+        match parse(unsafe { &*INPUTS[3] }) {
             .Err(.Overflow) => true,
             _ => false,
         },
         &b"\"4294967296\" overflows",
     );
     assert(
-        match parse(&*INPUTS[4]) {
+        match parse(unsafe { &*INPUTS[4] }) {
             .Err(.Overflow) => true,
             _ => false,
         },
         &b"\"4294967300\" overflows",
     );
     assert(
-        match parse(&*INPUTS[5]) {
+        match parse(unsafe { &*INPUTS[5] }) {
             .Err(.Empty) => true,
             _ => false,
         },
         &b"\"\" is empty",
     );
     assert(
-        match parse(&*INPUTS[6]) {
+        match parse(unsafe { &*INPUTS[6] }) {
             .Err(.BadDigit(b'a')) => true,
             _ => false,
         },
@@ -159,7 +159,7 @@ fn show(s: &[u8]) {
 entry fn main() -> ! {
     let mut i: usize = 0;
     while i < len(&INPUTS) {
-        show(&*INPUTS[i]);
+        unsafe { show(&*INPUTS[i]); }
         i += 1;
     }
     exit(0)

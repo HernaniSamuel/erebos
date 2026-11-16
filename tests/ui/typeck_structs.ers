@@ -13,13 +13,13 @@ struct Bytes { data: [u8; 3] }
 fn fields(p: *mut S, n: *const Nested) -> u32 {
     let mut s: S = S { c: 3, a: 1, b: 2 };
     s.b = s.a as u32 + s.c as u32;
-    (*p).c = 7;
-    let inner: S = (*n).s;
+    unsafe { (*p).c = 7; }
+    let inner: S = unsafe { (*n).s };
     let first: *const u16 = &raw const (*n).tail[0];
     let mut node: Node = Node { value: 1, next: 0 as *mut Node };
     node.next = &raw mut node;
     let e: Empty = Empty {};
-    (*node.next).value + inner.b
+    unsafe { (*node.next).value + inner.b }
 }
 
 entry fn main() -> ! { loop {} }

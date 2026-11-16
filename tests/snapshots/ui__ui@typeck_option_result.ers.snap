@@ -84,101 +84,102 @@ fn parse(s: *const [u8]) -> Result(u32, ParseError)
     expr 52 return 1495..1514: !
     expr 53 variant .Err (Result(u32, ParseError)::Err) 1502..1514: Result(u32, ParseError)
     expr 54 variant .Empty (ParseError::Empty) 1507..1513: ParseError
-    expr 55 match 1526..1729: Result(u32, ParseError)
-    expr 56 call 1532..1546: Result(u32, ParseError)
-    expr 57 index 1538..1545: u8
-    expr 58 deref 1538..1542: [u8]
-    expr 59 local s 1540..1541: *const [u8]
-    expr 60 int 0 1543..1544: usize
-    expr 61 variant .Ok (Result(u32, ParseError)::Ok) 1576..1582: Result(u32, ParseError)
-    expr 62 local v 1580..1581: u32
-    expr 63 variant .Err (Result(u32, ParseError)::Err) 1608..1620: Result(u32, ParseError)
-    expr 64 variant .Empty (ParseError::Empty) 1613..1619: ParseError
-    expr 65 variant .Err (Result(u32, ParseError)::Err) 1660..1678: Result(u32, ParseError)
-    expr 66 variant .BadDigit (ParseError::BadDigit) 1665..1677: ParseError
-    expr 67 local b 1675..1676: u8
-    expr 68 variant .Err (Result(u32, ParseError)::Err) 1707..1722: Result(u32, ParseError)
-    expr 69 variant .Overflow (ParseError::Overflow) 1712..1721: ParseError
+    expr 55 match 1526..1740: Result(u32, ParseError)
+    expr 56 call 1532..1557: Result(u32, ParseError)
+    expr 57 unsafe 1538..1556: u8
+    expr 58 index 1547..1554: u8
+    expr 59 deref 1547..1551: [u8]
+    expr 60 local s 1549..1550: *const [u8]
+    expr 61 int 0 1552..1553: usize
+    expr 62 variant .Ok (Result(u32, ParseError)::Ok) 1587..1593: Result(u32, ParseError)
+    expr 63 local v 1591..1592: u32
+    expr 64 variant .Err (Result(u32, ParseError)::Err) 1619..1631: Result(u32, ParseError)
+    expr 65 variant .Empty (ParseError::Empty) 1624..1630: ParseError
+    expr 66 variant .Err (Result(u32, ParseError)::Err) 1671..1689: Result(u32, ParseError)
+    expr 67 variant .BadDigit (ParseError::BadDigit) 1676..1688: ParseError
+    expr 68 local b 1686..1687: u8
+    expr 69 variant .Err (Result(u32, ParseError)::Err) 1718..1733: Result(u32, ParseError)
+    expr 70 variant .Overflow (ParseError::Overflow) 1723..1732: ParseError
 entry fn main() -> !
-    expr 70 loop 2302..2309: !
+    expr 71 loop 2313..2320: !
 panic fn on_panic() -> !
-    expr 71 loop 2339..2346: !
+    expr 72 loop 2350..2357: !
 comptime fn NOTHING() -> Option(u64)
-    expr 72 variant .None (Option(u64)::None) 699..704: Option(u64)
+    expr 73 variant .None (Option(u64)::None) 699..704: Option(u64)
 comptime fn LAST() -> Result((), ParseError)
-    expr 73 variant .Ok (Result((), ParseError)::Ok) 748..755: Result((), ParseError)
-    expr 74 unit 752..754: ()
+    expr 74 variant .Ok (Result((), ParseError)::Ok) 748..755: Result((), ParseError)
+    expr 75 unit 752..754: ()
 comptime fn comptime() -> ()
-    expr 75 assert 1748..1809: ()
-    expr 76 logical && 1755..1808: bool
-    expr 77 binary == 1755..1779: bool
-    expr 78 size_of(Option(u8)) 1755..1774: usize
-    expr 79 int 2 1778..1779: usize
-    expr 80 binary == 1783..1808: bool
-    expr 81 align_of(Option(u8)) 1783..1803: usize
-    expr 82 int 1 1807..1808: usize
-    expr 83 assert 1815..1878: ()
-    expr 84 logical && 1822..1877: bool
-    expr 85 binary == 1822..1847: bool
-    expr 86 size_of(Option(u32)) 1822..1842: usize
-    expr 87 int 8 1846..1847: usize
-    expr 88 binary == 1851..1877: bool
-    expr 89 align_of(Option(u32)) 1851..1872: usize
-    expr 90 int 4 1876..1877: usize
-    expr 91 assert 1884..1955: ()
-    expr 92 logical && 1891..1954: bool
-    expr 93 binary == 1891..1920: bool
-    expr 94 size_of(Option(*mut u8)) 1891..1915: usize
-    expr 95 int 8 1919..1920: usize
-    expr 96 binary == 1924..1954: bool
-    expr 97 align_of(Option(*mut u8)) 1924..1949: usize
-    expr 98 int 4 1953..1954: usize
-    expr 99 assert 1961..2022: ()
-    expr 100 logical && 1968..2021: bool
-    expr 101 binary == 1968..1992: bool
-    expr 102 size_of(Option(())) 1968..1987: usize
-    expr 103 int 1 1991..1992: usize
-    expr 104 binary == 1996..2021: bool
-    expr 105 align_of(Option(())) 1996..2016: usize
-    expr 106 int 1 2020..2021: usize
-    expr 107 assert 2028..2101: ()
-    expr 108 logical && 2035..2100: bool
-    expr 109 binary == 2035..2065: bool
-    expr 110 size_of(Option([u32; 0])) 2035..2060: usize
-    expr 111 int 4 2064..2065: usize
-    expr 112 binary == 2069..2100: bool
-    expr 113 align_of(Option([u32; 0])) 2069..2095: usize
-    expr 114 int 4 2099..2100: usize
-    expr 115 assert 2107..2171: ()
-    expr 116 logical && 2114..2170: bool
-    expr 117 binary == 2114..2140: bool
-    expr 118 size_of(Option(u64)) 2114..2134: usize
-    expr 119 int 16 2138..2140: usize
-    expr 120 binary == 2144..2170: bool
-    expr 121 align_of(Option(u64)) 2144..2165: usize
-    expr 122 int 8 2169..2170: usize
-    expr 123 assert 2177..2222: ()
-    expr 124 binary == 2184..2221: bool
-    expr 125 size_of(Result(u32, ParseError)) 2184..2216: usize
-    expr 126 int 8 2220..2221: usize
-    expr 127 assert 2228..2274: ()
-    expr 128 binary == 2235..2273: bool
-    expr 129 align_of(Result(u32, ParseError)) 2235..2268: usize
-    expr 130 int 4 2272..2273: usize
+    expr 76 assert 1759..1820: ()
+    expr 77 logical && 1766..1819: bool
+    expr 78 binary == 1766..1790: bool
+    expr 79 size_of(Option(u8)) 1766..1785: usize
+    expr 80 int 2 1789..1790: usize
+    expr 81 binary == 1794..1819: bool
+    expr 82 align_of(Option(u8)) 1794..1814: usize
+    expr 83 int 1 1818..1819: usize
+    expr 84 assert 1826..1889: ()
+    expr 85 logical && 1833..1888: bool
+    expr 86 binary == 1833..1858: bool
+    expr 87 size_of(Option(u32)) 1833..1853: usize
+    expr 88 int 8 1857..1858: usize
+    expr 89 binary == 1862..1888: bool
+    expr 90 align_of(Option(u32)) 1862..1883: usize
+    expr 91 int 4 1887..1888: usize
+    expr 92 assert 1895..1966: ()
+    expr 93 logical && 1902..1965: bool
+    expr 94 binary == 1902..1931: bool
+    expr 95 size_of(Option(*mut u8)) 1902..1926: usize
+    expr 96 int 8 1930..1931: usize
+    expr 97 binary == 1935..1965: bool
+    expr 98 align_of(Option(*mut u8)) 1935..1960: usize
+    expr 99 int 4 1964..1965: usize
+    expr 100 assert 1972..2033: ()
+    expr 101 logical && 1979..2032: bool
+    expr 102 binary == 1979..2003: bool
+    expr 103 size_of(Option(())) 1979..1998: usize
+    expr 104 int 1 2002..2003: usize
+    expr 105 binary == 2007..2032: bool
+    expr 106 align_of(Option(())) 2007..2027: usize
+    expr 107 int 1 2031..2032: usize
+    expr 108 assert 2039..2112: ()
+    expr 109 logical && 2046..2111: bool
+    expr 110 binary == 2046..2076: bool
+    expr 111 size_of(Option([u32; 0])) 2046..2071: usize
+    expr 112 int 4 2075..2076: usize
+    expr 113 binary == 2080..2111: bool
+    expr 114 align_of(Option([u32; 0])) 2080..2106: usize
+    expr 115 int 4 2110..2111: usize
+    expr 116 assert 2118..2182: ()
+    expr 117 logical && 2125..2181: bool
+    expr 118 binary == 2125..2151: bool
+    expr 119 size_of(Option(u64)) 2125..2145: usize
+    expr 120 int 16 2149..2151: usize
+    expr 121 binary == 2155..2181: bool
+    expr 122 align_of(Option(u64)) 2155..2176: usize
+    expr 123 int 8 2180..2181: usize
+    expr 124 assert 2188..2233: ()
+    expr 125 binary == 2195..2232: bool
+    expr 126 size_of(Result(u32, ParseError)) 2195..2227: usize
+    expr 127 int 8 2231..2232: usize
+    expr 128 assert 2239..2285: ()
+    expr 129 binary == 2246..2284: bool
+    expr 130 align_of(Result(u32, ParseError)) 2246..2279: usize
+    expr 131 int 4 2283..2284: usize
 comptime fn ParseError::Empty() -> u8
-    expr 131 int 0 482..483: u8
+    expr 132 int 0 482..483: u8
 comptime fn ParseError::BadDigit() -> u8
-    expr 132 int 1 500..501: u8
+    expr 133 int 1 500..501: u8
 comptime fn ParseError::Overflow() -> u8
-    expr 133 int 2 514..515: u8
+    expr 134 int 2 514..515: u8
 comptime fn Mode::Off() -> u8
-    expr 134 int 0 540..541: u8
+    expr 135 int 0 540..541: u8
 comptime fn Mode::Run() -> u8
-    expr 135 int 1 549..550: u8
+    expr 136 int 1 549..550: u8
 comptime fn Cmd::Nop() -> u8
-    expr 136 int 0 574..575: u8
+    expr 137 int 0 574..575: u8
 comptime fn Cmd::Set() -> u8
-    expr 137 int 1 597..598: u8
+    expr 138 int 1 597..598: u8
 comptime fn length() -> usize
     expr 17 binary + 926..931: usize
     expr 18 int 2 926..927: usize

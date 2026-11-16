@@ -24,8 +24,8 @@ fn register() -> *mut volatile Register {
 }
 
 fn putc(byte: u8) {
-    (*register()).data = byte;
-    board::putc((*register()).data);
+    unsafe { (*register()).data = byte; }
+    unsafe { board::putc((*register()).data); }
 }
 
 fn print_u32(n: u32) {
@@ -111,8 +111,8 @@ entry fn main() -> ! {
     let mut sum: u32 = 0;
     let mut node: *const Node = &raw const first;
     while node != 0 as *const Node {
-        sum += (*node).value;
-        node = (*node).next;
+        unsafe { sum += (*node).value; }
+        unsafe { node = (*node).next; }
     }
     print_u32(sum);
     putc(b'\n');

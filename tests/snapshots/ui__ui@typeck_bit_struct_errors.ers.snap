@@ -201,11 +201,11 @@ ty::match-type
 ty::write-through-const
 
   × cannot write through a `*const` pointer
-    ╭─[typeck_bit_struct_errors.ers:64:7]
+    ╭─[typeck_bit_struct_errors.ers:64:16]
  63 │ fn through_const(p: *const Lcr) {
- 64 │     (*p).dlab = true;
-    ·       ┬
-    ·       ╰── has type `*const regs::Lcr`
+ 64 │     unsafe { (*p).dlab = true; }
+    ·                ┬
+    ·                ╰── has type `*const regs::Lcr`
  65 │ }
     ╰────
   help: only `*mut` pointers can be written through
@@ -319,12 +319,12 @@ ty::no-fields
 ty::volatile-too-wide
 
   × a volatile `Wide` cannot be accessed in one instruction
-    ╭─[typeck_bit_struct_errors.ers:89:23]
+    ╭─[typeck_bit_struct_errors.ers:89:32]
  88 │ fn volatile_accesses(w: *mut volatile Wide, p: *mut volatile Packed) -> u32 {
- 89 │     let whole: Wide = *w;
-    ·                       ─┬
-    ·                        ╰── the widest single access is 32 bits
- 90 │     (*w).low = 1;
+ 89 │     let whole: Wide = unsafe { *w };
+    ·                                ─┬
+    ·                                 ╰── the widest single access is 32 bits
+ 90 │     unsafe { (*w).low = 1; }
     ╰────
   help: a bit-field struct is accessed as its integer type, `u64`, with all its fields at once;
         declare it on an integer type of at most 32 bits, or split its fields between two such
@@ -332,12 +332,12 @@ ty::volatile-too-wide
 ty::volatile-too-wide
 
   × a volatile `Wide` cannot be accessed in one instruction
-    ╭─[typeck_bit_struct_errors.ers:90:5]
- 89 │     let whole: Wide = *w;
- 90 │     (*w).low = 1;
-    ·     ────┬───
-    ·         ╰── the widest single access is 32 bits
- 91 │     (*p).status = Status { ready: true, count: 0 };
+    ╭─[typeck_bit_struct_errors.ers:90:14]
+ 89 │     let whole: Wide = unsafe { *w };
+ 90 │     unsafe { (*w).low = 1; }
+    ·              ────┬───
+    ·                  ╰── the widest single access is 32 bits
+ 91 │     unsafe { (*p).status = Status { ready: true, count: 0 }; }
     ╰────
   help: a bit-field struct is accessed as its integer type, `u64`, with all its fields at once;
         declare it on an integer type of at most 32 bits, or split its fields between two such
@@ -345,35 +345,35 @@ ty::volatile-too-wide
 ty::volatile-packed-field
 
   × a volatile `Status` here may be misaligned
-    ╭─[typeck_bit_struct_errors.ers:91:5]
- 90 │     (*w).low = 1;
- 91 │     (*p).status = Status { ready: true, count: 0 };
-    ·     ─────┬─────
-    ·          ╰── reached through a field of a `#[packed]` struct
- 92 │     let ready: bool = (*p).status.ready;
+    ╭─[typeck_bit_struct_errors.ers:91:14]
+ 90 │     unsafe { (*w).low = 1; }
+ 91 │     unsafe { (*p).status = Status { ready: true, count: 0 }; }
+    ·              ─────┬─────
+    ·                   ╰── reached through a field of a `#[packed]` struct
+ 92 │     let ready: bool = unsafe { (*p).status.ready };
     ╰────
   help: it would be split into several accesses; register blocks use the default layout, with
         explicit padding fields (ADR 0022, 0023)
 ty::volatile-packed-field
 
   × a volatile `Status` here may be misaligned
-    ╭─[typeck_bit_struct_errors.ers:92:23]
- 91 │     (*p).status = Status { ready: true, count: 0 };
- 92 │     let ready: bool = (*p).status.ready;
-    ·                       ────────┬────────
-    ·                               ╰── reached through a field of a `#[packed]` struct
- 93 │     (*w).high
+    ╭─[typeck_bit_struct_errors.ers:92:32]
+ 91 │     unsafe { (*p).status = Status { ready: true, count: 0 }; }
+ 92 │     let ready: bool = unsafe { (*p).status.ready };
+    ·                                ────────┬────────
+    ·                                        ╰── reached through a field of a `#[packed]` struct
+ 93 │     unsafe { (*w).high }
     ╰────
   help: it would be split into several accesses; register blocks use the default layout, with
         explicit padding fields (ADR 0022, 0023)
 ty::volatile-too-wide
 
   × a volatile `Wide` cannot be accessed in one instruction
-    ╭─[typeck_bit_struct_errors.ers:93:5]
- 92 │     let ready: bool = (*p).status.ready;
- 93 │     (*w).high
-    ·     ────┬────
-    ·         ╰── the widest single access is 32 bits
+    ╭─[typeck_bit_struct_errors.ers:93:14]
+ 92 │     let ready: bool = unsafe { (*p).status.ready };
+ 93 │     unsafe { (*w).high }
+    ·              ────┬────
+    ·                  ╰── the widest single access is 32 bits
  94 │ }
     ╰────
   help: a bit-field struct is accessed as its integer type, `u64`, with all its fields at once;

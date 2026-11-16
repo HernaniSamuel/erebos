@@ -21,7 +21,7 @@ interrupt fn pend() at Vector::PendSV {
 
 entry fn main() -> ! {
     core::arch::enable_interrupts();
-    *ICSR = 1 << 28;
+    unsafe { *ICSR = 1 << 28; }
     loop {
         critical {
             if RUNS >= 1 {

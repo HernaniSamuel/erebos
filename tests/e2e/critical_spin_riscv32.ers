@@ -25,8 +25,8 @@ interrupt fn tick() at Vector::MachineTimer {
 }
 
 entry fn main() -> ! {
-    *MTIMECMP_HIGH = 0;
-    *MTIMECMP_LOW = *MTIME + 1000;
+    unsafe { *MTIMECMP_HIGH = 0; }
+    unsafe { *MTIMECMP_LOW = *MTIME + 1000; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     loop {

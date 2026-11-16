@@ -96,11 +96,11 @@ eval::volatile-access
    ·          ╰── while evaluating the constant `DEVICE`
  8 │ const C_CODE: u32 = unsafe { c_function() };
    ╰────
-    ╭─[eval_errors.ers:29:5]
+    ╭─[eval_errors.ers:29:14]
  28 │     let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
- 29 │     *uart
-    ·     ──┬──
-    ·       ╰── accessed here
+ 29 │     unsafe { *uart }
+    ·              ──┬──
+    ·                ╰── accessed here
  30 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -115,11 +115,11 @@ eval::uninit-read
     ·          ╰── while evaluating the constant `PADDING`
  10 │ const ESCAPES: *const u32 = local_address();
     ╰────
-    ╭─[eval_errors.ers:35:5]
+    ╭─[eval_errors.ers:35:14]
  34 │     let bytes: *const u8 = &raw const p as *const u8;
- 35 │     bytes[1] as u32
-    ·     ────┬───
-    ·         ╰── read here
+ 35 │     unsafe { bytes[1] as u32 }
+    ·              ────┬───
+    ·                  ╰── read here
  36 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -174,11 +174,11 @@ eval::invalid-access
     ·          ╰── while evaluating the constant `ADDRESS`
  14 │ const PANIC: u32 = explicit_panic();
     ╰────
-    ╭─[eval_errors.ers:51:5]
+    ╭─[eval_errors.ers:51:14]
  50 │ fn read_address() -> u32 {
- 51 │     *(0x8000_0000 as *const u32)
-    ·     ──────────────┬─────────────
-    ·                   ╰── accessed here
+ 51 │     unsafe { *(0x8000_0000 as *const u32) }
+    ·              ──────────────┬─────────────
+    ·                            ╰── accessed here
  52 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)

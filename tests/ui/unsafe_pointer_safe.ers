@@ -1,0 +1,109 @@
+// emit: typeck
+// What does not need an `unsafe` block (ADR 0119): `&raw const` and `&raw mut`
+// of a place reached through a raw pointer (an address computation, the offset
+// of `&raw const p[i]` wrapping), `len(s)` and `slice(p, n)`, casts between
+// pointers and integers and from references to raw pointers, comparing
+// pointers, `*r` and the places reached through a reference, the registers of a
+// peripheral, and a `static mut` (ADR 0093). Nothing here is reported.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Node {
+    value: u32,
+    next: *mut Node,
+}
+
+#[copy]
+struct Reg {
+    n: u32,
+}
+
+impl Reg {
+    fn get(&self) -> u32 {
+        self.n
+    }
+
+    fn set(&mut self, n: u32) {
+        self.n = n;
+    }
+}
+
+peripheral Uart {
+    read write ctrl: u32 at 0,
+    read status: u32 at 4,
+}
+
+peripheral UART: Uart at 0x1000_0000;
+
+static mut COUNTER: u32 = 0;
+static TABLE: [u8; 4] = [1, 2, 3, 4];
+
+fn addresses(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4], s: *mut [u8], i: usize) {
+    let one: *const u32 = &raw const p[i];
+    let two: *mut u32 = &raw mut p[i + 1];
+    let three: *mut u32 = &raw mut (*pair).b;
+    let four: *const u8 = &raw const (*a)[i];
+    let five: *mut u8 = &raw mut (*s)[i];
+    let six: *const Pair = &raw const *pair;
+    let seven: *const [u8] = &raw const (*s)[1..3];
+    let eight: *mut u32 = &raw mut *p;
+}
+
+// The pointer inside the place is the address, not an access: `s` and `n` are
+// values.
+fn lengths(s: *const [u8], p: *const u8, n: usize) -> usize {
+    let t: *const [u8] = slice(p, n);
+    len(s) + len(t)
+}
+
+fn casts(p: *mut u32, r: &u32, m: &mut Pair, n: usize) -> usize {
+    let address: usize = p as usize;
+    let back: *const u8 = (address + n) as *const u8;
+    let wide: *mut u8 = p as *mut u8;
+    let from_ref: *const u32 = r as *const u32;
+    let from_mut: *mut Pair = m as *mut Pair;
+    address + back as usize + wide as usize + from_ref as usize + from_mut as usize
+}
+
+fn comparisons(p: *const u32, q: *const u32) -> bool {
+    (p == q) || (p != q) || (p as usize) < (q as usize)
+}
+
+fn through_references(r: &u32, m: &mut u32, pair: &mut Pair, items: &[u8], reg: &mut Reg) -> u32 {
+    *m = *r + 1;
+    pair.a = *m;
+    (*pair).b = pair.a + items[0] as u32;
+    reg.set(items[1] as u32);
+    let part: &[u8] = &items[1..3];
+    let again: &u32 = &*r;
+    let by_hand: &mut u32 = &mut *m;
+    *by_hand += reg.get() + part[0] as u32 + *again;
+    (*reg).get()
+}
+
+fn registers() -> u32 {
+    UART.ctrl = 1;
+    UART.ctrl |= 2;
+    UART.status
+}
+
+fn statics() -> u32 {
+    COUNTER += 1;
+    let p: *const u32 = &raw const COUNTER;
+    TABLE[1] as u32 + p as usize as u32
+}
+
+fn pointers_are_values(n: *mut Node, m: *mut Node) -> bool {
+    let next: *mut *mut Node = &raw mut (*n).next;
+    n == m
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

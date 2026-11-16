@@ -154,22 +154,22 @@ ty::end-private-field
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Plain` out of a place through a pointer
-    ╭─[end_errors.ers:78:9]
+    ╭─[end_errors.ers:78:18]
  77 │ fn plain_through_pointer(p: *mut Plain) {
- 78 │     end(*p);
-    ·         ─┬
-    ·          ╰── `Plain` is not copy, and this is a place through a pointer
+ 78 │     unsafe { end(*p); }
+    ·                  ─┬
+    ·                   ╰── `Plain` is not copy, and this is a place through a pointer
  79 │ }
     ╰────
   help: mark `Plain` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::end-type
 
   × `end` takes a value of a `#[linear]` struct, found `Plain`
-    ╭─[end_errors.ers:78:9]
+    ╭─[end_errors.ers:78:18]
  77 │ fn plain_through_pointer(p: *mut Plain) {
- 78 │     end(*p);
-    ·         ─┬
-    ·          ╰── `Plain` is not a `#[linear]` struct
+ 78 │     unsafe { end(*p); }
+    ·                  ─┬
+    ·                   ╰── `Plain` is not a `#[linear]` struct
  79 │ }
     ╰────
   help: `Plain` is not marked `#[linear]`, so its values need no ending: they can be let go; mark
@@ -177,11 +177,11 @@ ty::end-type
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `dma::Open` out of a place through a pointer
-    ╭─[end_errors.ers:83:9]
+    ╭─[end_errors.ers:83:18]
  82 │ fn unmovable(p: *mut dma::Open) {
- 83 │     end(*p);
-    ·         ─┬
-    ·          ╰── `dma::Open` is not copy, and this is a place through a pointer
+ 83 │     unsafe { end(*p); }
+    ·                  ─┬
+    ·                   ╰── `dma::Open` is not copy, and this is a place through a pointer
  84 │     end(HELD.t);
     ╰────
   help: a non-copy value is moved out of a local, a parameter or their fields, and out of the
@@ -190,7 +190,7 @@ ty::move-out-of-place
 
   × cannot move a value of the non-copy type `dma::Open` out of a static
     ╭─[end_errors.ers:84:9]
- 83 │     end(*p);
+ 83 │     unsafe { end(*p); }
  84 │     end(HELD.t);
     ·         ───┬──
     ·            ╰── `dma::Open` is not copy, and this is a static

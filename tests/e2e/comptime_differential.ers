@@ -215,7 +215,7 @@ fn enum_matches(m: Mode, l: Level, p: Port, c: Code, raw: u8) -> u64 {
         let other: Code => other as u64,
     });
     let byte: u8 = raw;
-    let odd: Mode = *(&raw const byte as *const Mode);
+    let odd: Mode = unsafe { *(&raw const byte as *const Mode) };
     mix(h, match odd {
         Mode::Off => 1,
         Mode::Run => 2,
@@ -256,7 +256,7 @@ fn bools(v: u8) -> u64 {
     // Any nonzero byte is `true` (ADR 0022).
     let byte: u8 = v;
     let flag: *const bool = &raw const byte as *const bool;
-    (*flag) as u64
+    unsafe { (*flag) as u64 }
 }
 
 fn layout() -> u64 {
@@ -280,8 +280,8 @@ fn ring(steps: u32) -> u64 {
     let mut h: u64 = 0;
     let mut i: u32 = 0;
     while i < steps {
-        h = mix(h, (*link).value as u64);
-        link = (*link).next;
+        unsafe { h = mix(h, (*link).value as u64); }
+        unsafe { link = (*link).next; }
         i += 1;
     }
     h
@@ -289,8 +289,8 @@ fn ring(steps: u32) -> u64 {
 
 fn weights(k: usize) -> u64 {
     let first: *const u16 = &raw const WEIGHTS as *const u16;
-    let h: u64 = mix(WEIGHTS[k % 4] as u64, *HEAVIEST as u64);
-    mix(h, first[(k + 1) % 4] as u64)
+    let h: u64 = unsafe { mix(WEIGHTS[k % 4] as u64, *HEAVIEST as u64) };
+    unsafe { mix(h, first[(k + 1) % 4] as u64) }
 }
 
 // Slices made from arrays, statics and byte strings, and with `slice`;
@@ -302,7 +302,7 @@ fn bytes_sum(s: *const [u8]) -> u64 {
     let mut h: u64 = len(s) as u64;
     let mut i: usize = 0;
     while i < len(s) {
-        h = mix(h, first[i] as u64);
+        unsafe { h = mix(h, first[i] as u64); }
         i += 1;
     }
     h
@@ -329,14 +329,14 @@ fn message_sum(k: usize) -> u64 {
     let mut h: u64 = 0;
     let mut i: usize = 0;
     while i < len(message) {
-        h = mix(h, (*message)[i] as u64);
+        unsafe { h = mix(h, (*message)[i] as u64); }
         i += 1;
     }
     let mut buffer: [u8; 8] = [0; 8];
     let part: *mut [u8] = slice(&raw mut buffer[k % 4], 4);
     i = 0;
     while i < len(part) {
-        (*part)[i] = (k + i * 3) as u8;
+        unsafe { (*part)[i] = (k + i * 3) as u8; }
         i += 1;
     }
     mix(h, bytes_sum(&raw const buffer))
@@ -352,7 +352,7 @@ fn repeated(k: usize) -> u64 {
     let pointers: [*const u8; 2] = [&raw mut byte; 2];
     let mut h: u64 = bytes_sum(views[k % 2]);
     h = mix(h, bytes_sum(messages[k % 3]));
-    mix(h, (*pointers[1]) as u64)
+    unsafe { mix(h, (*pointers[1]) as u64) }
 }
 
 // Enums with payloads (ADR 0039): variants of every kind, built in
@@ -390,7 +390,7 @@ fn packet_bytes(h: u64, p: *const u8, from: usize, to: usize) -> u64 {
     let mut h: u64 = h;
     let mut i: usize = from;
     while i < to {
-        h = mix(h, p[i] as u64);
+        unsafe { h = mix(h, p[i] as u64); }
         i += 1;
     }
     h
@@ -402,7 +402,7 @@ fn packet_bytes(h: u64, p: *const u8, from: usize, to: usize) -> u64 {
 fn packet_hash(packet: Packet) -> u64 {
     let copy: Packet = packet;
     let p: *const u8 = &raw const copy as *const u8;
-    let tag: u64 = p[0] as u64 | (p[1] as u64) << 8;
+    let tag: u64 = unsafe { p[0] as u64 | (p[1] as u64) << 8 };
     let h: u64 = mix(0, tag);
     if tag == 1 || tag == 7 {
         packet_bytes(h, p, 2, 3)
@@ -414,7 +414,7 @@ fn packet_hash(packet: Packet) -> u64 {
         packet_bytes(packet_bytes(h, p, 2, 5), p, 6, 8)
     } else if tag == 5 {
         packet_bytes(h, p, 4, 12)
-    } else if tag == 6 && p[2] == 1 {
+    } else if tag == 6 && unsafe { p[2] } == 1 {
         packet_bytes(h, p, 2, 4)
     } else if tag == 6 {
         packet_bytes(h, p, 2, 3)
@@ -634,7 +634,7 @@ fn lamp_value(k: u8) -> Lamp {
     } else if k == 5 {
         Lamp::Write(2, 8)
     } else {
-        (&raw const LAMP_BYTES as *const Lamp)[0]
+        unsafe { (&raw const LAMP_BYTES as *const Lamp)[0] }
     }
 }
 

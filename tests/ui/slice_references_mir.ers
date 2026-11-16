@@ -15,13 +15,13 @@ fn write(s: &mut [u8], i: usize, b: u8) {
 
 // The same through a raw slice: no `Deref` and `Index`.
 fn read_raw(p: *const [u8], i: usize) -> u8 {
-    (*p)[i]
+    unsafe { (*p)[i] }
 }
 
 // `&*s` from a raw `*const`, a raw `*mut`, a `&` and a `&mut`.
 fn make(raw: *const [u8], raw_mut: *mut [u8], shared: &[u8], unique: &mut [u8]) {
-    let a: &[u8] = &*raw;
-    let b: &mut [u8] = &mut *raw_mut;
+    let a: &[u8] = unsafe { &*raw };
+    let b: &mut [u8] = unsafe { &mut *raw_mut };
     let c: &[u8] = &*shared;
     let d: &mut [u8] = &mut *unique;
 }

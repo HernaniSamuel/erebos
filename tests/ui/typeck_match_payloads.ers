@@ -70,7 +70,7 @@ fn after_every_variant(m: Msg) -> u8 {
 fn opaque_positions(b: Bag) -> u8 {
     match b {
         Bag::Things(let p: Pair, let a: [u8; 2], let ptr: *const u8, let s: *const [u8], _) => {
-            p.a + a[1] + *ptr + (*s)[0]
+            unsafe { p.a + a[1] + *ptr + (*s)[0] }
         }
         Bag::Count(let LIMIT: u8, LIMIT) => LIMIT,
         Bag::Count(_, _) => 0,

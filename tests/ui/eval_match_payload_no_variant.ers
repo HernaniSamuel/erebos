@@ -14,11 +14,11 @@ enum Msg: u8 { Nop = 0, Wide(u32) = 1, SetMode(Mode) = 2 }
 static BYTES: [u8; 16] = [2, 7, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0];
 
 fn odd_mode() -> Msg {
-    (&raw const BYTES as *const Msg)[0]
+    unsafe { (&raw const BYTES as *const Msg)[0] }
 }
 
 fn odd_tag() -> Msg {
-    (&raw const BYTES as *const Msg)[1]
+    unsafe { (&raw const BYTES as *const Msg)[1] }
 }
 
 fn every_mode(m: Msg) -> u8 {

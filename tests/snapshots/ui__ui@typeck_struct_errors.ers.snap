@@ -93,16 +93,16 @@ ty::invalid-operand
  16 │     let same: bool = q == q;
     ·                      ───┬──
     ·                         ╰── has type `Point`
- 17 │     let copy: Point = *v;
+ 17 │     let copy: Point = unsafe { *v };
     ╰────
 ty::volatile-aggregate
 
   × a volatile `Point` cannot be accessed as a whole
-    ╭─[typeck_struct_errors.ers:17:23]
+    ╭─[typeck_struct_errors.ers:17:32]
  16 │     let same: bool = q == q;
- 17 │     let copy: Point = *v;
-    ·                       ─┬
-    ·                        ╰── access its elements or fields one at a time
- 18 │     let y: i32 = (*v).y;
+ 17 │     let copy: Point = unsafe { *v };
+    ·                                ─┬
+    ·                                 ╰── access its elements or fields one at a time
+ 18 │     let y: i32 = unsafe { (*v).y };
     ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)

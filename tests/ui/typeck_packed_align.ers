@@ -16,9 +16,9 @@ struct Ring { slots: [Descriptor; 2], head: u8 }
 struct Inner { a: u8, b: u32 }
 
 fn copies(h: *const Header) -> u32 {
-    let local: Header = *h;
+    let local: Header = unsafe { *h };
     let kind: *const u8 = &raw const local.kind;
-    local.len + (*h).len
+    unsafe { local.len + (*h).len }
 }
 
 entry fn main() -> ! { loop {} }

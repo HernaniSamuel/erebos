@@ -38,7 +38,7 @@ entry fn main() -> ! {
     let mut i: usize = 0;
     while i < 5 {
         putc(b' ');
-        print(name(modes[i]));
+        unsafe { print(name(modes[i])); }
         i += 1;
     }
     putc(b'\n');
@@ -47,7 +47,7 @@ entry fn main() -> ! {
     i = 0;
     while i < 5 {
         putc(b' ');
-        print(name(device[i]));
+        unsafe { print(name(device[i])); }
         i += 1;
     }
     putc(b'\n');
@@ -56,7 +56,7 @@ entry fn main() -> ! {
     i = 0;
     while i < 5 {
         putc(b' ');
-        putc(b'0' + modes[i] as u8);
+        unsafe { putc(b'0' + modes[i] as u8); }
         i += 1;
     }
     putc(b'\n');
@@ -64,13 +64,13 @@ entry fn main() -> ! {
     print(&b"eq: ");
     i = 0;
     while i < 5 {
-        flag(modes[i] == Mode::Sleep);
+        unsafe { flag(modes[i] == Mode::Sleep); }
         i += 1;
     }
     putc(b' ');
     i = 0;
     while i < 5 {
-        flag(modes[i] != Mode::Run);
+        unsafe { flag(modes[i] != Mode::Run); }
         i += 1;
     }
     putc(b'\n');

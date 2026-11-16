@@ -53,9 +53,9 @@ fn lend(r: &mut Bank) {
 }
 
 fn through_pointers() {
-    (*FROM_CONST).data = 1;
+    unsafe { (*FROM_CONST).data = 1; }
     let cast: *mut Bank = 0x5000_0000 as *mut Bank;
-    (*cast).data = 2;
+    unsafe { (*cast).data = 2; }
 }
 
 interrupt fn tick() at Vector::MachineTimer {

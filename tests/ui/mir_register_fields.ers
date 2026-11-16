@@ -65,8 +65,8 @@ fn others() {
 // Through a volatile pointer, as to a register; through a pointer that is
 // not volatile, as to a local.
 fn through(v: *mut volatile Status, p: *mut Status) {
-    (*v).enable = true;
-    (*p).enable = true;
+    unsafe { (*v).enable = true; }
+    unsafe { (*p).enable = true; }
 }
 
 // In ordinary memory, no masks.

@@ -13,38 +13,43 @@ fn discarded(a: [Handle; 2], p: *mut Holder, i: usize) -> ()
     expr 3 index 389..393: Handle
     expr 4 local a 389..390: [Handle; 2]
     expr 5 int 0 391..392: usize
-    expr 6 field h 399..405: Handle
-    expr 7 deref 399..403: Holder
-    expr 8 local p 401..402: *mut Holder
-    expr 9 index 411..424: Handle
-    expr 10 field items 411..421: [Handle; 2]
-    expr 11 deref 411..415: Holder
-    expr 12 local p 413..414: *mut Holder
-    expr 13 local i 422..423: usize
-    expr 14 static SH 430..432: Handle
-    expr 15 block 438..446: Holder
-    expr 16 deref 440..444: Holder
-    expr 17 local p 442..443: *mut Holder
-    expr 18 block 452..462: Handle
-    expr 19 block 454..460: Handle
-    expr 20 static SH 456..458: Handle
-    expr 21 critical 468..483: Handle
-    expr 22 static SH 479..481: Handle
-    expr 23 block 489..497: Handle
-    expr 24 index 491..495: Handle
-    expr 25 local a 491..492: [Handle; 2]
-    expr 26 int 1 493..494: usize
+    expr 6 unsafe 399..417: ()
+    expr 7 field h 408..414: Handle
+    expr 8 deref 408..412: Holder
+    expr 9 local p 410..411: *mut Holder
+    expr 10 unsafe 422..447: ()
+    expr 11 index 431..444: Handle
+    expr 12 field items 431..441: [Handle; 2]
+    expr 13 deref 431..435: Holder
+    expr 14 local p 433..434: *mut Holder
+    expr 15 local i 442..443: usize
+    expr 16 static SH 452..454: Handle
+    expr 17 unsafe 460..480: ()
+    expr 18 block 469..477: Holder
+    expr 19 deref 471..475: Holder
+    expr 20 local p 473..474: *mut Holder
+    expr 21 block 485..495: Handle
+    expr 22 block 487..493: Handle
+    expr 23 static SH 489..491: Handle
+    expr 24 critical 501..516: Handle
+    expr 25 static SH 512..514: Handle
+    expr 26 block 522..530: Handle
+    expr 27 index 524..528: Handle
+    expr 28 local a 524..525: [Handle; 2]
+    expr 29 int 1 526..527: usize
 fn copies(p: *mut u32) -> ()
-    expr 27 deref 531..533: u32
-    expr 28 local p 532..533: *mut u32
-    expr 29 binary + 539..547: u32
-    expr 30 deref 539..543: u32
-    expr 31 local p 541..542: *mut u32
-    expr 32 int 1 546..547: u32
+    expr 30 unsafe 564..578: ()
+    expr 31 deref 573..575: u32
+    expr 32 local p 574..575: *mut u32
+    expr 33 unsafe 583..603: ()
+    expr 34 binary + 592..600: u32
+    expr 35 deref 592..596: u32
+    expr 36 local p 594..595: *mut u32
+    expr 37 int 1 599..600: u32
 entry fn main() -> !
-    expr 33 loop 579..586: !
+    expr 38 loop 634..641: !
 panic fn on_panic() -> !
-    expr 34 loop 621..628: !
+    expr 39 loop 676..683: !
 comptime fn SH() -> Handle
-    expr 35 struct Handle 300..315: Handle
-    expr 36 int 1 312..313: u32
+    expr 40 struct Handle 300..315: Handle
+    expr 41 int 1 312..313: u32

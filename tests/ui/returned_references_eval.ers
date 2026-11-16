@@ -41,9 +41,9 @@ fn part(s: &[u8], start: usize, n: usize) -> &[u8] {
 }
 
 static MESSAGES: [*const [u8]; 3] = [
-    part(&*TOPICS, 0, 7) as *const [u8],
-    part(&*TOPICS, 9, 12) as *const [u8],
-    part(&*TOPICS, 23, 6) as *const [u8],
+    part(unsafe { &*TOPICS }, 0, 7) as *const [u8],
+    part(unsafe { &*TOPICS }, 9, 12) as *const [u8],
+    part(unsafe { &*TOPICS }, 23, 6) as *const [u8],
 ];
 
 static TAIL: *const [u8] = rest(&B, 4) as *const [u8];

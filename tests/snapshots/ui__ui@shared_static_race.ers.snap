@@ -13,12 +13,12 @@ analysis::unprotected-static
     ·     ─────┬────
     ·          ╰── the handler `tick` reaches it here
  26 │     TICKS += 1;
- 27 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 27 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  28 │ }
  29 │ 
  30 │ entry fn main() -> ! {
- 31 │     *MTIMECMP_HIGH = 0;
- 32 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 31 │     unsafe { *MTIMECMP_HIGH = 0; }
+ 32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
  34 │     core::arch::enable_interrupts();
  35 │     let mut i: u32 = 0;
@@ -38,12 +38,12 @@ analysis::unprotected-static
     ·     ─────┬────
     ·          ╰── the handler `tick` reaches it here
  26 │     TICKS += 1;
- 27 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 27 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  28 │ }
  29 │ 
  30 │ entry fn main() -> ! {
- 31 │     *MTIMECMP_HIGH = 0;
- 32 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 31 │     unsafe { *MTIMECMP_HIGH = 0; }
+ 32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
  34 │     core::arch::enable_interrupts();
  35 │     let mut i: u32 = 0;
@@ -66,12 +66,12 @@ analysis::unprotected-static
  26 │     TICKS += 1;
     ·     ─────┬────
     ·          ╰── the handler `tick` reaches it here
- 27 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 27 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  28 │ }
  29 │ 
  30 │ entry fn main() -> ! {
- 31 │     *MTIMECMP_HIGH = 0;
- 32 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 31 │     unsafe { *MTIMECMP_HIGH = 0; }
+ 32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
  34 │     core::arch::enable_interrupts();
  35 │     let mut i: u32 = 0;
@@ -99,12 +99,12 @@ analysis::unprotected-static
     ·     ─────┬────
     ·          ╰── the handler `tick` reaches it here
  26 │     TICKS += 1;
- 27 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 27 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  28 │ }
  29 │ 
  30 │ entry fn main() -> ! {
- 31 │     *MTIMECMP_HIGH = 0;
- 32 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 31 │     unsafe { *MTIMECMP_HIGH = 0; }
+ 32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
  34 │     core::arch::enable_interrupts();
  35 │     let mut i: u32 = 0;
@@ -134,12 +134,12 @@ analysis::unprotected-static
  26 │     TICKS += 1;
     ·     ─────┬────
     ·          ╰── the handler `tick` reaches it here
- 27 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 27 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  28 │ }
  29 │ 
  30 │ entry fn main() -> ! {
- 31 │     *MTIMECMP_HIGH = 0;
- 32 │     *MTIMECMP_LOW = *MTIME + PERIOD;
+ 31 │     unsafe { *MTIMECMP_HIGH = 0; }
+ 32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
  34 │     core::arch::enable_interrupts();
  35 │     let mut i: u32 = 0;

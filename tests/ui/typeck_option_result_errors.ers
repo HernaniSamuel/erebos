@@ -27,7 +27,7 @@ fn aggregates(o: Option(u8), p: Option(u8), v: *const volatile Option(u8)) {
     let n: u8 = o as u8;
     let f: u8 = o.f;
     let at: usize = offset_of(Option(u8), f);
-    let r: Option(u8) = *v;
+    let r: Option(u8) = unsafe { *v };
 }
 
 fn arguments(x: Option(u32)) {

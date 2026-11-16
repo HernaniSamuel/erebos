@@ -1,0 +1,214 @@
+// emit: typeck
+// An access through a raw pointer inside an `unsafe` block (ADR 0119,
+// operation 1): a read, a write, a compound assignment and a borrow of a place
+// reached through a thin pointer, a slice, a volatile pointer or a pointer to a
+// peripheral type, as `*p`, `p[i]`, `(*p).f`, `(*s)[i]`, a range of `*s`,
+// `&*p`, `&mut (*p).f` and a method call whose receiver is such a place; a
+// reference returned from `&*p` (ADR 0118); `match` on `*p`; the pointer
+// itself read from a field. Nothing here is reported. What stays safe outside
+// a block is in `unsafe_pointer_safe.ers`.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Node {
+    value: u32,
+    next: *mut Node,
+    items: [u8; 4],
+}
+
+#[copy]
+struct Reg {
+    n: u32,
+}
+
+impl Reg {
+    fn get(&self) -> u32 {
+        self.n
+    }
+
+    fn set(&mut self, n: u32) {
+        self.n = n;
+    }
+
+    fn take(self) -> u32 {
+        self.n
+    }
+}
+
+enum Mode: u8 {
+    Off = 0,
+    On = 1,
+}
+
+peripheral Uart {
+    read write ctrl: u32 at 0,
+    read status: u32 at 4,
+    read write data: [u8; 4] at 8,
+}
+
+fn reads(p: *const u32, q: *mut u32, pair: *const Pair, a: *const [u8; 4], s: *const [u8], i: usize) -> u32 {
+    let one: u32 = unsafe { *p };
+    let two: u32 = unsafe { p[i] };
+    let three: u32 = unsafe { q[2] };
+    let four: u32 = unsafe { (*pair).a };
+    let five: u8 = unsafe { (*a)[i] };
+    let six: u8 = unsafe { (*s)[i] };
+    one + two + three + four + five as u32 + six as u32
+}
+
+fn writes(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4], s: *mut [u8], i: usize) {
+    unsafe { *p = 1; }
+    unsafe { p[i] = 2; }
+    unsafe { (*pair).b = 3; }
+    unsafe { (*a)[i] = 4; }
+    unsafe { (*s)[i] = 5; }
+}
+
+// A compound assignment reads and writes.
+fn updates(p: *mut u32, pair: *mut Pair, s: *mut [u8], i: usize) {
+    unsafe { *p += 1; }
+    unsafe { p[i] |= 2; }
+    unsafe { (*pair).a -= 1; }
+    unsafe { (*s)[i] ^= 1; }
+}
+
+// A range of a slice reached through a pointer, borrowed or copied from.
+fn ranges(s: *const [u8], t: *mut [u8]) -> usize {
+    let part: &[u8] = unsafe { &(*s)[1..3] };
+    let from: &[u8] = unsafe { &(*s)[2..] };
+    let upto: &mut [u8] = unsafe { &mut (*t)[..2] };
+    len(part) + len(from) + len(upto)
+}
+
+// Borrowing a place reached through a pointer is the operation, whatever the
+// reference is used for afterwards.
+fn borrows(p: *mut u32, pair: *mut Pair, a: *mut [u8; 4]) -> u32 {
+    let r: &u32 = unsafe { &*p };
+    let m: &mut u32 = unsafe { &mut *p };
+    let f: &mut u32 = unsafe { &mut (*pair).a };
+    let e: &mut u8 = unsafe { &mut (*a)[1] };
+    *m = *r + *f + *e as u32;
+    *m
+}
+
+fn volatiles(v: *mut volatile u32, w: *const volatile [u8; 2]) -> u32 {
+    unsafe { *v = 1; }
+    unsafe { *v += 1; }
+    let r: &volatile u32 = unsafe { &*v };
+    *r + unsafe { (*w)[0] } as u32
+}
+
+fn registers(u: *mut Uart, i: usize) -> u32 {
+    unsafe { (*u).ctrl = 1; }
+    unsafe { (*u).ctrl |= 2; }
+    unsafe { (*u).data[i] = 7; }
+    unsafe { (*u).status + (*u).data[i] as u32 }
+}
+
+fn methods(r: *mut Reg) -> u32 {
+    unsafe { (*r).set(1); }
+    let a: u32 = unsafe { (*r).get() };
+    let b: u32 = unsafe { (*r).take() };
+    a + b
+}
+
+// The pointer read from a field is itself an access, and the place reached
+// through it another.
+fn chain(n: *mut Node) -> u32 {
+    let second: u32 = unsafe { (*(*n).next).value };
+    unsafe { (*(*n).next).items[1] = 2; }
+    unsafe { (*n).next = (*(*n).next).next; }
+    second
+}
+
+fn matches(m: *const Mode) -> u32 {
+    unsafe {
+        match *m {
+            Mode::Off => 0,
+            Mode::On => 1,
+        }
+    }
+}
+
+fn pointer_to_pointer(pp: *const *const u32) -> u32 {
+    unsafe { **pp }
+}
+
+// A returned reference made through a raw pointer is the program's word
+// (ADR 0118), and the borrow through the pointer needs a block.
+static mut OWNED: u32 = 0;
+
+fn counter() -> &u32 {
+    unsafe { &*(&raw const OWNED) }
+}
+
+fn tied(r: &mut Pair, p: *mut Pair) -> &mut u32 {
+    unsafe { &mut (*p).b }
+}
+
+fn whole(r: &Pair, p: *const Pair) -> &Pair {
+    unsafe { &*p }
+}
+
+// One block over several accesses, nested blocks, and a block in `critical`
+// and around it.
+fn blocks(p: *mut u32, q: *mut u32) -> u32 {
+    unsafe {
+        *p = 1;
+        *q = *p + 1;
+    }
+    let v: u32 = unsafe {
+        let inner: u32 = unsafe { *p };
+        inner + *q
+    };
+    unsafe {
+        critical {
+            *p += 1;
+        }
+    }
+    critical {
+        unsafe { *q += 1; }
+    }
+    v
+}
+
+// The body of an `unsafe fn` needs its own block.
+unsafe fn fill(dest: *mut u8, c: u8, n: usize) {
+    let mut i: usize = 0;
+    while i < n {
+        unsafe { dest[i] = c; }
+        i += 1;
+    }
+}
+
+// A pointer stored in a `static mut`, which ADR 0093 checks, is read safely;
+// the access through it is not.
+static mut CURSOR: *mut u32 = 0 as *mut u32;
+
+fn through_static() -> u32 {
+    unsafe { *CURSOR }
+}
+
+// An `asm` operand that is a place touches it as the operand says: `in` and
+// `const` read it, `out` and `lateout` write it, `inout` reads and writes it,
+// and `inout(..) v => place` reads `v` and writes the place.
+fn asm_operands(p: *mut u32, pair: *mut Pair, s: *mut [u32]) {
+    unsafe {
+        asm("nop {}", in(reg) *p);
+        asm("nop {}", out(reg) *p);
+        asm("nop {}", lateout(reg) (*pair).a);
+        asm("nop {}", inout(reg) p[1]);
+        asm("nop {}", inout(reg) 1 as u32 => (*s)[0]);
+        asm("nop {}", inout(reg) *p => _);
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

@@ -46,9 +46,9 @@ fn shadowed() -> Mode {
 }
 
 fn device(p: *mut volatile Device, wide: *const Wide) -> u64 {
-    (*p).port = Port::Data;
-    CURRENT = (*p).mode;
-    *wide as u64
+    unsafe { (*p).port = Port::Data; }
+    unsafe { CURRENT = (*p).mode; }
+    unsafe { *wide as u64 }
 }
 
 entry fn main() -> ! { loop {} }

@@ -26,16 +26,16 @@ mod timer {
 }
 
 entry fn main() -> ! {
-    *SYST_RVR = 10_000;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 10_000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     let mut seen: u32 = 0;
     loop {
         critical {
             if TICKS >= 3 {
-                *SYST_CSR = 0;
-                *ICSR = 1 << 25;
+                unsafe { *SYST_CSR = 0; }
+                unsafe { *ICSR = 1 << 25; }
                 seen = TICKS;
                 break;
             }

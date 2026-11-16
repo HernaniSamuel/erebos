@@ -5,15 +5,15 @@
 // through the slice's address. Through a volatile slice, the element is
 // accessed with one volatile load or store (ADR 0023).
 fn read(s: *const [u8], i: usize) -> u8 {
-    (*s)[i]
+    unsafe { (*s)[i] }
 }
 
 fn write_register(regs: *mut volatile [u32], i: usize, value: u32) {
-    (*regs)[i] = value;
+    unsafe { (*regs)[i] = value; }
 }
 
 fn read_register(regs: *const volatile [u32]) -> u32 {
-    (*regs)[2]
+    unsafe { (*regs)[2] }
 }
 
 entry fn main() -> ! { loop {} }

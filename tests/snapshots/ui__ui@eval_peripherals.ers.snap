@@ -19,15 +19,15 @@ eval::volatile-access
 eval::volatile-access
 
   × a volatile access cannot happen at compile time
-    ╭─[eval_peripherals.ers:29:5]
+    ╭─[eval_peripherals.ers:29:14]
  26 │ 
  27 │ const VIA: u8 = {
     ·       ─┬─
     ·        ╰── while evaluating the constant `VIA`
  28 │     let u: *mut Uart = 0x1000_0000 as *mut Uart;
- 29 │     (*u).lsr
-    ·     ────┬───
-    ·         ╰── accessed here
+ 29 │     unsafe { (*u).lsr }
+    ·              ────┬───
+    ·                  ╰── accessed here
  30 │ };
     ╰────
   help: this code runs at compile time (ADR 0027)

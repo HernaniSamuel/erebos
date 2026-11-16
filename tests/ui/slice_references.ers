@@ -32,9 +32,9 @@ fn lengths(raw: *const [u8], shared: &[u8], unique: &mut [u8]) -> usize {
 
 // `&*s` and `&mut *s` from a raw slice and from a reference.
 fn make(raw: *const [u8], raw_mut: *mut [u8], shared: &[u8], unique: &mut [u8]) {
-    let a: &[u8] = &*raw;
-    let b: &mut [u8] = &mut *raw_mut;
-    let c: &[u8] = &*raw_mut;
+    let a: &[u8] = unsafe { &*raw };
+    let b: &mut [u8] = unsafe { &mut *raw_mut };
+    let c: &[u8] = unsafe { &*raw_mut };
     let d: &[u8] = &*shared;
     let e: &[u8] = &*unique;
     let f: &mut [u8] = &mut *unique;
@@ -65,7 +65,7 @@ fn cast_unique(unique: &mut [u32]) -> *const u32 {
 
 // Passed to a function that takes one, and a `&mut` lent to a `&` parameter.
 fn pass(raw: *const [u8], unique: &mut [u8]) -> u8 {
-    let a: u8 = read(&*raw, 0);
+    let a: u8 = unsafe { read(&*raw, 0) };
     let b: u8 = read(unique, 1);
     write(unique, 2, a + b);
     read_mut(unique, 3)
@@ -73,7 +73,7 @@ fn pass(raw: *const [u8], unique: &mut [u8]) -> u8 {
 
 fn from_static() -> u32 {
     let raw: *const [u32] = &raw const TABLE as *const [u32];
-    let s: &[u32] = &*raw;
+    let s: &[u32] = unsafe { &*raw };
     (*s)[2]
 }
 

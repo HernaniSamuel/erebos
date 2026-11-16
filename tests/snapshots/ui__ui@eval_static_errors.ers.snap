@@ -66,7 +66,7 @@ eval::static-mut
 eval::read-only-write
 
   × `LIMIT` is a `static`, which cannot be written
-    ╭─[eval_static_errors.ers:25:5]
+    ╭─[eval_static_errors.ers:25:14]
  13 │ const WRITE_MUT: u32 = write_mut();
  14 │ const WRITE_STATIC: u32 = write_static();
     ·       ──────┬─────        ───────┬──────
@@ -82,9 +82,9 @@ eval::read-only-write
  22 │ 
  23 │ fn write_static() -> u32 {
  24 │     let p: *mut u32 = &raw const LIMIT as *mut u32;
- 25 │     *p = 11;
-    ·     ───┬───
-    ·        ╰── written here
+ 25 │     unsafe { *p = 11; }
+    ·              ───┬───
+    ·                 ╰── written here
  26 │     LIMIT
     ╰────
   help: this code runs at compile time (ADR 0027)
@@ -106,7 +106,7 @@ eval::pointer-compare
  22 │ 
  23 │ fn write_static() -> u32 {
  24 │     let p: *mut u32 = &raw const LIMIT as *mut u32;
- 25 │     *p = 11;
+ 25 │     unsafe { *p = 11; }
  26 │     LIMIT
  27 │ }
  28 │ 

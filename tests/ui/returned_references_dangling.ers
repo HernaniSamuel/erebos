@@ -11,13 +11,13 @@ static TABLE: [u32; 2] = [5, 6];
 fn dangling() -> &u32 {
     let x: u32 = 5;
     let p: *const u32 = &raw const x;
-    &*p
+    unsafe { &*p }
 }
 
 fn dangling_part(i: usize) -> &u32 {
     let t: [u32; 2] = [1, 2];
     let p: *const u32 = &raw const t as *const u32;
-    &*(&raw const p[i])
+    unsafe { &*(&raw const p[i]) }
 }
 
 fn element(i: usize) -> &u32 {

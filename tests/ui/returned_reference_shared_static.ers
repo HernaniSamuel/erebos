@@ -16,16 +16,16 @@ interrupt fn tick() at Vector::MachineTimer {
 }
 
 fn unprotected() -> &u32 {
-    &*(&raw const COUNT)
+    unsafe { &*(&raw const COUNT) }
 }
 
 fn protected() -> &u32 {
     let p: *const u32 = critical { &raw const COUNT };
-    &*p
+    unsafe { &*p }
 }
 
 fn owned() -> &u32 {
-    &*(&raw const OWNED)
+    unsafe { &*(&raw const OWNED) }
 }
 
 entry fn main() -> ! {

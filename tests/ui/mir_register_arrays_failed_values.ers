@@ -55,7 +55,7 @@ fn holder(i: usize) -> u32 {
 }
 
 fn pointer(p: *mut BadStep, i: usize) -> u32 {
-    (*p).ctx[i].threshold
+    unsafe { (*p).ctx[i].threshold }
 }
 
 entry fn main() -> ! { loop {} }

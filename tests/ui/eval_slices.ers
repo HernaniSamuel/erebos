@@ -18,7 +18,7 @@ static FROM_ADDRESS: *const [u32] = slice(0x1000 as *const u32, 8);
 // length is a relocation, as at run time the length holds that address.
 fn pointer_in_length() -> *const [u8] {
     let mut s: *const [u8] = slice(0x1000 as *const u8, 0);
-    (&raw mut s as *mut *const u8)[1] = &raw const TABLE as *const u8;
+    unsafe { (&raw mut s as *mut *const u8)[1] = &raw const TABLE as *const u8; }
     s
 }
 static LENGTH_POINTER: *const [u8] = pointer_in_length();
@@ -28,7 +28,7 @@ fn sum(s: *const [u16]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(s) {
-        total += first[i] as u32;
+        unsafe { total += first[i] as u32; }
         i += 1;
     }
     total

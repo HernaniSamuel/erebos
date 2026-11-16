@@ -46,9 +46,9 @@ fn reason(reason: core::PanicReason) -> &[u8] {
 panic fn on_panic(info: &core::PanicInfo) -> ! {
     print(reason(info.reason));
     print(&b": ");
-    print(&*info.message);
+    unsafe { print(&*info.message); }
     print(&b" at ");
-    print(&*info.file);
+    unsafe { print(&*info.file); }
     print(&b":");
     print_u32(info.line);
     print(&b":");

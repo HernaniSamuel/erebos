@@ -75,12 +75,12 @@ fn unnameable() {
 
 // Not linear and moved out of a pointer: both errors are true.
 fn plain_through_pointer(p: *mut Plain) {
-    end(*p);
+    unsafe { end(*p); }
 }
 
 // Moved out of a pointer, or out of a static.
 fn unmovable(p: *mut dma::Open) {
-    end(*p);
+    unsafe { end(*p); }
     end(HELD.t);
 }
 

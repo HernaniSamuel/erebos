@@ -7,12 +7,12 @@ input_file: tests/ui/eval_partial_pointer_errors.ers
 eval::pointer-to-int
 
   × this write overwrites part of a pointer, whose address only exists after linking
-    ╭─[eval_partial_pointer_errors.ers:12:5]
+    ╭─[eval_partial_pointer_errors.ers:12:14]
  11 │     let b: *mut u8 = &raw mut p as *mut u8;
- 12 │     *b = 0;
-    ·     ───┬──
-    ·        ╰── written here
- 13 │     *(&raw const p as *const [u8; 4])
+ 12 │     unsafe { *b = 0; }
+    ·              ───┬──
+    ·                 ╰── written here
+ 13 │     unsafe { *(&raw const p as *const [u8; 4]) }
     ╰────
     ╭─[eval_partial_pointer_errors.ers:47:7]
  46 │ 
@@ -26,11 +26,11 @@ eval::pointer-to-int
 eval::pointer-to-int
 
   × these bytes hold part of a pointer, whose address only exists after linking
-    ╭─[eval_partial_pointer_errors.ers:20:5]
+    ╭─[eval_partial_pointer_errors.ers:20:14]
  19 │     let q: *const u8 = &raw const p as *const u8;
- 20 │     *(&raw const q[1] as *const [u8; 2])
-    ·     ──────────────────┬─────────────────
-    ·                       ╰── read here
+ 20 │     unsafe { *(&raw const q[1] as *const [u8; 2]) }
+    ·              ──────────────────┬─────────────────
+    ·                                ╰── read here
  21 │ }
     ╰────
     ╭─[eval_partial_pointer_errors.ers:48:7]
@@ -45,28 +45,28 @@ eval::pointer-to-int
 eval::pointer-to-int
 
   × these bytes hold part of a pointer, whose address only exists after linking
-    ╭─[eval_partial_pointer_errors.ers:26:5]
+    ╭─[eval_partial_pointer_errors.ers:26:14]
  25 │     let p: *const u32 = &raw const T;
- 26 │     *(&raw const p as *const [u8; 2])
-    ·     ────────────────┬────────────────
-    ·                     ╰── read here
+ 26 │     unsafe { *(&raw const p as *const [u8; 2]) }
+    ·              ────────────────┬────────────────
+    ·                              ╰── read here
  27 │ }
  28 │ 
  29 │ // Copying half a pointer over the start of another.
  30 │ fn overlap() -> [u8; 6] {
  31 │     let p: *const u32 = &raw const T;
  32 │     let mut out: [u8; 6] = [0; 6];
- 33 │     *(&raw mut out[2] as *mut *const u32) = p;
- 34 │     *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]);
+ 33 │     unsafe { *(&raw mut out[2] as *mut *const u32) = p; }
+ 34 │     unsafe { *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]); }
  35 │     out
  36 │ }
  37 │ 
  38 │ // Copying plain bytes over the start of a pointer.
  39 │ fn cover() -> [u8; 6] {
  40 │     let mut out: [u8; 6] = [0; 6];
- 41 │     *(&raw mut out[2] as *mut *const u32) = &raw const T;
+ 41 │     unsafe { *(&raw mut out[2] as *mut *const u32) = &raw const T; }
  42 │     let four: [u8; 4] = [9, 9, 9, 9];
- 43 │     *(&raw mut out[0] as *mut [u8; 4]) = four;
+ 43 │     unsafe { *(&raw mut out[0] as *mut [u8; 4]) = four; }
  44 │     out
  45 │ }
  46 │ 
@@ -82,20 +82,20 @@ eval::pointer-to-int
 eval::pointer-to-int
 
   × these bytes hold part of a pointer, whose address only exists after linking
-    ╭─[eval_partial_pointer_errors.ers:34:42]
- 33 │     *(&raw mut out[2] as *mut *const u32) = p;
- 34 │     *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]);
-    ·                                          ────────────────┬────────────────
-    ·                                                          ╰── read here
+    ╭─[eval_partial_pointer_errors.ers:34:51]
+ 33 │     unsafe { *(&raw mut out[2] as *mut *const u32) = p; }
+ 34 │     unsafe { *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]); }
+    ·                                                   ────────────────┬────────────────
+    ·                                                                   ╰── read here
  35 │     out
  36 │ }
  37 │ 
  38 │ // Copying plain bytes over the start of a pointer.
  39 │ fn cover() -> [u8; 6] {
  40 │     let mut out: [u8; 6] = [0; 6];
- 41 │     *(&raw mut out[2] as *mut *const u32) = &raw const T;
+ 41 │     unsafe { *(&raw mut out[2] as *mut *const u32) = &raw const T; }
  42 │     let four: [u8; 4] = [9, 9, 9, 9];
- 43 │     *(&raw mut out[0] as *mut [u8; 4]) = four;
+ 43 │     unsafe { *(&raw mut out[0] as *mut [u8; 4]) = four; }
  44 │     out
  45 │ }
  46 │ 
@@ -112,11 +112,11 @@ eval::pointer-to-int
 eval::pointer-to-int
 
   × this write overwrites part of a pointer, whose address only exists after linking
-    ╭─[eval_partial_pointer_errors.ers:43:5]
+    ╭─[eval_partial_pointer_errors.ers:43:14]
  42 │     let four: [u8; 4] = [9, 9, 9, 9];
- 43 │     *(&raw mut out[0] as *mut [u8; 4]) = four;
-    ·     ────────────────────┬────────────────────
-    ·                         ╰── written here
+ 43 │     unsafe { *(&raw mut out[0] as *mut [u8; 4]) = four; }
+    ·              ────────────────────┬────────────────────
+    ·                                  ╰── written here
  44 │     out
  45 │ }
  46 │ 

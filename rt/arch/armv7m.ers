@@ -163,7 +163,9 @@ comptime {
 pub fn nvic_enable(irq: u32) {
     let word: *mut volatile u32 = nvic_address(NVIC_ISER, irq) as *mut volatile u32;
     compiler_fence();
-    *word = 1 << (irq % 32);
+    // Sound: `nvic_address` keeps the word inside `ISER`, a register the
+    // processor always has, and the write only sets bits of enabled lines.
+    unsafe { *word = 1 << (irq % 32); }
     compiler_fence();
 }
 
@@ -174,7 +176,9 @@ pub fn nvic_enable(irq: u32) {
 pub fn nvic_disable(irq: u32) {
     let word: *mut volatile u32 = nvic_address(NVIC_ICER, irq) as *mut volatile u32;
     compiler_fence();
-    *word = 1 << (irq % 32);
+    // Sound: `nvic_address` keeps the word inside `ICER`, a register the
+    // processor always has, and the write only clears bits of enabled lines.
+    unsafe { *word = 1 << (irq % 32); }
     // Sound in every context: the barriers order accesses and write no
     // register.
     unsafe {
@@ -188,7 +192,9 @@ pub fn nvic_disable(irq: u32) {
 pub fn nvic_pend(irq: u32) {
     let word: *mut volatile u32 = nvic_address(NVIC_ISPR, irq) as *mut volatile u32;
     compiler_fence();
-    *word = 1 << (irq % 32);
+    // Sound: `nvic_address` keeps the word inside `ISPR`, a register the
+    // processor always has, and the write only pends lines.
+    unsafe { *word = 1 << (irq % 32); }
     compiler_fence();
 }
 
@@ -197,7 +203,9 @@ pub fn nvic_pend(irq: u32) {
 pub fn nvic_unpend(irq: u32) {
     let word: *mut volatile u32 = nvic_address(NVIC_ICPR, irq) as *mut volatile u32;
     compiler_fence();
-    *word = 1 << (irq % 32);
+    // Sound: `nvic_address` keeps the word inside `ICPR`, a register the
+    // processor always has, and the write only clears pending lines.
+    unsafe { *word = 1 << (irq % 32); }
     compiler_fence();
 }
 
@@ -205,7 +213,9 @@ pub fn nvic_unpend(irq: u32) {
 // the line is enabled; it serves a program that polls a masked line.
 pub fn nvic_is_pending(irq: u32) -> bool {
     let word: *mut volatile u32 = nvic_address(NVIC_ISPR, irq) as *mut volatile u32;
-    (*word & (1 << (irq % 32))) != 0
+    // Sound: `nvic_address` keeps the word inside `ISPR`, a register the
+    // processor always has, and reading it has no effect.
+    (unsafe { *word } & (1 << (irq % 32))) != 0
 }
 
 // --- Critical sections (ADR 0086) --------------------------------------------

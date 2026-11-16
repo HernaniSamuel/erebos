@@ -123,7 +123,7 @@ fn per_iteration(mut x: u32, n: u32) {
 // is used, and `q` borrows what the address of `x` points to.
 fn raw(mut x: u32) {
     let p: *mut u32 = &raw mut x;
-    let q: &mut u32 = &mut *p;
+    let q: &mut u32 = unsafe { &mut *p };
     x = 5;
     *q = 1;
 }

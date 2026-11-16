@@ -16,7 +16,7 @@ const TOO_LONG: *const [u16] = slice(&raw const m::TABLE as *const u16, 5);
 
 fn write_static() -> u32 {
     let p: *mut u32 = &raw const m::LIMIT as *mut u32;
-    *p = 11;
+    unsafe { *p = 11; }
     m::LIMIT
 }
 

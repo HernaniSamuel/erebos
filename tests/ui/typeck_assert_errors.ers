@@ -29,8 +29,8 @@ fn errors(
     assert(x == 10, &raw mut buf);
     assert(x == 11, &buf[0..2]);
     assert(x == 12, &raw const buf[0..2]);
-    assert(x == 13, &*p);
-    assert(x == 14, &*r);
+    unsafe { assert(x == 13, &*p); }
+    unsafe { assert(x == 14, &*r); }
     assert(x == 15, { p });
     assert(x == 16, if x == 0 { p } else { q });
     assert(x == 17, match x { 0 => p, _ => &raw const b"raw" });

@@ -38,7 +38,7 @@ fn write_failed() {
 }
 
 fn through_failed(f: *mut Failed) -> u8 {
-    (*f).ctrl
+    unsafe { (*f).ctrl }
 }
 
 fn local_failed() {

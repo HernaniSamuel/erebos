@@ -41,8 +41,8 @@ fn operations(m: Msg, n: Msg) {
 }
 
 fn through(p: *mut volatile Msg, m: Msg) {
-    let a: Msg = *p;
-    *p = m;
+    let a: Msg = unsafe { *p };
+    unsafe { *p = m; }
 }
 
 #[align(8)]

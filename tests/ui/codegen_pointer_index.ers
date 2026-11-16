@@ -3,17 +3,17 @@
 // carries over (ADR 0021, 0023). A `bool` whose address is taken lives in
 // memory as a byte (ADR 0022).
 fn element(p: *const u16, i: usize) -> u16 {
-    p[i]
+    unsafe { p[i] }
 }
 
 fn device(regs: *mut volatile u32) {
-    regs[2] = regs[1];
+    unsafe { regs[2] = regs[1]; }
 }
 
 fn flag() -> bool {
     let mut set: bool = false;
     let byte: *mut u8 = &raw mut set as *mut u8;
-    *byte = 2;
+    unsafe { *byte = 2; }
     set
 }
 

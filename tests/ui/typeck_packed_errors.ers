@@ -33,9 +33,9 @@ fn errors(h: *mut Header, o: *const Outer, vp: *mut volatile Header, i: usize) {
     let x: *const u32 = &raw const (*o).header.inner.x;
     let ok: *const u8 = &raw const (*h).bytes[i];
     let kind: *mut u8 = &raw mut (*h).kind;
-    (*vp).len = 1;
-    let y: u32 = (*vp).inner.y;
-    let byte: u8 = (*vp).bytes[i];
+    unsafe { (*vp).len = 1; }
+    let y: u32 = unsafe { (*vp).inner.y };
+    let byte: u8 = unsafe { (*vp).bytes[i] };
 }
 
 entry fn main() -> ! { loop {} }

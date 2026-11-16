@@ -45,7 +45,7 @@ ty::cycle
  32 │         read a: u8 at 0,
  33 │ ╭─▶     read b: u8 at {
  34 │ │           let p: *mut Read = 0x10 as *mut Read;
- 35 │ │           (*p).a as usize
+ 35 │ │           unsafe { (*p).a as usize }
  36 │ ├─▶     },
     · ╰──── needed while computing itself
  37 │     }
@@ -62,7 +62,7 @@ ty::cycle
  40 │         read a: u8 at 0,
  41 │ ╭─▶     read b: u8 at {
  42 │ │           let p: *mut ReadEarly = 0x10 as *mut ReadEarly;
- 43 │ │           (*p).a as usize
+ 43 │ │           unsafe { (*p).a as usize }
  44 │ ├─▶     },
     · ╰──── through this value
  45 │     }

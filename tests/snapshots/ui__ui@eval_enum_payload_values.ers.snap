@@ -12,16 +12,17 @@ fn first() -> u8
     expr 1 as *const u8 445..470: *const u8
     expr 2 &raw const 445..457: *const E
     expr 3 local e 456..457: E
-    expr 4 binary + 476..484: u8
-    expr 5 index 476..480: u8
-    expr 6 local p 476..477: *const u8
-    expr 7 int 0 478..479: usize
-    expr 8 int 1 483..484: u8
+    expr 4 unsafe 476..495: u8
+    expr 5 binary + 485..493: u8
+    expr 6 index 485..489: u8
+    expr 7 local p 485..486: *const u8
+    expr 8 int 0 487..488: usize
+    expr 9 int 1 492..493: u8
 entry fn main() -> !
-    expr 9 loop 511..518: !
+    expr 10 loop 522..529: !
 panic fn on_panic() -> !
-    expr 10 loop 548..555: !
+    expr 11 loop 559..566: !
 comptime fn E::A() -> u8
-    expr 11 call 364..371: u8
+    expr 12 call 364..371: u8
 comptime fn E::B() -> u8
-    expr 12 int 1 377..378: u8
+    expr 13 int 1 377..378: u8

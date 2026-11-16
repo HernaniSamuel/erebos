@@ -162,7 +162,7 @@ fn indexes(_1: [u32; 4], _2: *const [u32], _3: [[u8; 2]; 3], _4: usize, _5: usiz
     }
 
     bb2: {
-        panic(index out of bounds, data7 at mir_panic_info.ers:19:6);
+        panic(index out of bounds, data7 at mir_panic_info.ers:19:15);
     }
 
     bb3: {
@@ -176,7 +176,7 @@ fn indexes(_1: [u32; 4], _2: *const [u32], _3: [[u8; 2]; 3], _4: usize, _5: usiz
     }
 
     bb4: {
-        panic(index out of bounds, data8 at mir_panic_info.ers:19:16);
+        panic(index out of bounds, data8 at mir_panic_info.ers:19:25);
     }
 
     bb5: {
@@ -186,7 +186,7 @@ fn indexes(_1: [u32; 4], _2: *const [u32], _3: [[u8; 2]; 3], _4: usize, _5: usiz
     }
 
     bb6: {
-        panic(index out of bounds, data9 at mir_panic_info.ers:19:23);
+        panic(index out of bounds, data9 at mir_panic_info.ers:19:32);
     }
 
     bb7: {
@@ -198,7 +198,7 @@ fn indexes(_1: [u32; 4], _2: *const [u32], _3: [[u8; 2]; 3], _4: usize, _5: usiz
     }
 
     bb8: {
-        panic(index out of bounds, data10 at mir_panic_info.ers:19:26);
+        panic(index out of bounds, data10 at mir_panic_info.ers:19:35);
     }
 }
 
@@ -332,11 +332,11 @@ fn messages(_1: u32, _2: *const [u8]) -> u32 {
         _4 = &(*_2);
         _5.0 = slice(const b"mir_panic_info.ers", const 18_usize);
         _5.1 = const 33_u32;
-        _5.2 = const 5_u32;
+        _5.2 = const 14_u32;
         _5.3 = const 2_u8;
         _6 = copy _4 as *const [u8];
         _5.4 = copy _6;
-        panic(assertion failed, copy _4, &raw const _5 at mir_panic_info.ers:33:5);
+        panic(assertion failed, copy _4, &raw const _5 at mir_panic_info.ers:33:14);
     }
 
     bb3: {
@@ -431,11 +431,11 @@ fn parenthesized(_1: bool, _2: *const [u8], _3: u8, _4: Option(u32)) -> Option(u
         _7 = &(*_2);
         _8.0 = slice(const b"mir_panic_info.ers", const 18_usize);
         _8.1 = const 46_u32;
-        _8.2 = const 6_u32;
+        _8.2 = const 15_u32;
         _8.3 = const 2_u8;
         _9 = copy _7 as *const [u8];
         _8.4 = copy _9;
-        panic(assertion failed, copy _7, &raw const _8 at mir_panic_info.ers:46:6);
+        panic(assertion failed, copy _7, &raw const _8 at mir_panic_info.ers:46:15);
     }
 
     bb5: {

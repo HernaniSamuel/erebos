@@ -39,7 +39,7 @@ fn elements(s: &mut volatile [u16], i: usize) -> u16 {
 // Made from a volatile pointer, and lent: the reference keeps the pointer's
 // accesses volatile.
 fn lend(p: *mut volatile Ring) -> u32 {
-    let r: &mut volatile Ring = &mut *p;
+    let r: &mut volatile Ring = unsafe { &mut *p };
     (*r).head = 5;
     (*r).head
 }

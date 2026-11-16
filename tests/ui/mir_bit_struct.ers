@@ -78,7 +78,7 @@ fn casts(l: Lcr, x: u8) -> u32 {
 }
 
 fn through(p: *mut volatile Lcr) {
-    (*p).dlab = true;
+    unsafe { (*p).dlab = true; }
 }
 
 entry fn main() -> ! { loop {} }

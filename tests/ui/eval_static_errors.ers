@@ -22,7 +22,7 @@ fn write_mut() -> u32 {
 
 fn write_static() -> u32 {
     let p: *mut u32 = &raw const LIMIT as *mut u32;
-    *p = 11;
+    unsafe { *p = 11; }
     LIMIT
 }
 

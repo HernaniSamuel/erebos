@@ -15,15 +15,15 @@ pub fn reader(text: *const [u8]) -> Reader {
 // The next number, or `.None` once the text is read.
 pub fn next(r: &mut Reader) -> Option(u32) {
     let text: *const [u8] = r.text;
-    while r.at < len(text) && !is_digit((*text)[r.at]) {
+    while r.at < len(text) && !is_digit(unsafe { (*text)[r.at] }) {
         r.at += 1;
     }
     if r.at == len(text) {
         return .None;
     }
     let mut value: u32 = 0;
-    while r.at < len(text) && is_digit((*text)[r.at]) {
-        value = value * 10 + ((*text)[r.at] - b'0') as u32;
+    while r.at < len(text) && is_digit(unsafe { (*text)[r.at] }) {
+        unsafe { value = value * 10 + ((*text)[r.at] - b'0') as u32; }
         r.at += 1;
     }
     .Some(value)

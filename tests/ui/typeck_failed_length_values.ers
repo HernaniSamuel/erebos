@@ -22,7 +22,7 @@ comptime { assert(offset_of(WithPointer, p) == 0); }
 
 fn mismatch() -> u32 {
     let p: *const Broken = 0 as *const u8;
-    (*p).z
+    unsafe { (*p).z }
 }
 
 struct BoolLength { x: [u8; true], y: u32 }

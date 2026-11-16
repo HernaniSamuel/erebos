@@ -30,16 +30,16 @@ const OUT: *mut volatile u32 = (board::SCRATCH + 64) as *mut volatile u32;
 static mut TICKS: u32 = 0;
 
 interrupt fn tick() at Vector::MachineTimer {
-    let a: u32 = SRC[0];
-    let b: u32 = SRC[1];
-    let c: u32 = SRC[2];
-    let d: u32 = SRC[3];
-    let e: u32 = SRC[4];
-    let f: u32 = SRC[5];
-    let g: u32 = SRC[6];
-    let h: u32 = SRC[7];
-    let i: u32 = SRC[8];
-    let j: u32 = SRC[9];
+    let a: u32 = unsafe { SRC[0] };
+    let b: u32 = unsafe { SRC[1] };
+    let c: u32 = unsafe { SRC[2] };
+    let d: u32 = unsafe { SRC[3] };
+    let e: u32 = unsafe { SRC[4] };
+    let f: u32 = unsafe { SRC[5] };
+    let g: u32 = unsafe { SRC[6] };
+    let h: u32 = unsafe { SRC[7] };
+    let i: u32 = unsafe { SRC[8] };
+    let j: u32 = unsafe { SRC[9] };
     // Every register the C ABI does not preserve gets a value that is not the
     // interrupted code's, so each value above is, below, in a register the C ABI
     // preserves, or in the frame.
@@ -64,25 +64,25 @@ interrupt fn tick() at Vector::MachineTimer {
             clobber_abi("C"),
         );
     }
-    OUT[0] = a;
-    OUT[1] = b;
-    OUT[2] = c;
-    OUT[3] = d;
-    OUT[4] = e;
-    OUT[5] = f;
-    OUT[6] = g;
-    OUT[7] = h;
-    OUT[8] = i;
-    OUT[9] = j;
+    unsafe { OUT[0] = a; }
+    unsafe { OUT[1] = b; }
+    unsafe { OUT[2] = c; }
+    unsafe { OUT[3] = d; }
+    unsafe { OUT[4] = e; }
+    unsafe { OUT[5] = f; }
+    unsafe { OUT[6] = g; }
+    unsafe { OUT[7] = h; }
+    unsafe { OUT[8] = i; }
+    unsafe { OUT[9] = j; }
     TICKS += 1;
     // The next tick, so that a tick that came before the `wfi` does not leave it
     // waiting for ever.
-    *MTIMECMP_LOW = *MTIME + PERIOD;
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
 }
 
 entry fn main() -> ! {
-    *MTIMECMP_HIGH = 0;
-    *MTIMECMP_LOW = *MTIME + PERIOD;
+    unsafe { *MTIMECMP_HIGH = 0; }
+    unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     // The registers the template changes besides the ones it clobbers are saved

@@ -11,18 +11,18 @@ static mut SH: Handle = Handle { n: 1 };
 fn discarded(a: [Handle; 2], p: *mut Holder, i: usize) {
     a[i];
     a[0];
-    (*p).h;
-    (*p).items[i];
+    unsafe { (*p).h; }
+    unsafe { (*p).items[i]; }
     SH;
-    { (*p) };
+    unsafe { { (*p) }; }
     { { SH } };
     critical { SH };
     { a[1] };
 }
 
 fn copies(p: *mut u32) {
-    *p;
-    (*p) + 1;
+    unsafe { *p; }
+    unsafe { (*p) + 1; }
 }
 
 entry fn main() -> ! {

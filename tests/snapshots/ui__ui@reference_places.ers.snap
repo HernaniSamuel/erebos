@@ -260,88 +260,92 @@ fn through_volatile(r: &volatile Ring, m: &mut volatile Ring) -> usize
     expr 222 field count 2624..2631: usize
     expr 223 local m 2624..2625: &mut volatile Ring, dereferenced
 fn pointers(r: &*const u8, h: &Holder) -> u8
-    expr 224 binary + 2744..2757: u8
-    expr 225 index 2744..2748: u8
-    expr 226 local r 2744..2745: &*const u8, dereferenced
-    expr 227 int 1 2746..2747: usize
-    expr 228 index 2751..2757: u8
-    expr 229 field p 2751..2754: *const u8
-    expr 230 local h 2751..2752: &Holder, dereferenced
-    expr 231 int 0 2755..2756: usize
+    expr 224 unsafe 2744..2768: u8
+    expr 225 binary + 2753..2766: u8
+    expr 226 index 2753..2757: u8
+    expr 227 local r 2753..2754: &*const u8, dereferenced
+    expr 228 int 1 2755..2756: usize
+    expr 229 index 2760..2766: u8
+    expr 230 field p 2760..2763: *const u8
+    expr 231 local h 2760..2761: &Holder, dereferenced
+    expr 232 int 0 2764..2765: usize
 fn choose(c: bool, a: &Ring, b: &Ring) -> usize
     let x: usize
     let y: u8
-    expr 232 field count 2881..2910: usize
-    expr 233 if 2881..2904: &Ring, dereferenced
-    expr 234 local c 2885..2886: bool
-    expr 235 local a 2889..2890: &Ring
-    expr 236 block 2898..2903: &Ring
-    expr 237 local b 2900..2901: &Ring
-    expr 238 index 2928..2958: u8
-    expr 239 field buf 2928..2955: [u8; 8]
-    expr 240 if 2928..2951: &Ring, dereferenced
-    expr 241 local c 2932..2933: bool
-    expr 242 local a 2936..2937: &Ring
-    expr 243 block 2945..2950: &Ring
-    expr 244 local b 2947..2948: &Ring
-    expr 245 int 1 2956..2957: usize
-    expr 246 binary + 2964..2980: usize
-    expr 247 local x 2964..2965: usize
-    expr 248 as usize 2968..2980: usize
-    expr 249 local y 2969..2970: u8
+    expr 233 field count 2892..2921: usize
+    expr 234 if 2892..2915: &Ring, dereferenced
+    expr 235 local c 2896..2897: bool
+    expr 236 local a 2900..2901: &Ring
+    expr 237 block 2909..2914: &Ring
+    expr 238 local b 2911..2912: &Ring
+    expr 239 index 2939..2969: u8
+    expr 240 field buf 2939..2966: [u8; 8]
+    expr 241 if 2939..2962: &Ring, dereferenced
+    expr 242 local c 2943..2944: bool
+    expr 243 local a 2947..2948: &Ring
+    expr 244 block 2956..2961: &Ring
+    expr 245 local b 2958..2959: &Ring
+    expr 246 int 1 2967..2968: usize
+    expr 247 binary + 2975..2991: usize
+    expr 248 local x 2975..2976: usize
+    expr 249 as usize 2979..2991: usize
+    expr 250 local y 2980..2981: u8
 fn explicit(m: &mut Ring) -> usize
-    expr 250 assign 3077..3091: ()
-    expr 251 field count 3077..3087: usize
-    expr 252 deref 3077..3081: Ring
-    expr 253 local m 3079..3080: &mut Ring
-    expr 254 int 1 3090..3091: usize
-    expr 255 assign += 3097..3128: ()
-    expr 256 field count 3097..3104: usize
-    expr 257 local m 3097..3098: &mut Ring, dereferenced
-    expr 258 as usize 3108..3128: usize
-    expr 259 index 3108..3119: u8
-    expr 260 field buf 3108..3116: [u8; 8]
-    expr 261 deref 3108..3112: Ring
-    expr 262 local m 3110..3111: &mut Ring
-    expr 263 int 0 3117..3118: usize
-    expr 264 assign 3134..3156: ()
-    expr 265 index 3134..3145: u8
-    expr 266 field buf 3134..3142: [u8; 8]
-    expr 267 deref 3134..3138: Ring
-    expr 268 local m 3136..3137: &mut Ring
-    expr 269 int 1 3143..3144: usize
-    expr 270 index 3148..3156: u8
-    expr 271 field buf 3148..3153: [u8; 8]
-    expr 272 local m 3148..3149: &mut Ring, dereferenced
-    expr 273 int 0 3154..3155: usize
-    expr 274 field count 3162..3172: usize
-    expr 275 deref 3162..3166: Ring
-    expr 276 local m 3164..3165: &mut Ring
+    expr 251 assign 3088..3102: ()
+    expr 252 field count 3088..3098: usize
+    expr 253 deref 3088..3092: Ring
+    expr 254 local m 3090..3091: &mut Ring
+    expr 255 int 1 3101..3102: usize
+    expr 256 assign += 3108..3139: ()
+    expr 257 field count 3108..3115: usize
+    expr 258 local m 3108..3109: &mut Ring, dereferenced
+    expr 259 as usize 3119..3139: usize
+    expr 260 index 3119..3130: u8
+    expr 261 field buf 3119..3127: [u8; 8]
+    expr 262 deref 3119..3123: Ring
+    expr 263 local m 3121..3122: &mut Ring
+    expr 264 int 0 3128..3129: usize
+    expr 265 assign 3145..3167: ()
+    expr 266 index 3145..3156: u8
+    expr 267 field buf 3145..3153: [u8; 8]
+    expr 268 deref 3145..3149: Ring
+    expr 269 local m 3147..3148: &mut Ring
+    expr 270 int 1 3154..3155: usize
+    expr 271 index 3159..3167: u8
+    expr 272 field buf 3159..3164: [u8; 8]
+    expr 273 local m 3159..3160: &mut Ring, dereferenced
+    expr 274 int 0 3165..3166: usize
+    expr 275 field count 3173..3183: usize
+    expr 276 deref 3173..3177: Ring
+    expr 277 local m 3175..3176: &mut Ring
 fn raw(p: *const [u8; 4], q: *mut [u8; 4]) -> u8
-    expr 277 assign 3308..3319: ()
-    expr 278 index 3308..3315: u8
-    expr 279 index 3308..3312: [u8; 4]
-    expr 280 local q 3308..3309: *mut [u8; 4]
-    expr 281 int 1 3310..3311: usize
-    expr 282 int 0 3313..3314: usize
-    expr 283 int 1 3318..3319: u8
-    expr 284 assign 3325..3336: ()
-    expr 285 index 3325..3332: u8
-    expr 286 deref 3325..3329: [u8; 4]
-    expr 287 local q 3327..3328: *mut [u8; 4]
-    expr 288 int 0 3330..3331: usize
-    expr 289 int 1 3335..3336: u8
-    expr 290 binary + 3342..3359: u8
-    expr 291 index 3342..3349: u8
-    expr 292 index 3342..3346: [u8; 4]
-    expr 293 local p 3342..3343: *const [u8; 4]
-    expr 294 int 1 3344..3345: usize
-    expr 295 int 0 3347..3348: usize
-    expr 296 index 3352..3359: u8
-    expr 297 deref 3352..3356: [u8; 4]
-    expr 298 local p 3354..3355: *const [u8; 4]
-    expr 299 int 2 3357..3358: usize
+    expr 278 unsafe 3319..3342: ()
+    expr 279 assign 3328..3339: ()
+    expr 280 index 3328..3335: u8
+    expr 281 index 3328..3332: [u8; 4]
+    expr 282 local q 3328..3329: *mut [u8; 4]
+    expr 283 int 1 3330..3331: usize
+    expr 284 int 0 3333..3334: usize
+    expr 285 int 1 3338..3339: u8
+    expr 286 unsafe 3347..3370: ()
+    expr 287 assign 3356..3367: ()
+    expr 288 index 3356..3363: u8
+    expr 289 deref 3356..3360: [u8; 4]
+    expr 290 local q 3358..3359: *mut [u8; 4]
+    expr 291 int 0 3361..3362: usize
+    expr 292 int 1 3366..3367: u8
+    expr 293 unsafe 3375..3403: u8
+    expr 294 binary + 3384..3401: u8
+    expr 295 index 3384..3391: u8
+    expr 296 index 3384..3388: [u8; 4]
+    expr 297 local p 3384..3385: *const [u8; 4]
+    expr 298 int 1 3386..3387: usize
+    expr 299 int 0 3389..3390: usize
+    expr 300 index 3394..3401: u8
+    expr 301 deref 3394..3398: [u8; 4]
+    expr 302 local p 3396..3397: *const [u8; 4]
+    expr 303 int 2 3399..3400: usize
 entry fn main() -> !
-    expr 300 loop 3386..3393: !
+    expr 304 loop 3430..3437: !
 panic fn on_panic() -> !
-    expr 301 loop 3423..3430: !
+    expr 305 loop 3467..3474: !

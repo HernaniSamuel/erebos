@@ -12,20 +12,20 @@ fn start(channel: u32) -> Transfer { Transfer { channel: channel } }
 
 // Rejected, at the assignment.
 fn through(p: *mut Transfer, s: *mut Slot, a: *mut Option(Transfer), t: Transfer, i: usize) {
-    *p = t;
-    p[i] = start(0);
-    (*s).h = start(1);
-    *a = .Some(start(2));
+    unsafe { *p = t; }
+    unsafe { p[i] = start(0); }
+    unsafe { (*s).h = start(1); }
+    unsafe { *a = .Some(start(2)); }
 }
 
 fn nested(n: *mut Slots) {
-    (*n).first.h = start(3);
+    unsafe { (*n).first.h = start(3); }
 }
 
 // A slice of a linear type is `ty::linear-array`, and the write is an error
 // of its own.
 fn sliced(s: *mut [Transfer], i: usize) {
-    (*s)[i] = start(4);
+    unsafe { (*s)[i] = start(4); }
 }
 
 // Accepted: a variable, or a copy field through a pointer.
@@ -33,8 +33,8 @@ fn accepted(s: *mut Slot) -> u32 {
     let mut t: Transfer = start(5);
     t = start(6);
     let q: *mut Transfer = &raw mut t;
-    (*q).channel = 7;
-    (*s).n = 8;
+    unsafe { (*q).channel = 7; }
+    unsafe { (*s).n = 8; }
     t.channel
 }
 

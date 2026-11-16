@@ -109,10 +109,10 @@ fn same(r: &u32) -> &u32 {
 }
 
 // The type of a constant or a static is not a return type.
-const MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
-const VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
-static HELD_MUTABLE: &mut u32 = &mut *(0x2000_0000 as *mut u32);
-static HELD_VOLATILE: &volatile u32 = &*(0x2000_0000 as *const volatile u32);
+const MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
+const VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
+static HELD_MUTABLE: &mut u32 = unsafe { &mut *(0x2000_0000 as *mut u32) };
+static HELD_VOLATILE: &volatile u32 = unsafe { &*(0x2000_0000 as *const volatile u32) };
 
 entry fn main() -> ! {
     loop {}

@@ -14,9 +14,9 @@ const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
 const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
 
 entry fn main() -> ! {
-    *SYST_RVR = 10_000;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 10_000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     loop {
         core::arch::wait_for_interrupt();
@@ -29,7 +29,7 @@ panic fn on_panic(info: &core::PanicInfo) -> ! {
         _ => exit(3),
     }
     print(&b": ");
-    print(&*info.message);
+    unsafe { print(&*info.message); }
     let mut ipsr: u32 = 0;
     unsafe { asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags)); }
     print(&b" ipsr ");

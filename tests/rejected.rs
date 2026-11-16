@@ -605,7 +605,7 @@ const CATALOG: &[Snippet] = &[
         "ty::write-through-const",
         Mir,
         Statements,
-        "let injected_n: u32 = 1;\nlet injected_p: *const u32 = &raw const injected_n;\n*injected_p = 2;"
+        "let injected_n: u32 = 1;\nlet injected_p: *const u32 = &raw const injected_n;\nunsafe { *injected_p = 2; }"
     ),
     s!("ty::not-assignable", Mir, Statements, "1 = 2;"),
     s!(
@@ -716,7 +716,7 @@ fn injected_f() {
         Items,
         "struct InjHandle4 { id: u32 }
 fn injected_f(injected_p: *mut InjHandle4) {
-    let injected_h: InjHandle4 = *injected_p;
+    let injected_h: InjHandle4 = unsafe { *injected_p };
 }"
     ),
     s!(
@@ -757,7 +757,7 @@ fn injected_use(injected_a: [InjLinear2; 2]) {}"
         "#[linear]
 struct InjLinear3 { id: u32 }
 fn injected_f(injected_p: *mut InjLinear3, injected_t: InjLinear3) {
-    *injected_p = injected_t;
+    unsafe { *injected_p = injected_t; }
 }"
     ),
     s!(
@@ -891,19 +891,19 @@ fn injected_f(injected_t: injected_dma::InjTransfer) {
         "ty::volatile-too-wide",
         Mir,
         Items,
-        "fn injected_f(p: *mut volatile u64) -> u64 {\n    *p\n}"
+        "fn injected_f(p: *mut volatile u64) -> u64 {\n    unsafe { *p }\n}"
     ),
     s!(
         "ty::volatile-aggregate",
         Mir,
         Items,
-        "struct InjS { a: u8 }\nfn injected_f(p: *const volatile InjS) -> InjS {\n    *p\n}"
+        "struct InjS { a: u8 }\nfn injected_f(p: *const volatile InjS) -> InjS {\n    unsafe { *p }\n}"
     ),
     s!(
         "ty::volatile-packed-field",
         Mir,
         Items,
-        "#[packed]\nstruct InjS { a: u8, b: u32 }\nfn injected_f(p: *const volatile InjS) -> u32 {\n    (*p).b\n}"
+        "#[packed]\nstruct InjS { a: u8, b: u32 }\nfn injected_f(p: *const volatile InjS) -> u32 {\n    unsafe { (*p).b }\n}"
     ),
     s!("resolve::module-file", Hir, Items, "mod injected_missing;"),
     s!(
@@ -1132,13 +1132,13 @@ fn injected_f(mut injected_t: InjLinear5) {
         "eval::read-only-write",
         Mir,
         Items,
-        "static INJ_S: u32 = 0;\nconst INJ_C: u32 = comptime {\n    let p: *mut u32 = &raw const INJ_S as *mut u32;\n    *p = 1;\n    0\n};"
+        "static INJ_S: u32 = 0;\nconst INJ_C: u32 = comptime {\n    let p: *mut u32 = &raw const INJ_S as *mut u32;\n    unsafe { *p = 1; }\n    0\n};"
     ),
     s!(
         "eval::invalid-access",
         Mir,
         Items,
-        "const INJ_C: u32 = comptime {\n    let p: *const u32 = 0x1000 as *const u32;\n    *p\n};"
+        "const INJ_C: u32 = comptime {\n    let p: *const u32 = 0x1000 as *const u32;\n    unsafe { *p }\n};"
     ),
     s!(
         "eval::pointer-to-int",
@@ -1150,7 +1150,7 @@ fn injected_f(mut injected_t: InjLinear5) {
         "eval::volatile-access",
         Mir,
         Items,
-        "const INJ_C: u32 = comptime {\n    let p: *const volatile u32 = 0x1000 as *const volatile u32;\n    *p\n};"
+        "const INJ_C: u32 = comptime {\n    let p: *const volatile u32 = 0x1000 as *const volatile u32;\n    unsafe { *p }\n};"
     ),
     s!(
         "eval::pointer-escapes",
@@ -1286,19 +1286,19 @@ const INJ_C: u32 = comptime {
         "ty::register-type",
         Mir,
         Items,
-        "peripheral InjP {\n    read a: u64 at 0,\n}\nfn injected_use(p: *mut InjP) -> u64 {\n    (*p).a\n}"
+        "peripheral InjP {\n    read a: u64 at 0,\n}\nfn injected_use(p: *mut InjP) -> u64 {\n    unsafe { (*p).a }\n}"
     ),
     s!(
         "ty::misaligned-register",
         Mir,
         Items,
-        "peripheral InjP {\n    read a: u32 at 1,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    (*p).a\n}"
+        "peripheral InjP {\n    read a: u32 at 1,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    unsafe { (*p).a }\n}"
     ),
     s!(
         "ty::register-overlap",
         Mir,
         Items,
-        "peripheral InjP {\n    read write a: u8 at 0,\n    read write b: u8 at 0,\n}\nfn injected_use(p: *mut InjP) -> u8 {\n    (*p).a\n}"
+        "peripheral InjP {\n    read write a: u8 at 0,\n    read write b: u8 at 0,\n}\nfn injected_use(p: *mut InjP) -> u8 {\n    unsafe { (*p).a }\n}"
     ),
     s!(
         "ty::misaligned-peripheral",
@@ -1342,26 +1342,26 @@ const INJ_C: u32 = comptime {
         "ty::unknown-register",
         Mir,
         Items,
-        "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) -> u32 {\n    (*p).zz\n}"
+        "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) -> u32 {\n    unsafe { (*p).zz }\n}"
     ),
     s!(
         "ty::private-register",
         Mir,
         Items,
         "mod injected_m {\n    pub peripheral InjP {\n        read a: u32 at 0,\n    }\n}\n\
-         fn injected_f(p: *mut injected_m::InjP) -> u32 {\n    (*p).a\n}"
+         fn injected_f(p: *mut injected_m::InjP) -> u32 {\n    unsafe { (*p).a }\n}"
     ),
     s!(
         "ty::write-to-read-only",
         Mir,
         Items,
-        "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) {\n    (*p).a = 1;\n}"
+        "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) {\n    unsafe { (*p).a = 1; }\n}"
     ),
     s!(
         "ty::read-of-write-only",
         Mir,
         Items,
-        "peripheral InjP {\n    write a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) -> u32 {\n    (*p).a\n}"
+        "peripheral InjP {\n    write a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) -> u32 {\n    unsafe { (*p).a }\n}"
     ),
     s!(
         "ty::register-address",
@@ -1375,14 +1375,14 @@ const INJ_C: u32 = comptime {
         Mir,
         Items,
         "struct InjB: u8 {\n    f: bool at 0,\n}\nperipheral InjP {\n    read write r: InjB at 0 read clears,\n}\n\
-         fn injected_f(p: *mut InjP) {\n    (*p).r.f = true;\n}"
+         fn injected_f(p: *mut InjP) {\n    unsafe { (*p).r.f = true; }\n}"
     ),
     s!(
         "ty::compound-write-effect",
         Mir,
         Items,
         "struct InjB: u8 {\n    f: bool at 0 write 1 clears,\n}\nperipheral InjP {\n    read write r: InjB at 0,\n}\n\
-         fn injected_f(p: *mut InjP) {\n    (*p).r.f |= true;\n}"
+         fn injected_f(p: *mut InjP) {\n    unsafe { (*p).r.f |= true; }\n}"
     ),
     // Register arrays, clusters and `over`.
     s!(
@@ -1414,13 +1414,13 @@ const INJ_C: u32 = comptime {
         "ty::misaligned-step",
         Mir,
         Items,
-        "peripheral InjP {\n    read a: [u32; 2] at 0 step 6,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    (*p).a[1]\n}"
+        "peripheral InjP {\n    read a: [u32; 2] at 0 step 6,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    unsafe { (*p).a[1] }\n}"
     ),
     s!(
         "ty::step-too-small",
         Mir,
         Items,
-        "peripheral InjP {\n    read a: [u32; 2] at 0 step 0,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    (*p).a[1]\n}"
+        "peripheral InjP {\n    read a: [u32; 2] at 0 step 0,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    unsafe { (*p).a[1] }\n}"
     ),
 ];
 

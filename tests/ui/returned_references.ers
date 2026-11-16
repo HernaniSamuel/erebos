@@ -174,12 +174,12 @@ fn naked(r: &u32) -> &u32 {
 
 // A reference made through a raw pointer is the program's word (ADR 0118).
 fn counter() -> &u32 {
-    &*(&raw const OWNED)
+    unsafe { &*(&raw const OWNED) }
 }
 
 fn shared_counter() -> &u32 {
     let p: *const u32 = critical { &raw const SHARED };
-    &*p
+    unsafe { &*p }
 }
 
 interrupt fn tick() at Vector::MachineTimer {

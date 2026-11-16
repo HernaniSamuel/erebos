@@ -145,7 +145,7 @@ entry fn main() -> ! {
 
     let mut transport: usize = 0;
     while transport < 8 {
-        describe(transport, &*TRANSPORTS[transport]);
+        unsafe { describe(transport, &*TRANSPORTS[transport]); }
         transport += 1;
     }
     exit(0)

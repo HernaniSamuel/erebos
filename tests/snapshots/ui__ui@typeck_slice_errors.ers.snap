@@ -193,34 +193,34 @@ ty::division-by-zero
 ty::volatile-aggregate
 
   × a volatile `*const [u8]` cannot be accessed as a whole
-    ╭─[typeck_slice_errors.ers:38:29]
+    ╭─[typeck_slice_errors.ers:38:38]
  37 │ fn volatile_slices(regs: *mut volatile Regs, table: *const volatile *const [u8]) {
- 38 │     let read: *const [u8] = (*regs).data;
-    ·                             ──────┬─────
-    ·                                   ╰── a slice is an address and a length, two accesses
- 39 │     (*regs).data = read;
+ 38 │     let read: *const [u8] = unsafe { (*regs).data };
+    ·                                      ──────┬─────
+    ·                                            ╰── a slice is an address and a length, two accesses
+ 39 │     unsafe { (*regs).data = read; }
     ╰────
   help: a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)
 ty::volatile-aggregate
 
   × a volatile `*const [u8]` cannot be accessed as a whole
-    ╭─[typeck_slice_errors.ers:39:5]
- 38 │     let read: *const [u8] = (*regs).data;
- 39 │     (*regs).data = read;
-    ·     ──────┬─────
-    ·           ╰── a slice is an address and a length, two accesses
- 40 │     let stored: *const [u8] = *table;
+    ╭─[typeck_slice_errors.ers:39:14]
+ 38 │     let read: *const [u8] = unsafe { (*regs).data };
+ 39 │     unsafe { (*regs).data = read; }
+    ·              ──────┬─────
+    ·                    ╰── a slice is an address and a length, two accesses
+ 40 │     let stored: *const [u8] = unsafe { *table };
     ╰────
   help: a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)
 ty::volatile-aggregate
 
   × a volatile `*const [u8]` cannot be accessed as a whole
-    ╭─[typeck_slice_errors.ers:40:31]
- 39 │     (*regs).data = read;
- 40 │     let stored: *const [u8] = *table;
-    ·                               ───┬──
-    ·                                  ╰── a slice is an address and a length, two accesses
- 41 │     let status: u32 = (*regs).status;
+    ╭─[typeck_slice_errors.ers:40:40]
+ 39 │     unsafe { (*regs).data = read; }
+ 40 │     let stored: *const [u8] = unsafe { *table };
+    ·                                        ───┬──
+    ·                                           ╰── a slice is an address and a length, two accesses
+ 41 │     let status: u32 = unsafe { (*regs).status };
     ╰────
   help: a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)
 ty::mismatched-types

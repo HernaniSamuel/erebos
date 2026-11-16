@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_field_modes_errors.ers
 ---
@@ -250,12 +249,12 @@ ty::write-to-read-only
     ·           ╰── declared `read`
  14 │     pub write start: bool at 1 = false,
     ╰────
-    ╭─[typeck_field_modes_errors.ers:53:5]
+    ╭─[typeck_field_modes_errors.ers:53:14]
  52 │ fn through_a_pointer(p: *mut volatile Status) {
- 53 │     (*p).busy = true;
-    ·     ────┬────
-    ·         ╰── written here
- 54 │     (*p).busy |= true;
+ 53 │     unsafe { (*p).busy = true; }
+    ·              ────┬────
+    ·                  ╰── written here
+ 54 │     unsafe { (*p).busy |= true; }
     ╰────
   help: a `read` field is ignored by the hardware when written, so it is only read; assign the
         other fields, which keeps its bits as read, or write a whole value (ADR 0065)
@@ -269,12 +268,12 @@ ty::write-to-read-only
     ·           ╰── declared `read`
  14 │     pub write start: bool at 1 = false,
     ╰────
-    ╭─[typeck_field_modes_errors.ers:54:5]
- 53 │     (*p).busy = true;
- 54 │     (*p).busy |= true;
-    ·     ────┬────
-    ·         ╰── written back by this compound assignment
- 55 │     (*p).start |= true;
+    ╭─[typeck_field_modes_errors.ers:54:14]
+ 53 │     unsafe { (*p).busy = true; }
+ 54 │     unsafe { (*p).busy |= true; }
+    ·              ────┬────
+    ·                  ╰── written back by this compound assignment
+ 55 │     unsafe { (*p).start |= true; }
     ╰────
   help: a `read` field is ignored by the hardware when written, so it is only read; assign the
         other fields, which keeps its bits as read, or write a whole value (ADR 0065)
@@ -288,12 +287,12 @@ ty::read-of-write-only
     ·           ╰── declared `write`
  15 │     pub mode: u8 at 4..=5 = 0,
     ╰────
-    ╭─[typeck_field_modes_errors.ers:55:5]
- 54 │     (*p).busy |= true;
- 55 │     (*p).start |= true;
-    ·     ─────┬────
-    ·          ╰── read by this compound assignment
- 56 │     let a: bool = (*p).start;
+    ╭─[typeck_field_modes_errors.ers:55:14]
+ 54 │     unsafe { (*p).busy |= true; }
+ 55 │     unsafe { (*p).start |= true; }
+    ·              ─────┬────
+    ·                   ╰── read by this compound assignment
+ 56 │     let a: bool = unsafe { (*p).start };
     ╰────
   help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
         compound assignment reads it first (ADR 0065)
@@ -307,11 +306,11 @@ ty::read-of-write-only
     ·           ╰── declared `write`
  15 │     pub mode: u8 at 4..=5 = 0,
     ╰────
-    ╭─[typeck_field_modes_errors.ers:56:19]
- 55 │     (*p).start |= true;
- 56 │     let a: bool = (*p).start;
-    ·                   ─────┬────
-    ·                        ╰── read here
+    ╭─[typeck_field_modes_errors.ers:56:28]
+ 55 │     unsafe { (*p).start |= true; }
+ 56 │     let a: bool = unsafe { (*p).start };
+    ·                            ─────┬────
+    ·                                 ╰── read here
  57 │ }
     ╰────
   help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
@@ -319,18 +318,18 @@ ty::read-of-write-only
 ty::cannot-index
 
   × cannot index a value of type `u8`
-    ╭─[typeck_field_modes_errors.ers:62:17]
+    ╭─[typeck_field_modes_errors.ers:62:26]
  61 │ fn indexed(p: *mut volatile Status) {
- 62 │     let a: u8 = (*p).m[0];
-    ·                 ───┬──
-    ·                    ╰── not an array or a pointer
+ 62 │     let a: u8 = unsafe { (*p).m[0] };
+    ·                          ───┬──
+    ·                             ╰── not an array or a pointer
  63 │     let b: u8 = DEV.rw.m[0];
     ╰────
 ty::cannot-index
 
   × cannot index a value of type `u8`
     ╭─[typeck_field_modes_errors.ers:63:17]
- 62 │     let a: u8 = (*p).m[0];
+ 62 │     let a: u8 = unsafe { (*p).m[0] };
  63 │     let b: u8 = DEV.rw.m[0];
     ·                 ────┬───
     ·                     ╰── not an array or a pointer

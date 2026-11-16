@@ -20,12 +20,12 @@ const ZERO: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
 static mut QUOTIENT: u32 = 0;
 
 interrupt fn tick() at Vector::MachineTimer {
-    QUOTIENT = 100 / *ZERO;
+    unsafe { QUOTIENT = 100 / *ZERO; }
 }
 
 entry fn main() -> ! {
-    *MTIMECMP_HIGH = 0;
-    *MTIMECMP_LOW = *MTIME + 1000;
+    unsafe { *MTIMECMP_HIGH = 0; }
+    unsafe { *MTIMECMP_LOW = *MTIME + 1000; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
     core::arch::enable_interrupts();
     loop {

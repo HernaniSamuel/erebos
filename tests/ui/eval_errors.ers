@@ -26,13 +26,13 @@ fn zero() -> u32 { 0 }
 fn deep(n: u32) -> u32 { deep(n + 1) }
 fn read_uart() -> u8 {
     let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *uart
+    unsafe { *uart }
 }
 extern fn c_function() -> u32;
 fn padding() -> u32 {
     let p: Padded = Padded { a: 1, b: 2 };
     let bytes: *const u8 = &raw const p as *const u8;
-    bytes[1] as u32
+    unsafe { bytes[1] as u32 }
 }
 fn local_address() -> *const u32 {
     let x: u32 = 5;
@@ -48,7 +48,7 @@ fn compare_objects() -> bool {
     &raw const a < &raw const b
 }
 fn read_address() -> u32 {
-    *(0x8000_0000 as *const u32)
+    unsafe { *(0x8000_0000 as *const u32) }
 }
 fn explicit_panic() -> u32 {
     on_panic()

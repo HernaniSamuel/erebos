@@ -53,13 +53,13 @@ fn print_u64(value: u64) {
 }
 
 entry fn main() -> ! {
-    *SYST_RVR = 10_000;
-    *SYST_CVR = 0;
-    *SYST_CSR = 7;
+    unsafe { *SYST_RVR = 10_000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
     core::arch::enable_interrupts();
     // `sp` is 4 modulo 8 while it waits.
     unsafe { asm("sub sp, sp, #4", "wfi", "add sp, sp, #4", clobber_abi("C")); }
-    *SYST_CSR = 0;
+    unsafe { *SYST_CSR = 0; }
     let sp: u32 = critical { SP_MOD_8 };
     if sp != 0 {
         exit(2)

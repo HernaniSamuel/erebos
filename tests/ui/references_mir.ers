@@ -54,7 +54,7 @@ fn read_only() {
 
 // Through a reference: `*p`, `&*r`, `&(*r).f`, a write and reads.
 fn through(r: &mut Wrapper, p: *mut u32, q: &u32) {
-    let a: &mut u32 = &mut *p;
+    let a: &mut u32 = unsafe { &mut *p };
     let b: &Wrapper = &*r;
     let c: &Pair = &(*r).pair;
     let d: &u32 = &(*r).pair.a;

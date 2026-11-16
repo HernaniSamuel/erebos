@@ -81,7 +81,7 @@ bb2:                                              ; preds = %bb0
   %13 = getelementptr i8, ptr %_5, i32 8
   store i32 20, ptr %13, align 4
   %14 = getelementptr i8, ptr %_5, i32 12
-  store i32 5, ptr %14, align 4
+  store i32 14, ptr %14, align 4
   %15 = getelementptr i8, ptr %_5, i32 16
   store i8 2, ptr %15, align 1
   call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_6, ptr align 4 %_4, i32 8, i1 false)
@@ -182,7 +182,7 @@ bb2:                                              ; preds = %bb0
   %5 = getelementptr inbounds nuw i8, ptr %_5, i32 8
   store i32 20, ptr %5, align 4
   %6 = getelementptr inbounds nuw i8, ptr %_5, i32 12
-  store i32 5, ptr %6, align 4
+  store i32 14, ptr %6, align 4
   %7 = getelementptr inbounds nuw i8, ptr %_5, i32 16
   store i8 2, ptr %7, align 4
   %8 = getelementptr inbounds nuw i8, ptr %_5, i32 20

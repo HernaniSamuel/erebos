@@ -17,11 +17,11 @@ fn v() -> u8 { 3 }
 fn w() -> u8 { 4 }
 
 fn assign(a: *mut [Counter; 2]) {
-    (*a)[i()].count = v();
+    unsafe { (*a)[i()].count = v(); }
 }
 
 fn compound(a: *mut [Counter; 2]) {
-    (*a)[i()].count += v();
+    unsafe { (*a)[i()].count += v(); }
 }
 
 fn literal() -> Counter {

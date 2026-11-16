@@ -31,38 +31,41 @@ fn fields(p: *mut S, n: *const Nested) -> u32
     expr 11 as u32 539..549: u32
     expr 12 field c 539..542: u16
     expr 13 local s 539..540: S
-    expr 14 assign 555..565: ()
-    expr 15 field c 555..561: u16
-    expr 16 deref 555..559: S
-    expr 17 local p 557..558: *mut S
-    expr 18 int 7 564..565: u16
-    expr 19 field s 586..592: S
-    expr 20 deref 586..590: Nested
-    expr 21 local n 588..589: *const Nested
-    expr 22 &raw const 622..645: *const u16
-    expr 23 index 633..645: u16
-    expr 24 field tail 633..642: [u16; 3]
-    expr 25 deref 633..637: Nested
-    expr 26 local n 635..636: *const Nested
-    expr 27 int 0 643..644: usize
-    expr 28 struct Node 672..711: Node
-    expr 29 int 1 686..687: u32
-    expr 30 as *mut Node 695..709: *mut Node
-    expr 31 int 0 695..696: usize
-    expr 32 assign 717..742: ()
-    expr 33 field next 717..726: *mut Node
-    expr 34 local node 717..721: Node
-    expr 35 &raw mut 729..742: *mut Node
-    expr 36 local node 738..742: Node
-    expr 37 struct Empty 763..771: Empty
-    expr 38 binary + 777..805: u32
-    expr 39 field value 777..795: u32
-    expr 40 deref 777..789: Node
-    expr 41 field next 779..788: *mut Node
-    expr 42 local node 779..783: Node
-    expr 43 field b 798..805: u32
-    expr 44 local inner 798..803: S
+    expr 14 unsafe 555..577: ()
+    expr 15 assign 564..574: ()
+    expr 16 field c 564..570: u16
+    expr 17 deref 564..568: S
+    expr 18 local p 566..567: *mut S
+    expr 19 int 7 573..574: u16
+    expr 20 unsafe 597..614: S
+    expr 21 field s 606..612: S
+    expr 22 deref 606..610: Nested
+    expr 23 local n 608..609: *const Nested
+    expr 24 &raw const 644..667: *const u16
+    expr 25 index 655..667: u16
+    expr 26 field tail 655..664: [u16; 3]
+    expr 27 deref 655..659: Nested
+    expr 28 local n 657..658: *const Nested
+    expr 29 int 0 665..666: usize
+    expr 30 struct Node 694..733: Node
+    expr 31 int 1 708..709: u32
+    expr 32 as *mut Node 717..731: *mut Node
+    expr 33 int 0 717..718: usize
+    expr 34 assign 739..764: ()
+    expr 35 field next 739..748: *mut Node
+    expr 36 local node 739..743: Node
+    expr 37 &raw mut 751..764: *mut Node
+    expr 38 local node 760..764: Node
+    expr 39 struct Empty 785..793: Empty
+    expr 40 unsafe 799..838: u32
+    expr 41 binary + 808..836: u32
+    expr 42 field value 808..826: u32
+    expr 43 deref 808..820: Node
+    expr 44 field next 810..819: *mut Node
+    expr 45 local node 810..814: Node
+    expr 46 field b 829..836: u32
+    expr 47 local inner 829..834: S
 entry fn main() -> !
-    expr 45 loop 832..839: !
+    expr 48 loop 865..872: !
 panic fn on_panic() -> !
-    expr 46 loop 869..876: !
+    expr 49 loop 902..909: !

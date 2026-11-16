@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_register_arrays_access_errors.ers
 ---
@@ -307,7 +306,7 @@ ty::peripheral-by-value
  55 │     PLIC.one = 1;
     ·     ────┬───
     ·         ╰── a device, written as a whole
- 56 │     let f: u32 = (*p).data;
+ 56 │     let f: u32 = unsafe { (*p).data };
     ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
         function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
@@ -321,35 +320,35 @@ ty::peripheral-by-value
     ·                    ╰── declared as a register array
  23 │         pub write command: [u32; 4] at 0x10,
     ╰────
-    ╭─[typeck_register_arrays_access_errors.ers:56:18]
+    ╭─[typeck_register_arrays_access_errors.ers:56:27]
  55 │     PLIC.one = 1;
- 56 │     let f: u32 = (*p).data;
-    ·                  ────┬────
-    ·                      ╰── an array, read as a whole
- 57 │     (*p).ctx[0] = (*p).ctx[1];
+ 56 │     let f: u32 = unsafe { (*p).data };
+    ·                           ────┬────
+    ·                               ╰── an array, read as a whole
+ 57 │     unsafe { (*p).ctx[0] = (*p).ctx[1]; }
     ╰────
   help: index it to reach one register, as in `P.data[i]` (ADR 0064)
 ty::peripheral-by-value
 
   × `dev::Context` is a peripheral type, which no value has
-    ╭─[typeck_register_arrays_access_errors.ers:57:5]
- 56 │     let f: u32 = (*p).data;
- 57 │     (*p).ctx[0] = (*p).ctx[1];
-    ·     ─────┬─────
-    ·          ╰── a device, written as a whole
- 58 │     (*c).threshold
+    ╭─[typeck_register_arrays_access_errors.ers:57:14]
+ 56 │     let f: u32 = unsafe { (*p).data };
+ 57 │     unsafe { (*p).ctx[0] = (*p).ctx[1]; }
+    ·              ─────┬─────
+    ·                   ╰── a device, written as a whole
+ 58 │     unsafe { (*c).threshold }
     ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
         function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
 ty::peripheral-by-value
 
   × `dev::Context` is a peripheral type, which no value has
-    ╭─[typeck_register_arrays_access_errors.ers:57:19]
- 56 │     let f: u32 = (*p).data;
- 57 │     (*p).ctx[0] = (*p).ctx[1];
-    ·                   ─────┬─────
-    ·                        ╰── a device, read as a whole
- 58 │     (*c).threshold
+    ╭─[typeck_register_arrays_access_errors.ers:57:28]
+ 56 │     let f: u32 = unsafe { (*p).data };
+ 57 │     unsafe { (*p).ctx[0] = (*p).ctx[1]; }
+    ·                            ─────┬─────
+    ·                                 ╰── a device, read as a whole
+ 58 │     unsafe { (*c).threshold }
     ╰────
   help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
         function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)

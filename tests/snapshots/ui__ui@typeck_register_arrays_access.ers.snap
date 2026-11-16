@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_register_arrays_access.ers
 ---
@@ -11,226 +10,236 @@ peripheral Plic { pub read write priority: [u32; 96] at 0x0 step 0x4, pub read p
 peripheral PLIC: Plic at 0xc000000 covers [0xc000000, 0xc400118)
 struct Ctl: u32 { enable: bool at 0 = false, level: u8 at 4..=6 = 0 }
 fn serve(c: *mut Context) -> u32
-    expr 2 assign 1172..1190: ()
-    expr 3 register threshold 1172..1186: u32
-    expr 4 deref 1172..1176: Context
-    expr 5 local c 1174..1175: *mut Context
-    expr 6 int 3 1189..1190: u32
-    expr 7 assign += 1196..1215: ()
-    expr 8 register threshold 1196..1210: u32
-    expr 9 deref 1196..1200: Context
-    expr 10 local c 1198..1199: *mut Context
-    expr 11 int 1 1214..1215: u32
-    expr 12 assign 1221..1243: ()
-    expr 13 index 1221..1239: u32
-    expr 14 register word 1221..1236: [u32; 3]
-    expr 15 register inner 1221..1231: Inner
-    expr 16 deref 1221..1225: Context
-    expr 17 local c 1223..1224: *mut Context
-    expr 18 int 1 1237..1238: usize
-    expr 19 int 9 1242..1243: u32
-    expr 20 assign 1249..1280: ()
-    expr 21 bit field enable 1249..1273: bool
-    expr 22 index 1249..1266: Ctl
-    expr 23 register ctl 1249..1263: [Ctl; 2]
-    expr 24 register inner 1249..1259: Inner
-    expr 25 deref 1249..1253: Context
-    expr 26 local c 1251..1252: *mut Context
-    expr 27 int 0 1264..1265: usize
-    expr 28 bool true 1276..1280: bool
-    expr 29 register claim 1286..1296: u32
-    expr 30 deref 1286..1290: Context
-    expr 31 local c 1288..1289: *mut Context
+    expr 2 unsafe 1172..1202: ()
+    expr 3 assign 1181..1199: ()
+    expr 4 register threshold 1181..1195: u32
+    expr 5 deref 1181..1185: Context
+    expr 6 local c 1183..1184: *mut Context
+    expr 7 int 3 1198..1199: u32
+    expr 8 unsafe 1207..1238: ()
+    expr 9 assign += 1216..1235: ()
+    expr 10 register threshold 1216..1230: u32
+    expr 11 deref 1216..1220: Context
+    expr 12 local c 1218..1219: *mut Context
+    expr 13 int 1 1234..1235: u32
+    expr 14 unsafe 1243..1277: ()
+    expr 15 assign 1252..1274: ()
+    expr 16 index 1252..1270: u32
+    expr 17 register word 1252..1267: [u32; 3]
+    expr 18 register inner 1252..1262: Inner
+    expr 19 deref 1252..1256: Context
+    expr 20 local c 1254..1255: *mut Context
+    expr 21 int 1 1268..1269: usize
+    expr 22 int 9 1273..1274: u32
+    expr 23 unsafe 1282..1325: ()
+    expr 24 assign 1291..1322: ()
+    expr 25 bit field enable 1291..1315: bool
+    expr 26 index 1291..1308: Ctl
+    expr 27 register ctl 1291..1305: [Ctl; 2]
+    expr 28 register inner 1291..1301: Inner
+    expr 29 deref 1291..1295: Context
+    expr 30 local c 1293..1294: *mut Context
+    expr 31 int 0 1306..1307: usize
+    expr 32 bool true 1318..1322: bool
+    expr 33 unsafe 1330..1351: u32
+    expr 34 register claim 1339..1349: u32
+    expr 35 deref 1339..1343: Context
+    expr 36 local c 1341..1342: *mut Context
 fn view(c: *const Context) -> u32
-    expr 32 binary + 1340..1375: u32
-    expr 33 register threshold 1340..1354: u32
-    expr 34 deref 1340..1344: Context
-    expr 35 local c 1342..1343: *const Context
-    expr 36 index 1357..1375: u32
-    expr 37 register word 1357..1372: [u32; 3]
-    expr 38 register inner 1357..1367: Inner
-    expr 39 deref 1357..1361: Context
-    expr 40 local c 1359..1360: *const Context
-    expr 41 int 2 1373..1374: usize
+    expr 37 unsafe 1395..1441: u32
+    expr 38 binary + 1404..1439: u32
+    expr 39 register threshold 1404..1418: u32
+    expr 40 deref 1404..1408: Context
+    expr 41 local c 1406..1407: *const Context
+    expr 42 index 1421..1439: u32
+    expr 43 register word 1421..1436: [u32; 3]
+    expr 44 register inner 1421..1431: Inner
+    expr 45 deref 1421..1425: Context
+    expr 46 local c 1423..1424: *const Context
+    expr 47 int 2 1437..1438: usize
 fn registers(i: usize, v: u32) -> u32
     let pending: u32
-    expr 42 assign 1423..1443: ()
-    expr 43 index 1423..1439: u32
-    expr 44 register priority 1423..1436: [u32; 96]
-    expr 45 peripheral PLIC 1423..1427: Plic
-    expr 46 local i 1437..1438: usize
-    expr 47 local v 1442..1443: u32
-    expr 48 assign += 1449..1470: ()
-    expr 49 index 1449..1465: u32
-    expr 50 register priority 1449..1462: [u32; 96]
-    expr 51 peripheral PLIC 1449..1453: Plic
-    expr 52 int 0 1463..1464: usize
-    expr 53 int 1 1469..1470: u32
-    expr 54 assign 1476..1491: ()
-    expr 55 index 1476..1487: u32
-    expr 56 register ack 1476..1484: [u32; 2]
-    expr 57 peripheral PLIC 1476..1480: Plic
-    expr 58 local i 1485..1486: usize
-    expr 59 local v 1490..1491: u32
-    expr 60 index 1516..1531: u32
-    expr 61 register pending 1516..1528: [u32; 3]
-    expr 62 peripheral PLIC 1516..1520: Plic
-    expr 63 local i 1529..1530: usize
-    expr 64 assign 1537..1568: ()
-    expr 65 register threshold 1537..1558: u32
-    expr 66 index 1537..1548: Context
-    expr 67 register ctx 1537..1545: [Context; 2]
-    expr 68 peripheral PLIC 1537..1541: Plic
-    expr 69 local i 1546..1547: usize
-    expr 70 local pending 1561..1568: u32
-    expr 71 assign 1574..1603: ()
-    expr 72 index 1574..1599: u32
-    expr 73 register word 1574..1596: [u32; 3]
-    expr 74 register inner 1574..1591: Inner
-    expr 75 index 1574..1585: Context
-    expr 76 register ctx 1574..1582: [Context; 2]
-    expr 77 peripheral PLIC 1574..1578: Plic
-    expr 78 int 1 1583..1584: usize
-    expr 79 local i 1597..1598: usize
-    expr 80 local v 1602..1603: u32
-    expr 81 assign 1609..1643: ()
-    expr 82 bit field level 1609..1639: u8
-    expr 83 index 1609..1633: Ctl
-    expr 84 register ctl 1609..1630: [Ctl; 2]
-    expr 85 register inner 1609..1626: Inner
-    expr 86 index 1609..1620: Context
-    expr 87 register ctx 1609..1617: [Context; 2]
-    expr 88 peripheral PLIC 1609..1613: Plic
-    expr 89 local i 1618..1619: usize
-    expr 90 local i 1631..1632: usize
-    expr 91 int 5 1642..1643: u8
-    expr 92 assign 1649..1688: ()
-    expr 93 bit field enable 1649..1680: bool
-    expr 94 index 1649..1673: Ctl
-    expr 95 register ctl 1649..1670: [Ctl; 2]
-    expr 96 register inner 1649..1666: Inner
-    expr 97 index 1649..1660: Context
-    expr 98 register ctx 1649..1657: [Context; 2]
-    expr 99 peripheral PLIC 1649..1653: Plic
-    expr 100 local i 1658..1659: usize
-    expr 101 int 0 1671..1672: usize
-    expr 102 bool false 1683..1688: bool
-    expr 103 assign 1694..1718: ()
-    expr 104 register threshold 1694..1714: u32
-    expr 105 register first 1694..1704: Context
-    expr 106 peripheral PLIC 1694..1698: Plic
-    expr 107 int 1 1717..1718: u32
-    expr 108 assign += 1724..1758: ()
-    expr 109 bit field level 1724..1753: u8
-    expr 110 index 1724..1747: Ctl
-    expr 111 register ctl 1724..1744: [Ctl; 2]
-    expr 112 register inner 1724..1740: Inner
-    expr 113 register first 1724..1734: Context
-    expr 114 peripheral PLIC 1724..1728: Plic
-    expr 115 int 1 1745..1746: usize
-    expr 116 int 1 1757..1758: u8
-    expr 117 binary + 1764..1827: u32
-    expr 118 binary + 1764..1800: u32
-    expr 119 register claim 1764..1781: u32
-    expr 120 index 1764..1775: Context
-    expr 121 register ctx 1764..1772: [Context; 2]
-    expr 122 peripheral PLIC 1764..1768: Plic
-    expr 123 local i 1773..1774: usize
-    expr 124 index 1784..1800: u32
-    expr 125 register priority 1784..1797: [u32; 96]
-    expr 126 peripheral PLIC 1784..1788: Plic
-    expr 127 local i 1798..1799: usize
-    expr 128 index 1803..1827: u32
-    expr 129 register word 1803..1824: [u32; 3]
-    expr 130 register inner 1803..1819: Inner
-    expr 131 register first 1803..1813: Context
-    expr 132 peripheral PLIC 1803..1807: Plic
-    expr 133 int 0 1825..1826: usize
+    expr 48 assign 1489..1509: ()
+    expr 49 index 1489..1505: u32
+    expr 50 register priority 1489..1502: [u32; 96]
+    expr 51 peripheral PLIC 1489..1493: Plic
+    expr 52 local i 1503..1504: usize
+    expr 53 local v 1508..1509: u32
+    expr 54 assign += 1515..1536: ()
+    expr 55 index 1515..1531: u32
+    expr 56 register priority 1515..1528: [u32; 96]
+    expr 57 peripheral PLIC 1515..1519: Plic
+    expr 58 int 0 1529..1530: usize
+    expr 59 int 1 1535..1536: u32
+    expr 60 assign 1542..1557: ()
+    expr 61 index 1542..1553: u32
+    expr 62 register ack 1542..1550: [u32; 2]
+    expr 63 peripheral PLIC 1542..1546: Plic
+    expr 64 local i 1551..1552: usize
+    expr 65 local v 1556..1557: u32
+    expr 66 index 1582..1597: u32
+    expr 67 register pending 1582..1594: [u32; 3]
+    expr 68 peripheral PLIC 1582..1586: Plic
+    expr 69 local i 1595..1596: usize
+    expr 70 assign 1603..1634: ()
+    expr 71 register threshold 1603..1624: u32
+    expr 72 index 1603..1614: Context
+    expr 73 register ctx 1603..1611: [Context; 2]
+    expr 74 peripheral PLIC 1603..1607: Plic
+    expr 75 local i 1612..1613: usize
+    expr 76 local pending 1627..1634: u32
+    expr 77 assign 1640..1669: ()
+    expr 78 index 1640..1665: u32
+    expr 79 register word 1640..1662: [u32; 3]
+    expr 80 register inner 1640..1657: Inner
+    expr 81 index 1640..1651: Context
+    expr 82 register ctx 1640..1648: [Context; 2]
+    expr 83 peripheral PLIC 1640..1644: Plic
+    expr 84 int 1 1649..1650: usize
+    expr 85 local i 1663..1664: usize
+    expr 86 local v 1668..1669: u32
+    expr 87 assign 1675..1709: ()
+    expr 88 bit field level 1675..1705: u8
+    expr 89 index 1675..1699: Ctl
+    expr 90 register ctl 1675..1696: [Ctl; 2]
+    expr 91 register inner 1675..1692: Inner
+    expr 92 index 1675..1686: Context
+    expr 93 register ctx 1675..1683: [Context; 2]
+    expr 94 peripheral PLIC 1675..1679: Plic
+    expr 95 local i 1684..1685: usize
+    expr 96 local i 1697..1698: usize
+    expr 97 int 5 1708..1709: u8
+    expr 98 assign 1715..1754: ()
+    expr 99 bit field enable 1715..1746: bool
+    expr 100 index 1715..1739: Ctl
+    expr 101 register ctl 1715..1736: [Ctl; 2]
+    expr 102 register inner 1715..1732: Inner
+    expr 103 index 1715..1726: Context
+    expr 104 register ctx 1715..1723: [Context; 2]
+    expr 105 peripheral PLIC 1715..1719: Plic
+    expr 106 local i 1724..1725: usize
+    expr 107 int 0 1737..1738: usize
+    expr 108 bool false 1749..1754: bool
+    expr 109 assign 1760..1784: ()
+    expr 110 register threshold 1760..1780: u32
+    expr 111 register first 1760..1770: Context
+    expr 112 peripheral PLIC 1760..1764: Plic
+    expr 113 int 1 1783..1784: u32
+    expr 114 assign += 1790..1824: ()
+    expr 115 bit field level 1790..1819: u8
+    expr 116 index 1790..1813: Ctl
+    expr 117 register ctl 1790..1810: [Ctl; 2]
+    expr 118 register inner 1790..1806: Inner
+    expr 119 register first 1790..1800: Context
+    expr 120 peripheral PLIC 1790..1794: Plic
+    expr 121 int 1 1811..1812: usize
+    expr 122 int 1 1823..1824: u8
+    expr 123 binary + 1830..1893: u32
+    expr 124 binary + 1830..1866: u32
+    expr 125 register claim 1830..1847: u32
+    expr 126 index 1830..1841: Context
+    expr 127 register ctx 1830..1838: [Context; 2]
+    expr 128 peripheral PLIC 1830..1834: Plic
+    expr 129 local i 1839..1840: usize
+    expr 130 index 1850..1866: u32
+    expr 131 register priority 1850..1863: [u32; 96]
+    expr 132 peripheral PLIC 1850..1854: Plic
+    expr 133 local i 1864..1865: usize
+    expr 134 index 1869..1893: u32
+    expr 135 register word 1869..1890: [u32; 3]
+    expr 136 register inner 1869..1885: Inner
+    expr 137 register first 1869..1879: Context
+    expr 138 peripheral PLIC 1869..1873: Plic
+    expr 139 int 0 1891..1892: usize
 fn through(p: *mut Plic, q: *const Plic, i: usize) -> u32
-    expr 134 assign 1895..1915: ()
-    expr 135 index 1895..1911: u32
-    expr 136 register priority 1895..1908: [u32; 96]
-    expr 137 deref 1895..1899: Plic
-    expr 138 local p 1897..1898: *mut Plic
-    expr 139 local i 1909..1910: usize
-    expr 140 int 1 1914..1915: u32
-    expr 141 assign 1921..1950: ()
-    expr 142 index 1921..1946: u32
-    expr 143 register word 1921..1943: [u32; 3]
-    expr 144 register inner 1921..1938: Inner
-    expr 145 index 1921..1932: Context
-    expr 146 register ctx 1921..1929: [Context; 2]
-    expr 147 deref 1921..1925: Plic
-    expr 148 local p 1923..1924: *mut Plic
-    expr 149 local i 1930..1931: usize
-    expr 150 int 0 1944..1945: usize
-    expr 151 int 2 1949..1950: u32
-    expr 152 binary + 1956..2015: u32
-    expr 153 binary + 1956..1996: u32
-    expr 154 index 1956..1972: u32
-    expr 155 register priority 1956..1969: [u32; 96]
-    expr 156 deref 1956..1960: Plic
-    expr 157 local q 1958..1959: *const Plic
-    expr 158 local i 1970..1971: usize
-    expr 159 register threshold 1975..1996: u32
-    expr 160 index 1975..1986: Context
-    expr 161 register ctx 1975..1983: [Context; 2]
-    expr 162 deref 1975..1979: Plic
-    expr 163 local q 1977..1978: *const Plic
-    expr 164 int 1 1984..1985: usize
-    expr 165 register claim 1999..2015: u32
-    expr 166 register first 1999..2009: Context
-    expr 167 deref 1999..2003: Plic
-    expr 168 local q 2001..2002: *const Plic
+    expr 140 unsafe 1961..1993: ()
+    expr 141 assign 1970..1990: ()
+    expr 142 index 1970..1986: u32
+    expr 143 register priority 1970..1983: [u32; 96]
+    expr 144 deref 1970..1974: Plic
+    expr 145 local p 1972..1973: *mut Plic
+    expr 146 local i 1984..1985: usize
+    expr 147 int 1 1989..1990: u32
+    expr 148 unsafe 1998..2039: ()
+    expr 149 assign 2007..2036: ()
+    expr 150 index 2007..2032: u32
+    expr 151 register word 2007..2029: [u32; 3]
+    expr 152 register inner 2007..2024: Inner
+    expr 153 index 2007..2018: Context
+    expr 154 register ctx 2007..2015: [Context; 2]
+    expr 155 deref 2007..2011: Plic
+    expr 156 local p 2009..2010: *mut Plic
+    expr 157 local i 2016..2017: usize
+    expr 158 int 0 2030..2031: usize
+    expr 159 int 2 2035..2036: u32
+    expr 160 unsafe 2044..2114: u32
+    expr 161 binary + 2053..2112: u32
+    expr 162 binary + 2053..2093: u32
+    expr 163 index 2053..2069: u32
+    expr 164 register priority 2053..2066: [u32; 96]
+    expr 165 deref 2053..2057: Plic
+    expr 166 local q 2055..2056: *const Plic
+    expr 167 local i 2067..2068: usize
+    expr 168 register threshold 2072..2093: u32
+    expr 169 index 2072..2083: Context
+    expr 170 register ctx 2072..2080: [Context; 2]
+    expr 171 deref 2072..2076: Plic
+    expr 172 local q 2074..2075: *const Plic
+    expr 173 int 1 2081..2082: usize
+    expr 174 register claim 2096..2112: u32
+    expr 175 register first 2096..2106: Context
+    expr 176 deref 2096..2100: Plic
+    expr 177 local q 2098..2099: *const Plic
 fn pointers(i: usize) -> u32
     let a: *mut Context
     let b: *const Context
     let c: *const Context
     let d: *mut Context
     let e: *mut Inner
-    expr 169 &raw mut 2076..2096: *mut Context
-    expr 170 index 2085..2096: Context
-    expr 171 register ctx 2085..2093: [Context; 2]
-    expr 172 peripheral PLIC 2085..2089: Plic
-    expr 173 local i 2094..2095: usize
-    expr 174 &raw const 2126..2148: *const Context
-    expr 175 index 2137..2148: Context
-    expr 176 register ctx 2137..2145: [Context; 2]
-    expr 177 peripheral PLIC 2137..2141: Plic
-    expr 178 int 1 2146..2147: usize
-    expr 179 &raw const 2178..2199: *const Context
-    expr 180 register first 2189..2199: Context
-    expr 181 peripheral PLIC 2189..2193: Plic
-    expr 182 &raw mut 2227..2246: *mut Context
-    expr 183 register first 2236..2246: Context
-    expr 184 peripheral PLIC 2236..2240: Plic
-    expr 185 &raw mut 2272..2298: *mut Inner
-    expr 186 register inner 2281..2298: Inner
-    expr 187 index 2281..2292: Context
-    expr 188 register ctx 2281..2289: [Context; 2]
-    expr 189 peripheral PLIC 2281..2285: Plic
-    expr 190 local i 2290..2291: usize
-    expr 191 binary + 2304..2358: u32
-    expr 192 binary + 2304..2343: u32
-    expr 193 binary + 2304..2332: u32
-    expr 194 binary + 2304..2322: u32
-    expr 195 call 2304..2312: u32
-    expr 196 local a 2310..2311: *mut Context
-    expr 197 call 2315..2322: u32
-    expr 198 local b 2320..2321: *const Context
-    expr 199 call 2325..2332: u32
-    expr 200 local c 2330..2331: *const Context
-    expr 201 call 2335..2343: u32
-    expr 202 local d 2341..2342: *mut Context
-    expr 203 index 2346..2358: u32
-    expr 204 register word 2346..2355: [u32; 3]
-    expr 205 deref 2346..2350: Inner
-    expr 206 local e 2348..2349: *mut Inner
-    expr 207 int 0 2356..2357: usize
+    expr 178 &raw mut 2175..2195: *mut Context
+    expr 179 index 2184..2195: Context
+    expr 180 register ctx 2184..2192: [Context; 2]
+    expr 181 peripheral PLIC 2184..2188: Plic
+    expr 182 local i 2193..2194: usize
+    expr 183 &raw const 2225..2247: *const Context
+    expr 184 index 2236..2247: Context
+    expr 185 register ctx 2236..2244: [Context; 2]
+    expr 186 peripheral PLIC 2236..2240: Plic
+    expr 187 int 1 2245..2246: usize
+    expr 188 &raw const 2277..2298: *const Context
+    expr 189 register first 2288..2298: Context
+    expr 190 peripheral PLIC 2288..2292: Plic
+    expr 191 &raw mut 2326..2345: *mut Context
+    expr 192 register first 2335..2345: Context
+    expr 193 peripheral PLIC 2335..2339: Plic
+    expr 194 &raw mut 2371..2397: *mut Inner
+    expr 195 register inner 2380..2397: Inner
+    expr 196 index 2380..2391: Context
+    expr 197 register ctx 2380..2388: [Context; 2]
+    expr 198 peripheral PLIC 2380..2384: Plic
+    expr 199 local i 2389..2390: usize
+    expr 200 unsafe 2403..2468: u32
+    expr 201 binary + 2412..2466: u32
+    expr 202 binary + 2412..2451: u32
+    expr 203 binary + 2412..2440: u32
+    expr 204 binary + 2412..2430: u32
+    expr 205 call 2412..2420: u32
+    expr 206 local a 2418..2419: *mut Context
+    expr 207 call 2423..2430: u32
+    expr 208 local b 2428..2429: *const Context
+    expr 209 call 2433..2440: u32
+    expr 210 local c 2438..2439: *const Context
+    expr 211 call 2443..2451: u32
+    expr 212 local d 2449..2450: *mut Context
+    expr 213 index 2454..2466: u32
+    expr 214 register word 2454..2463: [u32; 3]
+    expr 215 deref 2454..2458: Inner
+    expr 216 local e 2456..2457: *mut Inner
+    expr 217 int 0 2464..2465: usize
 entry fn main() -> !
-    expr 208 loop 2385..2392: !
+    expr 218 loop 2495..2502: !
 panic fn on_panic() -> !
-    expr 209 loop 2422..2429: !
+    expr 219 loop 2532..2539: !
 comptime fn default() -> bool
     expr 0 bool false 560..565: bool
 comptime fn default() -> u8

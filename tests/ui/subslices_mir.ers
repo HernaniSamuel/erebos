@@ -19,7 +19,7 @@ fn slice_forms(s: &[u8], a: usize, b: usize) {
 fn raw_forms(p: *const [u8], q: *mut [u8], a: usize, b: usize) {
     let x: *const [u8] = &raw const (*p)[a..b];
     let y: *mut [u8] = &raw mut (*q)[..b];
-    let z: &[u8] = &(*p)[a..];
+    let z: &[u8] = unsafe { &(*p)[a..] };
 }
 
 // An array with run-time bounds: checked against `N`.

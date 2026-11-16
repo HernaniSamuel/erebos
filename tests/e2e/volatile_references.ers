@@ -88,25 +88,25 @@ fn print_line(a: u32, b: u32, c: u32) {
 }
 
 entry fn main() -> ! {
-    fill(&mut (*RING).desc[0], 0x100, 4);
-    fill(&mut (*RING).desc[1], 10, 20);
-    fill(&mut (*RING).desc[2], 1, 1);
+    unsafe { fill(&mut (*RING).desc[0], 0x100, 4); }
+    unsafe { fill(&mut (*RING).desc[1], 10, 20); }
+    unsafe { fill(&mut (*RING).desc[2], 1, 1); }
     print_line(
-        total(&(*RING).desc[0]),
-        total(&(*RING).desc[1]),
-        total(&(*RING).desc[2]),
+        total(unsafe { &(*RING).desc[0] }),
+        total(unsafe { &(*RING).desc[1] }),
+        total(unsafe { &(*RING).desc[2] }),
     );
 
     let mut i: usize = 0;
     while i < 4 {
-        (*RING).words[i] = i as u32 + 1;
+        unsafe { (*RING).words[i] = i as u32 + 1; }
         i += 1;
     }
-    let before: u32 = sum(&(*RING).words);
-    bump(&mut (*RING).words);
-    print_line(before, sum(&(*RING).words), sum(&(*RING).words[1..3]));
+    let before: u32 = unsafe { sum(&(*RING).words) };
+    unsafe { bump(&mut (*RING).words); }
+    unsafe { print_line(before, sum(&(*RING).words), sum(&(*RING).words[1..3])); }
 
-    let ring: &mut volatile Ring = &mut *RING;
+    let ring: &mut volatile Ring = unsafe { &mut *RING };
     ring.head = 7;
     ring.tail = ring.head + 1;
     print_line(MEMORY.head, MEMORY.tail, 0);

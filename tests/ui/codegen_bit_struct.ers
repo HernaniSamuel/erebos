@@ -21,11 +21,11 @@ fn read(l: Lcr) -> u8 {
 }
 
 fn set_dlab(p: *mut volatile Lcr) {
-    (*p).dlab = true;
+    unsafe { (*p).dlab = true; }
 }
 
 fn set_count(p: *mut volatile Control, x: u8) {
-    (*p).count = x & 0xF;
+    unsafe { (*p).count = x & 0xF; }
 }
 
 fn pass(l: Lcr, c: Control) -> Control {

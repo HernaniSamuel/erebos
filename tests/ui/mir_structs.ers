@@ -4,15 +4,15 @@
 struct Pair { first: u32, second: u32 }
 
 fn next(counter: *mut u32) -> u32 {
-    *counter += 1;
-    *counter
+    unsafe { *counter += 1; }
+    unsafe { *counter }
 }
 
 fn pairs(p: *mut Pair) -> u32 {
     let mut n: u32 = 0;
     let pair: Pair = Pair { second: next(&raw mut n), first: next(&raw mut n) };
-    (*p).second = pair.first;
-    (*p).first
+    unsafe { (*p).second = pair.first; }
+    unsafe { (*p).first }
 }
 
 entry fn main() -> ! { loop {} }

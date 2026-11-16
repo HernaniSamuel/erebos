@@ -135,18 +135,18 @@ ty::mismatched-types
  31 │     assert(x == 12, &raw const buf[0..2]);
     ·                     ──────────┬─────────
     ·                               ╰── expected `&[u8]`, found `*const [u8]`
- 32 │     assert(x == 13, &*p);
+ 32 │     unsafe { assert(x == 13, &*p); }
     ╰────
   help: an `assert` message is a `&[u8]`: borrow the place with `&p` instead of `&raw const p` or
         `&raw mut p` (ADR 0116)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_assert_errors.ers:33:21]
- 32 │     assert(x == 13, &*p);
- 33 │     assert(x == 14, &*r);
-    ·                     ─┬─
-    ·                      ╰── expected `&[u8]`, found `&volatile [u8]`
+    ╭─[typeck_assert_errors.ers:33:30]
+ 32 │     unsafe { assert(x == 13, &*p); }
+ 33 │     unsafe { assert(x == 14, &*r); }
+    ·                              ─┬─
+    ·                               ╰── expected `&[u8]`, found `&volatile [u8]`
  34 │     assert(x == 15, { p });
     ╰────
   help: a volatile reference never becomes one that is not, nor the other way: it would hide
@@ -155,7 +155,7 @@ ty::mismatched-types
 
   × mismatched types
     ╭─[typeck_assert_errors.ers:34:23]
- 33 │     assert(x == 14, &*r);
+ 33 │     unsafe { assert(x == 14, &*r); }
  34 │     assert(x == 15, { p });
     ·                       ┬
     ·                       ╰── expected `&[u8]`, found `*const [u8]`
