@@ -6207,6 +6207,7 @@ mod tests {
             reset: Some(BodyId(START as u32)),
             critical_enter: Some(BodyId(ENTER as u32)),
             critical_exit: Some(BodyId(EXIT as u32)),
+            inserted: Vec::new(),
             handlers: vec![Handler {
                 vector: "SysTick".to_owned(),
                 word: 2,

@@ -83,6 +83,13 @@ pub struct Mir {
     /// with one, the body stays as a declaration.
     pub critical_enter: Option<BodyId>,
     pub critical_exit: Option<BodyId>,
+    /// The inserted functions (ADR 0123): the `#[export]` functions of `core`
+    /// other than `_start`, in the order of their bodies. They are what the
+    /// compiler and the linker call without a call in MIR (`memcpy`,
+    /// `memset`, `memmove`, and on thumbv7m the `__aeabi_` functions), apart
+    /// from the two of a `critical` block, which `critical_enter` and
+    /// `critical_exit` name. Empty once `core` is left out.
+    pub inserted: Vec<BodyId>,
     /// The interrupt handlers, in the order of their bodies, each with the
     /// vector it serves (ADR 0084).
     pub handlers: Vec<Handler>,
@@ -338,6 +345,10 @@ impl Mir {
         }
         // `_start` is `core`'s, and nothing calls it.
         self.reset = None;
+        // The inserted functions are `core`'s, and the bodies kept name them
+        // by no call of MIR; the ones a body kept calls stay as declarations
+        // for that call, not for the list.
+        self.inserted.clear();
         // The two functions of a `critical` block stay when a body kept has
         // one, as declarations; with none, they are gone.
         self.critical_enter = self.critical_enter.and_then(|id| ids[id.0 as usize]);
@@ -2420,6 +2431,7 @@ mod tests {
             reset: None,
             critical_enter: None,
             critical_exit: None,
+            inserted: Vec::new(),
             handlers: Vec::new(),
             vector_table: None,
             memory: None,
@@ -2472,6 +2484,7 @@ mod tests {
             reset: None,
             critical_enter: None,
             critical_exit: None,
+            inserted: Vec::new(),
             handlers: if handlers {
                 vec![Handler {
                     vector: "SysTick".to_owned(),
@@ -2509,6 +2522,16 @@ mod tests {
             peripherals: Vec::new(),
             statics: Vec::new(),
         }
+    }
+
+    /// The inserted functions are `core`'s, so leaving `core` out empties the
+    /// list, even when a body kept names one and it stays as a declaration.
+    #[test]
+    fn leaving_out_core_empties_the_inserted_functions() {
+        let mut mir = with_table(true);
+        mir.inserted = vec![BodyId(0)];
+        mir.leave_out(&core_out());
+        assert!(mir.inserted.is_empty());
     }
 
     /// The vector table is the compiler's and not `core`'s, so a program with a

@@ -1003,14 +1003,10 @@ mod tests {
     }
 
     /// The functions "What is a call" lists: every `#[export]` function of
-    /// `core` (`runtime`, with a symbol that is no path) but `_start`, and the
-    /// two of the `critical` block.
+    /// `core` but `_start` (`Mir::inserted`), and the two of the `critical`
+    /// block.
     fn inserted_roots(mir: &mir::Mir) -> Vec<mir::BodyId> {
-        let mut roots: Vec<mir::BodyId> = mir
-            .bodies()
-            .filter(|(id, body)| body.runtime && !body.name.contains('.') && Some(*id) != mir.reset)
-            .map(|(id, _)| id)
-            .collect();
+        let mut roots = mir.inserted.clone();
         roots.extend(mir.critical_enter);
         roots.extend(mir.critical_exit);
         roots
@@ -1058,6 +1054,71 @@ mod tests {
             assert!(
                 names.iter().all(|name| *name != "_start"),
                 "{}: `_start` is no root",
+                target.name
+            );
+        }
+    }
+
+    /// `Mir::inserted` holds the `#[export]` functions of `core` but `_start`
+    /// (ADR 0123): the memory and division functions on both targets, and the
+    /// two `__aeabi_` division functions in assembly on thumbv7m only. It
+    /// holds neither `_start` nor the functions of the `critical` block, and
+    /// no function with a path for a symbol; it lists the bodies in order.
+    #[test]
+    fn mir_lists_the_inserted_functions() {
+        const BOTH: [&str; 19] = [
+            "memcpy",
+            "memmove",
+            "memset",
+            "__aeabi_memcpy",
+            "__aeabi_memcpy4",
+            "__aeabi_memcpy8",
+            "__aeabi_memmove",
+            "__aeabi_memmove4",
+            "__aeabi_memmove8",
+            "__aeabi_memset",
+            "__aeabi_memset4",
+            "__aeabi_memset8",
+            "__aeabi_memclr",
+            "__aeabi_memclr4",
+            "__aeabi_memclr8",
+            "__udivdi3",
+            "__umoddi3",
+            "__divdi3",
+            "__moddi3",
+        ];
+        for target in BOTH_TARGETS {
+            let mir = whole_mir(target, BARE);
+            let names: Vec<&str> = (mir.inserted.iter())
+                .map(|&id| mir.body(id).name.as_str())
+                .collect();
+            let mut wanted = BOTH.to_vec();
+            let thumb = std::ptr::eq(target, &target::THUMBV7M);
+            if thumb {
+                wanted.extend(["__aeabi_uldivmod", "__aeabi_ldivmod"]);
+            }
+            for name in &wanted {
+                assert!(
+                    names.contains(name),
+                    "{}: no `{name}` among {names:?}",
+                    target.name
+                );
+            }
+            for name in &names {
+                assert!(
+                    !name.contains('.') && *name != "_start" && !name.starts_with("__critical"),
+                    "{}: `{name}` is no inserted function",
+                    target.name
+                );
+                assert!(
+                    thumb || !matches!(*name, "__aeabi_uldivmod" | "__aeabi_ldivmod"),
+                    "{}: `{name}` is thumbv7m's",
+                    target.name
+                );
+            }
+            assert!(
+                mir.inserted.windows(2).all(|pair| pair[0].0 < pair[1].0),
+                "{}: not in the order of the bodies",
                 target.name
             );
         }

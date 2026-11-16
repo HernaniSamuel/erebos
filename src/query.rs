@@ -2058,6 +2058,22 @@ impl<'h> Queries<'h> {
             self.memory_map()
                 .expect("every value of a program without errors is computed")
         });
+        let bodies: Vec<mir::Body> = self
+            .bodies
+            .into_iter()
+            .map(|body| match body {
+                State::Done(Some(body)) => Rc::unwrap_or_clone(body),
+                _ => unreachable!("every body of a well-typed program is built"),
+            })
+            .collect();
+        // The `#[export]` functions of `core` (`runtime`, with a symbol that
+        // is no path) but `_start` (ADR 0123).
+        let inserted = (bodies.iter().enumerate())
+            .filter(|(id, body)| {
+                body.runtime && !body.name.contains('.') && *id != self.hir.reset.0 as usize
+            })
+            .map(|(id, _)| BodyId(id as u32))
+            .collect();
         let mir = Mir {
             structs,
             bit_structs,
@@ -2066,19 +2082,13 @@ impl<'h> Queries<'h> {
             peripherals,
             data: self.data,
             statics,
-            bodies: self
-                .bodies
-                .into_iter()
-                .map(|body| match body {
-                    State::Done(Some(body)) => Rc::unwrap_or_clone(body),
-                    _ => unreachable!("every body of a well-typed program is built"),
-                })
-                .collect(),
+            bodies,
             entry: BodyId(self.hir.entry.0),
             panic: BodyId(self.hir.panic.0),
             reset: Some(BodyId(self.hir.reset.0)),
             critical_enter: Some(BodyId(self.hir.critical_enter.0)),
             critical_exit: Some(BodyId(self.hir.critical_exit.0)),
+            inserted,
             handlers,
             vector_table: self.vector_table,
             memory,
