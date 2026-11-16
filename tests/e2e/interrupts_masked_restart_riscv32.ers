@@ -20,7 +20,8 @@ entry fn main() -> ! {
             exit(1)
         }
         unsafe { *RUNS = 1; }
-        core::arch::enable_interrupts();
+        // In the entry function, outside every `critical` block (ADR 0119).
+        unsafe { core::arch::enable_interrupts(); }
         if !core::arch::interrupts_enabled() {
             exit(2)
         }

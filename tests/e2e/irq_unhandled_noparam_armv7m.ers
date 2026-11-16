@@ -17,7 +17,8 @@ enum Interrupt: u32 {
 entry fn main() -> ! {
     core::arch::nvic_enable(Interrupt::Spi as u32);
     core::arch::nvic_pend(Interrupt::Spi as u32);
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     loop {
         core::arch::wait_for_interrupt();
     }

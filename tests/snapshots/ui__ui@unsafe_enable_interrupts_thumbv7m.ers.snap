@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_enable_interrupts_thumbv7m.ers
+---
+--- errors ---
+ty::unsafe-required
+
+  × calling `unsafe fn core::arch::enable_interrupts` needs an `unsafe` block
+   ╭─[unsafe_enable_interrupts_thumbv7m.ers:7:5]
+ 6 │ entry fn main() -> ! {
+ 7 │     core::arch::enable_interrupts();
+   ·     ───────────────┬───────────────
+   ·                    ╰── this calls `unsafe fn core::arch::enable_interrupts`
+ 8 │     // In the entry function, outside every `critical` block.
+   ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)

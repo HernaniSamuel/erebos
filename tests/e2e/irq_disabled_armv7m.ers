@@ -25,7 +25,8 @@ entry fn main() -> ! {
     let line: u32 = Interrupt::Dma as u32;
     core::arch::nvic_enable(line);
     core::arch::nvic_disable(line);
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     core::arch::nvic_pend(line);
     let mut loops: u32 = 0;
     while loops < 1000 {

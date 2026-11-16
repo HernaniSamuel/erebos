@@ -1,0 +1,28 @@
+// emit: typeck
+// `core::arch::enable_interrupts` is an `unsafe fn` on both targets (ADR 0119,
+// 0086): the call outside an `unsafe` block is `ty::unsafe-required`, in the
+// entry function, in another function and in a `critical` block; the calls in
+// a block are accepted, a function that is not the entry function being an
+// `unsafe fn` with the contract of `enable_interrupts`.
+fn helper() {
+    core::arch::enable_interrupts();
+}
+
+unsafe fn carried() {
+    // Sound if `carried` is not called inside `critical` or a handler.
+    unsafe { core::arch::enable_interrupts(); }
+}
+
+entry fn main() -> ! {
+    core::arch::enable_interrupts();
+    helper();
+    critical {
+        core::arch::enable_interrupts();
+    }
+    // In the entry function, outside every `critical` block.
+    unsafe { core::arch::enable_interrupts(); }
+    unsafe { carried(); }
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

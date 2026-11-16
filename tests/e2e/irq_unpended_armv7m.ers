@@ -29,7 +29,8 @@ entry fn main() -> ! {
     if core::arch::nvic_is_pending(line) {
         exit(2)
     }
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     let mut loops: u32 = 0;
     while loops < 1000 {
         let runs: u32 = critical { RUNS };

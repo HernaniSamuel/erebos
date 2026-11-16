@@ -17,7 +17,8 @@ entry fn main() -> ! {
     unsafe { *SYST_RVR = 10_000; }
     unsafe { *SYST_CVR = 0; }
     unsafe { *SYST_CSR = 7; }
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     loop {
         core::arch::wait_for_interrupt();
     }

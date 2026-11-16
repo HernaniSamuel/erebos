@@ -20,7 +20,8 @@ interrupt fn pend() at Vector::PendSV {
 }
 
 entry fn main() -> ! {
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     unsafe { *ICSR = 1 << 28; }
     loop {
         critical {

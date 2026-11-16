@@ -110,7 +110,8 @@ entry fn main() -> ! {
     }
     // `mie.MEIE`: the machine external interrupt is enabled.
     unsafe { asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags)); }
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
 
     send(&b"uart tx by interrupt\n");
 

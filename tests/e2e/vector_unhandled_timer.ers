@@ -19,7 +19,8 @@ entry fn main() -> ! {
     unsafe { *MTIMECMP_HIGH = 0; }
     unsafe { *MTIMECMP_LOW = *MTIME + 1000; }
     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     loop {
         core::arch::wait_for_interrupt();
     }

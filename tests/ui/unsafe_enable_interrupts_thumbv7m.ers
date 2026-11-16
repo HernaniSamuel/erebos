@@ -1,0 +1,13 @@
+// emit: typeck
+// target: thumbv7m-none-eabi
+// The same on thumbv7m (ADR 0080): `enable_interrupts` is an `unsafe fn` on both
+// targets, so the call outside an `unsafe` block is `ty::unsafe-required` and
+// the call in one is accepted.
+entry fn main() -> ! {
+    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block.
+    unsafe { core::arch::enable_interrupts(); }
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

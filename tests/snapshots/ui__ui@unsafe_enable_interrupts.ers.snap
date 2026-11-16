@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/unsafe_enable_interrupts.ers
+---
+--- errors ---
+ty::unsafe-required
+
+  × calling `unsafe fn core::arch::enable_interrupts` needs an `unsafe` block
+   ╭─[unsafe_enable_interrupts.ers:8:5]
+ 7 │ fn helper() {
+ 8 │     core::arch::enable_interrupts();
+   ·     ───────────────┬───────────────
+   ·                    ╰── this calls `unsafe fn core::arch::enable_interrupts`
+ 9 │ }
+   ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn core::arch::enable_interrupts` needs an `unsafe` block
+    ╭─[unsafe_enable_interrupts.ers:17:5]
+ 16 │ entry fn main() -> ! {
+ 17 │     core::arch::enable_interrupts();
+    ·     ───────────────┬───────────────
+    ·                    ╰── this calls `unsafe fn core::arch::enable_interrupts`
+ 18 │     helper();
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)
+ty::unsafe-required
+
+  × calling `unsafe fn core::arch::enable_interrupts` needs an `unsafe` block
+    ╭─[unsafe_enable_interrupts.ers:20:9]
+ 19 │     critical {
+ 20 │         core::arch::enable_interrupts();
+    ·         ───────────────┬───────────────
+    ·                        ╰── this calls `unsafe fn core::arch::enable_interrupts`
+ 21 │     }
+    ╰────
+  help: the caller vouches for the contract of an `unsafe fn`: call it inside an `unsafe { }`
+        block, after checking that its contract holds (ADR 0119)

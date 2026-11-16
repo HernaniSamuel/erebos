@@ -55,7 +55,8 @@ entry fn main() -> ! {
     unsafe { *SYST_RVR = 10_000; }
     unsafe { *SYST_CVR = 0; }
     unsafe { *SYST_CSR = 7; }
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     // `r4` to `r11` are saved and restored by the template, which uses them
     // as they are, `r6` and `r7` too, that the compiler keeps for itself.
     unsafe {

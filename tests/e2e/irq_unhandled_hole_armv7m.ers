@@ -27,7 +27,8 @@ interrupt fn last() at Interrupt::Last {
 entry fn main() -> ! {
     core::arch::nvic_enable(4);
     core::arch::nvic_pend(4);
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     loop {
         core::arch::wait_for_interrupt();
     }

@@ -7979,9 +7979,12 @@ the compiler binary, and compiled and checked with every program.
     any access after it. It is `fence iorw, iorw` on riscv32 and `dmb sy` on
     thumbv7m. It orders; it does not wait for a write to reach a device, nor
     make a cache coherent (neither target of the tests has a data cache).
-  - `pub fn enable_interrupts()`: lets maskable handlers run (`csrsi mstatus,
-    8` on riscv32, `cpsie i` on thumbv7m). A compiler fence. Each source of
-    interrupts has its own enable, which is the program's (ADR 0086).
+  - `pub unsafe fn enable_interrupts()`: lets maskable handlers run (`csrsi
+    mstatus, 8` on riscv32, `cpsie i` on thumbv7m). A compiler fence. Each
+    source of interrupts has its own enable, which is the program's (ADR
+    0086). An `unsafe fn` (ADR 0119): the call needs an `unsafe` block, and
+    its contract is that the caller is not inside a `critical` block or an
+    `interrupt fn`, directly or through callers.
   - `pub fn wait_for_interrupt()`: runs `wfi`, a compiler fence too. It may
     return for no reason, so it belongs in a loop.
   - `pub fn interrupts_enabled() -> bool`: the mask state and nothing else:

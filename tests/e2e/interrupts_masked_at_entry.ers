@@ -14,7 +14,8 @@ entry fn main() -> ! {
         exit(1)
     }
     putc(b'm'); putc(b'a'); putc(b's'); putc(b'k'); putc(b'e'); putc(b'd'); putc(b'\n');
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     if !core::arch::interrupts_enabled() {
         exit(2)
     }

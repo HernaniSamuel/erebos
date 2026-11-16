@@ -2,18 +2,22 @@
 // The NVIC functions of `core::arch` are specific to thumbv7m (ADR 0091): the
 // file of riscv32 defines none, so each path is one that names nothing, as any
 // item of another target (ADR 0080), and the error does not say the item
-// exists elsewhere. The portable `enable_interrupts` beside them resolves.
-fn main_work() {
+// exists elsewhere. The portable `enable_interrupts` beside them resolves. It is
+// an `unsafe fn` (ADR 0119), so `main_work`, which is not the entry function,
+// is an `unsafe fn` with its contract, and the entry function calls it.
+unsafe fn main_work() {
     core::arch::nvic_enable(1);
     core::arch::nvic_disable(1);
     core::arch::nvic_pend(1);
     core::arch::nvic_unpend(1);
     let pending: bool = core::arch::nvic_is_pending(1);
-    core::arch::enable_interrupts();
+    // Sound if `main_work` is not called inside `critical` or a handler.
+    unsafe { core::arch::enable_interrupts(); }
 }
 
 entry fn main() -> ! {
-    main_work();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { main_work(); }
     loop {}
 }
 

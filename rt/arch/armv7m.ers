@@ -13,7 +13,7 @@
 //
 // portable: pub fn compiler_fence()
 // portable: pub fn fence()
-// portable: pub fn enable_interrupts()
+// portable: pub unsafe fn enable_interrupts()
 // portable: pub fn wait_for_interrupt()
 // portable: pub fn interrupts_enabled() -> bool
 
@@ -46,10 +46,15 @@ pub fn fence() {
 // has no memory option, so this is a compiler fence: statics written before it
 // are in memory. Inside a critical section or a handler it ends that
 // protection.
-pub fn enable_interrupts() {
+//
+// Safety: the caller is not inside a `critical` block or an `interrupt fn`,
+// directly or through any depth of callers, so that the check of shared statics
+// (ADR 0093) holds. A function can establish that for itself only when nothing
+// calls it: the entry function, outside every `critical` block in it. Any other
+// function that calls this is an `unsafe fn` with the same contract (ADR 0119).
+pub unsafe fn enable_interrupts() {
     // Sound in privileged mode, where every program runs: it clears
-    // `PRIMASK`. Calling it inside `critical` or a handler ends their
-    // protection (ADR 0086); that is for the caller to avoid.
+    // `PRIMASK`. Where it may be called is the contract above.
     unsafe {
         asm("cpsie i", options(nostack, preserves_flags));
     }

@@ -56,7 +56,8 @@ entry fn main() -> ! {
     unsafe { *SYST_RVR = 10_000; }
     unsafe { *SYST_CVR = 0; }
     unsafe { *SYST_CSR = 7; }
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
     // `sp` is 4 modulo 8 while it waits.
     unsafe { asm("sub sp, sp, #4", "wfi", "add sp, sp, #4", clobber_abi("C")); }
     unsafe { *SYST_CSR = 0; }

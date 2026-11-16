@@ -29,13 +29,13 @@ resolve::unknown-variant
     ·                                              ╰── unknown variant
  12 │ 
     ╰────
-    ╭─[rt/arch/armv7m.ers:98:10]
- 97 │ // numbers `nvic_enable` and its siblings take (below).
- 98 │ pub enum Vector: u32 {
-    ·          ───┬──
-    ·             ╰── `core::arch::Vector` is declared here
- 99 │     NMI = 2,
-    ╰────
+     ╭─[rt/arch/armv7m.ers:103:10]
+ 102 │ // numbers `nvic_enable` and its siblings take (below).
+ 103 │ pub enum Vector: u32 {
+     ·          ───┬──
+     ·             ╰── `core::arch::Vector` is declared here
+ 104 │     NMI = 2,
+     ╰────
   help: its variants are `NMI`, `HardFault`, `MemManage`, `BusFault`, `UsageFault`, `SVCall`,
         `DebugMonitor`, `PendSV`, `SysTick`
 resolve::misplaced-attribute

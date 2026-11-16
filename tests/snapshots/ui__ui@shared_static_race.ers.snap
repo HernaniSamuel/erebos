@@ -7,7 +7,7 @@ input_file: tests/ui/shared_static_race.ers
 analysis::unprotected-static
 
   × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_race.ers:37:25]
+    ╭─[shared_static_race.ers:38:25]
  24 │ interrupt fn tick() at Vector::MachineTimer {
  25 │     COUNT += 1;
     ·     ─────┬────
@@ -20,19 +20,20 @@ analysis::unprotected-static
  31 │     unsafe { *MTIMECMP_HIGH = 0; }
  32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 34 │     core::arch::enable_interrupts();
- 35 │     let mut i: u32 = 0;
- 36 │     while i < INCREMENTS {
- 37 │         let seen: u32 = COUNT;
+ 34 │     // In the entry function, outside every `critical` block (ADR 0119).
+ 35 │     unsafe { core::arch::enable_interrupts(); }
+ 36 │     let mut i: u32 = 0;
+ 37 │     while i < INCREMENTS {
+ 38 │         let seen: u32 = COUNT;
     ·                         ──┬──
     ·                           ╰── reached here, outside `critical`
- 38 │         if seen == 0xFFFF_FFFF {
+ 39 │         if seen == 0xFFFF_FFFF {
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
 
   × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_race.ers:41:9]
+    ╭─[shared_static_race.ers:42:9]
  24 │ interrupt fn tick() at Vector::MachineTimer {
  25 │     COUNT += 1;
     ·     ─────┬────
@@ -45,23 +46,24 @@ analysis::unprotected-static
  31 │     unsafe { *MTIMECMP_HIGH = 0; }
  32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 34 │     core::arch::enable_interrupts();
- 35 │     let mut i: u32 = 0;
- 36 │     while i < INCREMENTS {
- 37 │         let seen: u32 = COUNT;
- 38 │         if seen == 0xFFFF_FFFF {
- 39 │             exit(3)
- 40 │         }
- 41 │         COUNT = seen + 1;
+ 34 │     // In the entry function, outside every `critical` block (ADR 0119).
+ 35 │     unsafe { core::arch::enable_interrupts(); }
+ 36 │     let mut i: u32 = 0;
+ 37 │     while i < INCREMENTS {
+ 38 │         let seen: u32 = COUNT;
+ 39 │         if seen == 0xFFFF_FFFF {
+ 40 │             exit(3)
+ 41 │         }
+ 42 │         COUNT = seen + 1;
     ·         ────────┬───────
     ·                 ╰── reached here, outside `critical`
- 42 │         i += 1;
+ 43 │         i += 1;
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
 
   × `TICKS` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_race.ers:45:8]
+    ╭─[shared_static_race.ers:46:8]
  25 │     COUNT += 1;
  26 │     TICKS += 1;
     ·     ─────┬────
@@ -73,27 +75,28 @@ analysis::unprotected-static
  31 │     unsafe { *MTIMECMP_HIGH = 0; }
  32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 34 │     core::arch::enable_interrupts();
- 35 │     let mut i: u32 = 0;
- 36 │     while i < INCREMENTS {
- 37 │         let seen: u32 = COUNT;
- 38 │         if seen == 0xFFFF_FFFF {
- 39 │             exit(3)
- 40 │         }
- 41 │         COUNT = seen + 1;
- 42 │         i += 1;
- 43 │     }
- 44 │     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 45 │     if TICKS == 0 {
+ 34 │     // In the entry function, outside every `critical` block (ADR 0119).
+ 35 │     unsafe { core::arch::enable_interrupts(); }
+ 36 │     let mut i: u32 = 0;
+ 37 │     while i < INCREMENTS {
+ 38 │         let seen: u32 = COUNT;
+ 39 │         if seen == 0xFFFF_FFFF {
+ 40 │             exit(3)
+ 41 │         }
+ 42 │         COUNT = seen + 1;
+ 43 │         i += 1;
+ 44 │     }
+ 45 │     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
+ 46 │     if TICKS == 0 {
     ·        ──┬──
     ·          ╰── reached here, outside `critical`
- 46 │         exit(2)
+ 47 │         exit(2)
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
 
   × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_race.ers:48:8]
+    ╭─[shared_static_race.ers:49:8]
  24 │ interrupt fn tick() at Vector::MachineTimer {
  25 │     COUNT += 1;
     ·     ─────┬────
@@ -106,30 +109,31 @@ analysis::unprotected-static
  31 │     unsafe { *MTIMECMP_HIGH = 0; }
  32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 34 │     core::arch::enable_interrupts();
- 35 │     let mut i: u32 = 0;
- 36 │     while i < INCREMENTS {
- 37 │         let seen: u32 = COUNT;
- 38 │         if seen == 0xFFFF_FFFF {
- 39 │             exit(3)
- 40 │         }
- 41 │         COUNT = seen + 1;
- 42 │         i += 1;
- 43 │     }
- 44 │     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 45 │     if TICKS == 0 {
- 46 │         exit(2)
- 47 │     }
- 48 │     if COUNT != INCREMENTS + TICKS {
+ 34 │     // In the entry function, outside every `critical` block (ADR 0119).
+ 35 │     unsafe { core::arch::enable_interrupts(); }
+ 36 │     let mut i: u32 = 0;
+ 37 │     while i < INCREMENTS {
+ 38 │         let seen: u32 = COUNT;
+ 39 │         if seen == 0xFFFF_FFFF {
+ 40 │             exit(3)
+ 41 │         }
+ 42 │         COUNT = seen + 1;
+ 43 │         i += 1;
+ 44 │     }
+ 45 │     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
+ 46 │     if TICKS == 0 {
+ 47 │         exit(2)
+ 48 │     }
+ 49 │     if COUNT != INCREMENTS + TICKS {
     ·        ──┬──
     ·          ╰── reached here, outside `critical`
- 49 │         exit(1)
+ 50 │         exit(1)
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block
 analysis::unprotected-static
 
   × `TICKS` is reached outside `critical` in the thread context, and a handler reaches it too
-    ╭─[shared_static_race.ers:48:30]
+    ╭─[shared_static_race.ers:49:30]
  25 │     COUNT += 1;
  26 │     TICKS += 1;
     ·     ─────┬────
@@ -141,23 +145,24 @@ analysis::unprotected-static
  31 │     unsafe { *MTIMECMP_HIGH = 0; }
  32 │     unsafe { *MTIMECMP_LOW = *MTIME + PERIOD; }
  33 │     unsafe { asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 34 │     core::arch::enable_interrupts();
- 35 │     let mut i: u32 = 0;
- 36 │     while i < INCREMENTS {
- 37 │         let seen: u32 = COUNT;
- 38 │         if seen == 0xFFFF_FFFF {
- 39 │             exit(3)
- 40 │         }
- 41 │         COUNT = seen + 1;
- 42 │         i += 1;
- 43 │     }
- 44 │     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
- 45 │     if TICKS == 0 {
- 46 │         exit(2)
- 47 │     }
- 48 │     if COUNT != INCREMENTS + TICKS {
+ 34 │     // In the entry function, outside every `critical` block (ADR 0119).
+ 35 │     unsafe { core::arch::enable_interrupts(); }
+ 36 │     let mut i: u32 = 0;
+ 37 │     while i < INCREMENTS {
+ 38 │         let seen: u32 = COUNT;
+ 39 │         if seen == 0xFFFF_FFFF {
+ 40 │             exit(3)
+ 41 │         }
+ 42 │         COUNT = seen + 1;
+ 43 │         i += 1;
+ 44 │     }
+ 45 │     unsafe { asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags)); }
+ 46 │     if TICKS == 0 {
+ 47 │         exit(2)
+ 48 │     }
+ 49 │     if COUNT != INCREMENTS + TICKS {
     ·                              ──┬──
     ·                                ╰── reached here, outside `critical`
- 49 │         exit(1)
+ 50 │         exit(1)
     ╰────
   help: put the access, or one call on the path to it, in a `critical` block

@@ -233,7 +233,7 @@ interrupt fn service() at core::arch::Vector::SVCall {
 }
 
 entry fn main() -> ! {
-    core::arch::enable_interrupts();
+    unsafe { core::arch::enable_interrupts(); }
     unsafe { asm(\"svc #0\"); }
     board::exit(0)
 }
@@ -726,32 +726,46 @@ fn reference_portable_items(reference: &str) -> Vec<String> {
 
 /// The call of a portable item in a program: the items of `core::arch` that
 /// have no parameter, as the fences and the interrupt functions do, and return
-/// nothing or a value, which the program binds to a local named after the item. A later item with
-/// another signature needs arguments here, and the test says so.
+/// nothing or a value, which the program binds to a local named after the item.
+/// An `unsafe fn` (`enable_interrupts`, ADR 0119) is called in an `unsafe`
+/// block; the program calls it from the entry function, outside `critical`, as
+/// its contract asks. A later item with another signature needs arguments here,
+/// and the test says so.
 fn call_of(item: &str) -> Result<String, String> {
-    let signature = item.strip_prefix("pub fn ").and_then(|rest| {
-        let (name, returned) = rest.split_once("()")?;
-        let returned = match returned {
-            "" => None,
-            _ => Some(returned.strip_prefix(" -> ")?),
-        };
-        Some((name, returned))
-    });
+    let signature = item
+        .strip_prefix("pub fn ")
+        .map(|rest| (false, rest))
+        .or_else(|| item.strip_prefix("pub unsafe fn ").map(|rest| (true, rest)))
+        .and_then(|(is_unsafe, rest)| {
+            let (name, returned) = rest.split_once("()")?;
+            let returned = match returned {
+                "" => None,
+                _ => Some(returned.strip_prefix(" -> ")?),
+            };
+            Some((is_unsafe, name, returned))
+        });
     match signature {
-        Some((name, returned))
+        Some((is_unsafe, name, returned))
             if !name.is_empty()
                 && name.chars().all(|c| c.is_alphanumeric() || c == '_')
                 && returned.is_none_or(|ty| {
                     !ty.is_empty() && ty.chars().all(|c| c.is_alphanumeric() || c == '_')
                 }) =>
         {
+            let call = format!("core::arch::{name}()");
+            let call = if is_unsafe {
+                format!("unsafe {{ {call} }}")
+            } else {
+                call
+            };
             Ok(match returned {
-                None => format!("    core::arch::{name}();\n"),
-                Some(ty) => format!("    let {name}_result: {ty} = core::arch::{name}();\n"),
+                None => format!("    {call};\n"),
+                Some(ty) => format!("    let {name}_result: {ty} = {call};\n"),
             })
         }
         _ => Err(format!(
-            "`{item}` is not `pub fn name()` or `pub fn name() -> type`: teach `call_of` to call it"
+            "`{item}` is not `pub [unsafe] fn name()` or `pub [unsafe] fn name() -> type`: \
+             teach `call_of` to call it"
         )),
     }
 }
@@ -858,6 +872,15 @@ fn portable_items_are_checked_against_the_files() {
         call_of("pub fn fence()").unwrap(),
         "    core::arch::fence();\n"
     );
+    assert_eq!(
+        call_of("pub unsafe fn enable()").unwrap(),
+        "    unsafe { core::arch::enable() };\n"
+    );
+    assert_eq!(
+        call_of("pub unsafe fn id() -> u32").unwrap(),
+        "    let id_result: u32 = unsafe { core::arch::id() };\n"
+    );
+    assert!(call_of("pub unsafe fn wait(n: u32)").is_err());
     assert!(call_of("pub fn wait(n: u32)").is_err());
     assert_eq!(
         call_of("pub fn id() -> u32").unwrap(),

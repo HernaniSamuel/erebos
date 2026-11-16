@@ -88,7 +88,8 @@ entry fn main() -> ! {
         UART0.ctrl = Ctrl { tx_en: true, tx_inten: true, .. };
     }
     core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
-    core::arch::enable_interrupts();
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
 
     send(&b"uart tx by interrupt\n");
 
