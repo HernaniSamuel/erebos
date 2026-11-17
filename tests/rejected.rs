@@ -1556,6 +1556,14 @@ const EXEMPT: &[Exempt] = &[
         reason: "a snippet cannot break either rule alone, for the reason given above for statics: rule 1 needs a place the thread context reaches and one in a handler, rule 2 a place in an unmaskable handler and another context, and a handler in a snippet clashes with a base that serves its vector, `resolve::duplicate-vector`, which hides the code; the `tests/ui/shared_peripheral_*.ers` cover it (ADR 0115)",
     },
     Exempt {
+        codes: &[
+            "analysis::stack-overflow",
+            "analysis::missing-stack",
+            "analysis::stack-cycle",
+        ],
+        reason: "the stack bound runs after code generation, and the snippets are compiled to MIR, so none can reach it; `tests/elf.rs` builds a program for each of them, on both targets (ADR 0123)",
+    },
+    Exempt {
         codes: &["eval::step-limit"],
         reason: "a loop of 10,000,000 steps takes seconds in a debug build, in every program it is injected into; `tests/ui/eval_comptime_loop.ers` covers it",
     },

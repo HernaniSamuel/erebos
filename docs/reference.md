@@ -1,4 +1,4 @@
-# Erebos language reference (M5.9)
+# Erebos language reference (M5.11)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -264,6 +264,10 @@ fn add(a: u32, mut b: u32) -> u32 {
   "`unsafe`").
 - `#[align(N)]` before a function with a body, `N` a power of two, says that
   its first instruction is at a multiple of `N` (ADR 0087, see "Layout").
+- `#[stack(N)]` before a function, with a body or an `extern fn`, says how many
+  bytes of stack it uses that the compiler does not measure (ADR 0122, see
+  "The stack bound"). Every build checks that the program's stack is deep
+  enough for the worst path of calls (ADR 0123).
 
 ### Aggregates by value (ADR 0025, 0039, 0075)
 
@@ -331,7 +335,15 @@ Its parameters cannot be
 a mismatch is undefined. An `extern fn` cannot be declared `unsafe` (every
 call is already unsafe): `unsafe extern fn` is `parser::misplaced-unsafe`. Its symbol is its own name, in any module; a C
 function is declared in one module and brought into the others with `use`
-(see "Symbols").
+(see "Symbols"). The compiler cannot see its stack either, so an `extern fn`
+that code running on the target can reach needs `#[stack(N)]`, with `N` the
+whole depth of the external function, the functions it calls back included
+(`analysis::missing-stack` otherwise, see "The stack bound"):
+
+```
+#[stack(16)]
+extern fn c_checksum(data: *const u8, n: usize) -> u32;
+```
 
 ## Statements and blocks
 
@@ -3910,7 +3922,7 @@ written `Ring::f(..)` or `r.f(..)`, is an unsafe operation (ADR 0119, see
   `parser::local-impl`, as `mod` and `use` are. `core` may have `impl` blocks
   for its own types, under the same rules.
 - Between its braces are **functions with a body** only: `fn` and `pub fn`,
-  with the attributes `#[align(N)]` and `#[naked]`. Any other item, an `extern
+  with the attributes `#[align(N)]`, `#[naked]` and `#[stack(N)]`. Any other item, an `extern
   fn`, an `entry fn`, a `panic fn` or an `interrupt fn` is `parser::impl-item`;
   `#[export]` on a function of a type is `resolve::misplaced-attribute` (C
   calls a function of a type through a plain `#[export]` function that calls
@@ -5302,7 +5314,7 @@ must be local (`1:` and `1b`, `1f`).
 | `nomem` | reads and writes no memory | memory accesses may move across it; not a compiler fence |
 | `readonly` | reads memory, writes none | writes may not move across it, reads may |
 | `pure` | has no effect but its outputs, which depend only on its inputs and, with `readonly`, memory | may be removed when its outputs are unused, or evaluated once for equal inputs; needs `nomem` or `readonly` and an output |
-| `nostack` | does not touch the stack | the stack is not aligned for it |
+| `nostack` | does not touch the stack | the stack is not aligned for it; without it, the function that holds the `asm` needs `#[stack(N)]` (see "The stack bound") |
 | `preserves_flags` | leaves the condition flags as they were | no effect on riscv32, nor beside `clobber_abi("C")`, which covers the flags |
 | `noreturn` | never ends | the expression has type `!`; no output operands |
 
@@ -5318,6 +5330,7 @@ placeholders (`{0:x}`), `inlateout` and ABIs other than C do not exist.
 ```
 #[export]
 #[naked]
+#[stack(24)]
 fn __aeabi_uldivmod() {
     asm(
         "push {{r4, lr}}",
@@ -5358,7 +5371,10 @@ the entry function, the panic function, an interrupt handler or any other
 item it is
 `resolve::misplaced-attribute`, and twice
 `resolve::duplicate-attribute`. LLVM gets the function with the `naked` and
-`noinline` attributes.
+`noinline` attributes. LLVM measures no frame for it, so a naked function that
+code running on the target reaches needs `#[stack(N)]`, with `N` all the stack
+its assembly takes (`analysis::missing-stack` otherwise, see "The stack
+bound").
 
 ### At compile time, and errors of the assembler
 
@@ -5884,8 +5900,10 @@ block is `resolve::unknown-region`.
   one that overflows leaves its region below its origin, where many chips
   have no memory or memory that faults, instead of running over `.data` and
   `.bss`. Nothing detects the
-  overflow at run time yet (a fault that stacking causes needs a stack of its
-  own, which a later step may add, ADR 0085); on QEMU `virt`,
+  overflow at run time (a fault that stacking causes needs a stack of its
+  own, which a later step may add, ADR 0085), but the compiler checks that the
+  program's worst path fits in `E` bytes, and rejects the build otherwise (see
+  "The stack bound"); on QEMU `virt`,
   where every region is part of one RAM, an overflow writes into the
   region below, if there is one. The stack cannot be in the code's region
   (`resolve::stack-with-code`), whose origin `_start` needs; a program on
@@ -6278,7 +6296,7 @@ interrupts").
   `comptime` blocks included: `resolve::call-interrupt`. A `sym` operand of
   `asm` may name it, since that gives only its address.
 - It is a function of the C ABI with a symbol by the rules of "Symbols", so
-  `#[export]` and `#[align(N)]` apply. `#[naked]` does not
+  `#[export]`, `#[align(N)]` and `#[stack(N)]` apply. `#[naked]` does not
   (`resolve::misplaced-attribute`): no contract says what state a naked
   handler would find, and it differs on each target. `pub` is accepted, as
   on `entry fn`; since a handler cannot be called, it only decides who may
@@ -6464,8 +6482,8 @@ The panic function runs with what the trap left: `mstatus.MIE` clear on
 riscv32 and, on thumbv7m, at the priority of the exception. It may read
 `mcause`, `mepc`, `IPSR` or `HFSR` with `asm`. If it faults in turn: on
 thumbv7m at `HardFault`'s level the core locks up; on riscv32 the trap entry
-runs again on the same stack, and the panic function with it, for ever if it
-always faults. Default handlers are **not contexts** of ADR 0078, maskable or
+runs again on the same stack and reaches the panic function, whose guard spins
+(see "Panic information"). Default handlers are **not contexts** of ADR 0078, maskable or
 not, since they never return: nothing is left to race with.
 
 ### The trap entry of riscv32 (ADR 0085)
@@ -7010,10 +7028,12 @@ division by zero, an index out of bounds, an `assert`); that call is no edge
 here, though it is one for the shared statics (see "What is a call", above).
 Otherwise a panic function that prints its message through a function that
 reads a slice would be a cycle, since the read has a bounds check. A check that
-fails inside the panic function does re-enter it; that is not bounded by this
-rule. `sym` in `asm`, an `extern fn` and the calls that code generation or LLVM
-inserts (`memcpy`, `__aeabi_uldivmod`) are no edges either, so a cycle through C
-or assembly is not seen.
+fails inside the panic function does re-enter it; the guard of the panic
+function stops that second entry (see "Panic information"). `sym` in `asm`, an
+`extern fn` and the calls that code generation or LLVM inserts (`memcpy`,
+`__aeabi_uldivmod`) are no edges here, so this rule does not see a cycle
+through C or assembly; the stack bound rejects one through assembly and counts
+one through C in the `extern fn`'s `#[stack(N)]` (see "The stack bound").
 
 **The error.** One error for each strongly connected component of the graph that
 holds a cycle (a function that calls itself is one of a single function). It
@@ -7086,6 +7106,281 @@ fn print_u32(n: u32) {
 
 A walk that needs a stack of its own, such as one over a tree, keeps the
 stack in a fixed-size array and an index into it.
+
+### The stack bound (ADR 0121 to 0123)
+
+A program declares the size of its stack in `memory` (see "Memory maps") and
+has no other memory that grows. `erebos build` computes the **worst-case depth**
+of that stack, in bytes, and rejects the program when the depth is more than
+the declared size. Nothing turns the check off.
+
+**When it runs.** On every `erebos build`, after code generation and before the
+link, at the optimization level being built: the frames are those of the code
+that is flashed, so a program may fit with `-O` and not without it, and each
+build is checked at its own level. `--emit=stack` prints the report below;
+`--emit=llvm-ir` and the stages before it do not run the bound. The stage reads
+more than MIR: the frame sizes that code generation measured (ADR 0123 amends
+the rule that analyses read only MIR for this one).
+
+**Frames.** A function's frame is what LLVM reports after register allocation. A
+function with no frame, or that LLVM inlined everywhere, has a frame of 0; its
+callees stay callees of the body. A function that LLVM made and the program does
+not have (a specialized copy, an outlined sequence) is `codegen::llvm`, "LLVM
+made the function `x`, which the stack bound does not know": the bound refuses
+rather than guesses, and no program of the tests makes one. A function's
+**cost** is its frame plus the `N` of its `#[stack(N)]`, and an `extern fn`'s
+cost is its `N`.
+
+**The graph.** A node for each function that runs on the target, with an edge to
+what its reachable blocks use: a call (a method call included); a `critical`
+block, to the two functions of `core` that enter and leave it; a check, to the
+panic function; a `sym` operand that names a function, since assembly may call
+what it names (the bound does not read templates); and the **inserted calls**,
+the calls that code generation or LLVM adds, which no MIR shows (`memcpy`,
+`memmove` and `memset` for aggregates, the 64-bit division, the `__aeabi_`
+functions of thumbv7m). The bound assumes that every function may call each of
+the `#[export]` functions of `core` other than `_start` (the **inserted
+functions**), and adds an edge to each of them from every function except three
+kinds: a naked function and an `extern fn`, which have no code of the compiler's
+around them, and the inserted functions themselves and the functions they reach
+through calls, `critical` blocks and `sym` operands (the **inserted closure**),
+which are `core`'s code written to need no inserted call. An `extern fn` has no
+other edges either: its `N` counts what it calls.
+
+**Cycles.** ADR 0120 rejects every cycle of calls, so a cycle in this graph
+without its panic edges goes through a `sym` operand or an inserted call:
+`analysis::stack-cycle`, one error for each group of functions that reach each
+other, with a label on each call or `sym` of the shortest cycle and a note with
+the cycle ("`ping` and `pong` reach each other through assembly, so the stack
+has no bound"), for these two functions, called from the entry function:
+
+```
+#[naked]
+#[stack(0)]
+fn ping() {
+    asm("j {}", sym pong, options(noreturn));
+}
+
+#[naked]
+#[stack(0)]
+fn pong() {
+    asm("j {}", sym ping, options(noreturn));
+}
+```
+
+Edges into the panic function are not followed for cycles: they are bounded by
+the guard of the panic function (see "Panic information").
+
+**Depth.** The depth of a function is its cost plus the largest depth among the
+targets of its edges. The panic function is the exception: it runs its body once,
+so a panic that happens while one is running (a check in the panic function, or
+in what it calls) costs one more frame of the panic function and nothing more.
+
+**What preempts.** Code that preempts runs on the same stack, under the one level
+of ADR 0078. The worst case is the sum of four parts, `E` being what an
+exception's entry takes (64 bytes on riscv32, the trap entry's save; 36 on
+thumbv7m, the 32 bytes the core stacks and the 4 it may add to align the stack)
+and `D_def` the depth of a default handler (its frame plus the panic function's):
+
+| Part | Bytes |
+|------|-------|
+| thread | the depth of `_start`, which reaches the entry function through `sym` |
+| maskable | the largest, over the maskable handlers `h` the program declares, of `E` plus the depth of `h`, and `E + D_def` too when a maskable word of the vector table has no handler: maskable handlers do not preempt each other |
+| unmaskable | the sum, over the unmaskable handlers the program declares, of `E` plus the handler's depth, and `E + D_def` on thumbv7m when NMI has no handler: each can preempt any code once |
+| faults | the sum of two terms: `E + D_def`, and `E` plus the default handlers' largest frame plus the panic function's frame (without its `N`). A fault can happen anywhere, once before a panic and once more inside the panic function, where the guard stops it |
+
+The sum is pessimistic: the deepest points of the parts rarely meet, and
+`critical` sections, which keep handlers out, are not used to lower it. Priorities
+(after M6) would let it be lower.
+
+**The report.** `erebos build --emit=stack` prints the worst case and the
+declared size, each part with its bytes and its deepest path, and a line for
+each function that runs on the target, `core`'s included, in the order of MIR.
+Built as `main.ers` for riscv32 without `-O`, a program with a `Block` of 32
+words passed by value:
+
+```
+memory {
+    region ROM { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8001_0000, size: 0x1_0000 }
+    code in ROM;
+    data in RAM;
+    stack in RAM { size: 2048 }
+}
+
+struct Block {
+    words: [u32; 32],
+}
+
+fn sum(block: Block) -> u32 {
+    block.words[0] + block.words[31]
+}
+
+entry fn main() -> ! {
+    let block: Block = Block { words: [1; 32] };
+    let total: u32 = sum(block);
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
+```
+
+gives (the lines of `core`'s other functions are left out at `...`):
+
+```
+worst case: 1360 bytes, 2048 declared
+thread context: 752 bytes: `_start` (0) → `main` (544) → `sum` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (112)
+maskable handler context: 272 bytes: exception entry (64) → default handler (0) → `on_panic` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (112)
+unmaskable handler context: 0 bytes
+fault context: 336 bytes: exception entry (64) → default handler (0) → `on_panic` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (112) + exception entry (64) → default handler (0) → `on_panic` (0)
+bodies:
+sum: frame 0, depth 208; calls inserted calls
+main: frame 544, depth 752; calls sum, inserted calls
+on_panic: frame 0, depth 208; calls inserted calls
+...
+core.arch.__erebos_trap: frame 0, stack 64, depth 64
+_start: frame 0, stack 0, depth 752; calls core.arch.__erebos_trap, main
+```
+
+- A path names each function with its cost in parentheses, as a diagnostic names
+  it (`::` between the parts of a path), `inserted` for a call the bound
+  assumes, `exception entry` for `E` and `default handler` for the largest frame
+  of the default handlers. Among the targets of a function's edges with the
+  largest depth, the path takes the first in the order of its edges (statements
+  in order, then the terminator, the inserted calls last); an edge to a function
+  that costs nothing is never taken, so a path ends at the last function that
+  costs something. Every order comes from MIR, so a program gives the same report
+  on every run.
+- A line of the `bodies:` list names the function by its symbol, with the dots of
+  a path of `core` (`core.arch.__erebos_trap`), and gives its frame, its `stack`
+  if it has `#[stack(N)]`, its depth, `not reached` when no part reaches it, and
+  the functions its edges reach (`inserted calls` for the assumed ones). The
+  depth of a function that no part reaches is computed all the same, and is
+  `unknown` when it reaches a function that needs `#[stack(N)]` and has none.
+- Without a `memory` block the line reads `worst case: N bytes`, with no
+  comparison (`erebos build` has `link::no-memory-map` instead).
+- When the bound reports an error (any code below, `analysis::stack-overflow`
+  included), `--emit=stack` fails with those diagnostics and prints no report.
+
+**The overflow.** With a stack of 1024 bytes, the same program is
+`analysis::stack-overflow`, at the `stack` placement, with one note that has a
+line for each part that is not 0:
+
+```
+analysis::stack-overflow
+
+  × the stack may need 1360 bytes, more than the 1024 declared
+   ╭─[main.ers:6:5]
+ 5 │     data in RAM;
+ 6 │     stack in RAM { size: 1024 }
+   ·     ──────┬─────
+   ·           ╰── 1024 bytes declared here
+ 7 │ }
+   ╰────
+  help: declare a stack of at least 1360 bytes, or make the deepest path need less
+
+  the thread context needs 752 bytes: `_start` (0) → `main` (544) → `sum` (0) → `__divdi3` (48,
+  inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4`
+  (112)
+  the maskable handler context needs 272 bytes: ...
+  the fault context needs 336 bytes: ...
+```
+
+The bound is a number the compiler can check, not the use of a particular run: a
+program that fits builds, and one that may not is rejected before the link, with
+the path that needs the most.
+
+### `#[stack(N)]` (ADR 0122)
+
+The compiler cannot measure the stack that three kinds of code use: a naked
+function (no prologue, so LLVM reports a frame of 0 for whatever its assembly
+pushes), an `asm` expression without `options(nostack)` (which may push below
+the stack pointer), and an `extern fn` (code the compiler does not see).
+The program says the number:
+
+```
+#[naked]
+#[stack(64)]
+fn __erebos_trap() -> ! { asm(...) }
+
+#[stack(16)]
+extern fn crc32(data: *const u8, len: usize) -> u32;
+```
+
+- It applies to every function: one with a body (plain, naked, the entry
+  function, the panic function, a handler, a function of a type) and an `extern
+  fn`. On any other item it is `resolve::misplaced-attribute`, given twice
+  `resolve::duplicate-attribute`, without an argument
+  `resolve::attribute-argument`. `N` is a `usize` computed at compile time as the
+  argument of `#[align(N)]` is; any value is valid, 0 and one that is no multiple
+  of the stack alignment included, and a failed computation is the error of that
+  computation. On a function that only compile time runs it has no effect and no
+  diagnostic. `--emit=mir` shows it on the line after `#[align(N)]`.
+- **What `N` counts.** On a function with a body, the stack that the compiler does
+  not measure, added to the frame LLVM measures: for a naked function all the
+  stack its assembly takes below the stack pointer it was entered with, for a
+  function with an `asm` without `nostack` the most that any one execution of
+  those `asm` takes. An `asm` that is not `noreturn` leaves the stack pointer as
+  it found it, so an `asm` in a loop takes the same bytes on each pass. A
+  function that the assembly calls through a `sym` operand is not in `N`: it is a
+  callee, with its own frame. On an `extern fn`, `N` is the whole depth of the
+  external function, its frame and everything it calls, Erebos functions that it
+  calls back included, since the compiler sees none of those calls. The report
+  gives the depth of such an Erebos function, even when no part reaches it, which
+  is the number to add to the C function's own.
+- **Where it is required.** On each function the bound reaches that is naked,
+  that holds an `asm` expression without `nostack` in a block reachable from its
+  start, or that is an `extern fn`: without it, `analysis::missing-stack`, one
+  error for each function in the order of MIR, at the function, "the stack of
+  `crc32` is not known: it is an `extern fn`" (or "it is naked", "it holds `asm`
+  without `nostack`"), with a note that gives the path that reaches it and the
+  help to declare `#[stack(N)]`. A function that nothing reaches needs nothing.
+  With this error or `analysis::stack-cycle`, the worst case is not computed.
+- **Not under `unsafe`.** `N` is the program's word, which nothing checks, as the
+  signature of an `extern fn` is, and calling it already needs `unsafe`.
+- **A cycle through C** (an `extern fn` that calls back the Erebos function that
+  called it) is inside the `N` of the `extern fn`, which counts what it calls
+  back. A restart, a jump to `_start` from C or from the template of an `asm`
+  that names it as text, sets the stack pointer to `__stack_end` again, so what it
+  runs is not on top of the call; the bound does not read it as an edge. The same
+  goes for an Erebos function that only C calls: it is outside every part, and
+  what it uses is inside the `N` of the `extern fn` through which the program
+  enters that C code.
+
+### What the stack bound does not cover
+
+- A handler the program declares that raises its own vector again, the likeliest
+  being a fault handler that faults: the trap entry runs again on the same stack,
+  without end, and the guard does not stop it, since the fault enters the declared
+  handler and not a default one. A fault handler should do nothing that can
+  fault. Handlers of different priorities, or that enable interrupts, are outside
+  the one level of ADR 0078 too.
+- A wrong `#[stack(N)]` or a wrong declared stack size: the bound rests on them.
+- A call through a function pointer: the language has none yet (ADR 0123 says
+  that such a call will be an edge to every function of a compatible signature
+  whose address is taken).
+- A tighter number: the bound adds the parts, assumes the inserted calls from
+  every function and counts a callee that LLVM inlined again at `-O`. The bound
+  depends on LLVM's register allocation, so an LLVM upgrade may move it.
+
+**What the tests check against the machine.** For every program of
+`tests/e2e/`, on both targets at both levels, every call and every jump to
+another function's symbol in `llvm-objdump -d` of the executable is an edge of the
+report's lines, or leaves a function whose `#[stack(N)]` covers it. At `-O0` the
+edge is the direct one of the caller's line; at `-O` it may be reached through
+other lines, since inlining makes the calls of an inlined function appear in its
+caller. The calls that C makes are inside the `extern fn`'s `N`, and a jump to
+`_start` is a restart, so neither is compared; nor are the calls that the
+compiler's default handlers (`__erebos_unhandled*`) make to the panic function,
+since they are in no line of the report (the programs that fault exercise that
+path at run time). A second oracle runs a program on
+QEMU that fills the unused stack with a pattern, runs its deepest path while a
+timer's handler preempts it, and counts how much of the pattern the path
+overwrote: the number is at most the bound, and at least the 512 bytes of an
+array on the path. A fault that reaches a default handler and the panic function
+instead of a check is a second program.
 
 ## Peripherals (ADR 0058)
 
@@ -8573,6 +8868,25 @@ clang's.
 - Each check costs about 28 bytes of read-only data when the handler
   takes the parameter, and nothing when it does not.
 
+**A second panic stops (ADR 0121).** The compiler starts the panic function
+with a **guard**: it reads a flag, `__erebos_panicking`, a byte in `.bss` that
+it defines, and when the flag is set it spins in a loop of one branch, with
+interrupts as they are; otherwise it sets the flag and the body runs as
+written. Both accesses are volatile. So the panic function runs its body at
+most once, whichever way it was entered (a check, a default handler or an
+explicit call): a check that fails inside the body, or in what it calls, a
+fault in the body (see "Vectors without a handler"), or an explicit call from
+the body, does not run it again; it spins. The body cannot report the second
+panic, since it never learns of it. A handler that interrupts the spin still
+runs. On riscv32 a trap clears `MIE`, so a second panic reached through a
+fault spins with interrupts masked, which nothing but a reset ends; one
+reached through a check in code that runs with interrupts enabled does not. The
+compiler marks the panic function `noinline`, so that one copy of it exists,
+with one guard and one frame. `--emit=llvm-ir` shows the flag and the guard,
+and `--emit=mir` neither. The stack bound counts a second entry as the panic
+function's own frame and nothing more (see "The stack bound"). There is no
+hook for what a second panic does other than spin (a reset, a breakpoint).
+
 **At compile time** nothing changes: a failed check fails the evaluation
 with `eval::panic` and its cause, or `eval::assertion-failed` for an
 `assert` (see "Compile-time execution"); the panic function's body never
@@ -8596,20 +8910,26 @@ defining `extern fn`s and `extern static`s; it may be repeated. `--target`
 names the machine to build for, `riscv32imac-unknown-none-elf` (the default)
 or `thumbv7m-none-eabi` (see "Targets"); it may be given once, and it needs
 a name. `--emit` prints a compiler stage instead: `tokens`, `ast`, `hir`,
-`typeck`, `mir`, `linker-script` or `llvm-ir`, those of the chosen target.
+`typeck`, `mir`, `linker-script`, `llvm-ir` or `stack`, those of the chosen target.
 
 - Building an executable and `linker-script` need the program's `memory`
   block (`link::no-memory-map`, see "Memory maps"); the other stages do
   not. `linker-script` prints the script `ld.lld` is given.
+- `stack` prints the report of the stack bound (see "The stack bound"): it
+  compiles the program to an object in memory, writes no file, and fails with
+  the bound's diagnostics instead of printing when the bound finds an error. It
+  follows the level, `-O` or not, as `llvm-ir` does, and needs no `memory`
+  block.
 - `tokens` and `ast` show the root file alone, before any module file is
   read; the later stages show the whole program.
 - The dumps leave `core` out: `mir` and `llvm-ir` show a function of `core`
   the program calls as a declaration (`extern fn memcpy(...)`,
-  `declare ptr @memcpy`), and the others not at all.
+  `declare ptr @memcpy`), and the others not at all. `stack` is the exception:
+  its report lists `core`'s functions, since the paths go through them.
 - `typeck` and `mir` show a handler as `interrupt fn name() -> () at
   SysTick`, and `mir` shows `critical_enter _n` and `critical_exit _n` for a
-  `critical` block and `#[align(N)]` on the line before a function that has
-  it. `llvm-ir` shows the vector table, as `module asm`, and the default
+  `critical` block, and `#[align(N)]` and `#[stack(N)]` on the lines before a
+  function that has them. `llvm-ir` shows the vector table, as `module asm`, and the default
   handlers with their information only for a program that declares a handler
   (ADR 0085); every executable has them.
 - `hir` and `typeck` show the items outside the root module by their
@@ -8746,7 +9066,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`, `end`); a module of the root module named `llvm` or `rt`, or a struct, bit-field struct, enum or peripheral type of the root module named `llvm`; a function of a type named `_start` or with a name starting with `__`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included); any attribute on an `impl` block; `#[export]` on a function of a type |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, `#[stack(N)]` on anything but a function, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included); any attribute on an `impl` block; `#[export]` on a function of a type |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]`, or `#[copy]` with `#[linear]` |
@@ -8905,8 +9225,11 @@ Every error has a stable code, shown with the message.
 | `analysis::unprotected-peripheral` | a place in the thread context, outside `critical`, naming a peripheral that the handler context also reaches, by its own name or by one whose bytes meet it (ADR 0115) |
 | `analysis::unmaskable-peripheral` | a place in the context of an unmaskable handler, naming a peripheral that another context also reaches, by its own name or by one whose bytes meet it; being inside `critical` changes nothing (ADR 0115) |
 | `analysis::recursion` | a cycle in the call graph of the code that runs on the target: a function that reaches itself through calls, directly or through others, in a body the compiler builds for the target that compile time does not alone reach; one error per strongly connected component, naming the functions of one cycle, with a label on each call of it and the cycle in a note; a check that calls the panic function is no call here; a function that only a constant, a static, an array length (written without the `comptime` keyword) or a top-level `comptime { }` item calls is exempt; one that only a `comptime` expression calls is not, inside a function or inside an array length (ADR 0120) |
+| `analysis::stack-overflow` | the worst-case stack of the program is more than the stack `memory` declares; found by `erebos build` and `--emit=stack`, after code generation, at the `stack` placement, with the bytes of each context and its deepest path in a note; not reported with one of the next two (ADR 0123) |
+| `analysis::missing-stack` | a function the stack bound reaches that is naked, holds an `asm` without `nostack`, or is an `extern fn`, and has no `#[stack(N)]`; one error per function, with the path that reaches it in a note (ADR 0122, 0123) |
+| `analysis::stack-cycle` | a cycle in the stack bound's graph, through a `sym` operand or a call the compiler inserts; one error per group of functions that reach each other, with a label on each call or `sym` of the shortest cycle and the cycle in a note (ADR 0123) |
 | `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |
-| `codegen::llvm` | LLVM rejected the target, or reported an error that is not about inline assembly; an environment problem |
+| `codegen::llvm` | LLVM rejected the target, or reported an error that is not about inline assembly; an environment problem; or LLVM made a function the program does not have (a specialized copy, an outlined sequence), which the stack bound cannot place (ADR 0123) |
 | `link::no-memory-map` | building an executable, or printing its linker script, for a program without a `memory` block |
 | `link::region-overflow` | what is placed in a region does not fit in it, found by the linker |
 

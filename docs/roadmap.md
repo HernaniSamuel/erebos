@@ -10,7 +10,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** ✅ | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
-| **M5** (M5.1 to M5.10 ✅; M5.11 before M6) | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118); `unsafe` for what the checks do not cover (ADR 0119); no recursion in code that runs on the target (ADR 0120). |
+| **M5** (M5.1 to M5.11 ✅) | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`); references returned when tied to the one reference parameter (ADR 0118); `unsafe` for what the checks do not cover (ADR 0119); no recursion in code that runs on the target (ADR 0120); the stack bound (ADR 0121 to 0123). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
 
 ## M2 steps
@@ -114,7 +114,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.8** ✅ Returned references | a function returns a reference tied to its one reference parameter, or to read-only static data when it has none; `&mut self -> &mut Self` chains and getters of non-copy parts (ADR 0118); the migration of the raw returns, with a recount | a ring buffer with `peek` and `slot`, a UART configured by a chain, a decoder walking a buffer, panic reasons from `reason(r) -> &[u8]`, on both targets |
 | **M5.9** ✅ `unsafe` | `unsafe { }` and `unsafe fn`; accesses through raw pointers, `asm`, `extern fn` calls, `extern static` accesses and calls to an `unsafe fn` need `unsafe`; `enable_interrupts` an `unsafe fn` (ADR 0119); every program migrated, with a count | the e2e programs with `unsafe`, the same output, and a safe interface built on `unsafe`, on both targets |
 | **M5.10** ✅ No recursion | a cycle in the run-time call graph is an error, with the cycle in the diagnostic; the analysis in `src/analysis/` over MIR; the e2e programs that recurse migrated (the compiler counts 52 `analysis::recursion` errors, one per function that calls itself, on the tree before the migration: 45 in `tests/e2e/` and 7 in `tests/ui/`; 43 programs repeated a recursive `print_u32` or `print_u64`: one shared copy in each `tests/boards/` module); ADR 0120 | the e2e programs, the same output, and a rejected program for direct and mutual recursion, on both targets |
-| **M5.11** Stack bound | the worst-case stack depth of the program, computed after code generation and before the link, checked against the stack declared in `memory` (ADR 0057); frame sizes from the backend; `#[stack(N)]` for what the compiler cannot measure (`asm`, `#[naked]`, `extern fn`); the handlers' share; ADR to write, amending the layer rule | a program whose stack fits, and one whose stack does not fit, rejected with the path of calls that needs the most, on both targets at both levels |
+| **M5.11** ✅ Stack bound | the worst-case stack depth of the program, computed after code generation and before the link, checked against the stack declared in `memory` (ADR 0057); frame sizes from the backend; `#[stack(N)]` for what the compiler cannot measure (`asm`, `#[naked]`, `extern fn`); the handlers' share; a second panic stops in a guard of the panic function (ADR 0121); ADR 0122 and 0123, the second amending the layer rule; the 231 attributes the migration added are counted under "After M5" | a program whose stack fits, and one whose stack does not fit, rejected with the path of calls that needs the most, on both targets at both levels |
 
 Before M6, because the call graph is closed now (no function pointers, no heap)
 and the features that open it (function pointers, M6's generics) are designed
@@ -125,8 +125,9 @@ compiled for the target is a root unless compile time reaches it, not only
 `entry`, handlers, `panic fn` and `#[export]` functions; and a `comptime`
 expression inside a function or an array length exempts nothing (the evaluator
 drops its body), where the bullets say compile-time recursion stays allowed.
-M5.11 is not planned yet: it opens new ground (a check that needs the backend),
-so its design conversation is the one worth running on Opus.
+M5.11 is done: ADR 0121 to 0123 (Accepted) settled it, and
+`.claude/plans/M5.11.md` records the steps. Where they changed the bullets
+below, the ADRs win.
 
 Agreed in conversation (2026-11-16), settled by ADR 0120 (the bullets below
 are the conversation as it was; the ADR wins where they differ):
@@ -164,7 +165,8 @@ are the conversation as it was; the ADR wins where they differ):
   checked) or reads the machine code. It reads more than MIR, so it amends the
   rule of ADR 0003, 0028 and 0093 that analyses read only MIR; the ADR says so.
 
-Left for the planner of M5.11:
+Left for the planner of M5.11 (settled by ADR 0121 to 0123; the bullets are the
+question as it was):
 
 - Nesting of handlers in the worst case: on thumbv7m the hardware stacks 32
   bytes per exception and handlers of different priorities can preempt; the
@@ -719,6 +721,27 @@ ADRs:
     `hir`, `ast` and `typeck` stages), nor the snippets embedded in `tests/*.rs`
     and the `print_u64` that `tests/common/generator.rs` writes into every
     generated program (not files of these directories; step 3 rewrote it).
+  - `#[stack(N)]` and `nostack`, counted after M5.11 (ADR 0122, "Programs
+    migrated"; the plan `.claude/plans/M5.11.md`, steps 4 and 7, has the method).
+    The migration added 231 `#[stack(N)]` attributes: 5 in `rt/` (`_start` on both
+    targets, the riscv32 trap entry, `__aeabi_uldivmod` and `__aeabi_ldivmod`), 220 in
+    28 programs of `tests/e2e/` and 6 in `tests/elf.rs`. By kind: 211 on an
+    `extern fn` (208 in `tests/e2e/` in 24 programs, 3 in `tests/elf.rs`), 17 on a
+    naked function (5 in `rt/`, 9 in `tests/e2e/`, 3 in `tests/elf.rs`) and 3 on the
+    `main` of the programs whose `asm` pushes (`handler_registers_*`,
+    `handler_stack_armv7m`). ADR 0122 expected about 210. The generator of ADR 0068
+    writes 10 more in every generated program, from one line of
+    `tests/common/generator.rs`. The numbers of an `extern fn` come from
+    `clang -fstack-usage` on its C definition at both levels, the larger one, plus
+    the depth of the Erebos functions it calls back as the report gives them: step 7
+    replaced 79 numbers (77 in `tests/e2e/`, 2 in `tests/elf.rs`) that step 4
+    had set with 256 bytes for those functions. 25 lines gained `nostack`, where
+    the template does not touch the stack (`tests/e2e/`, `tests/e2e.rs`,
+    `tests/elf.rs`). `tests/boards/`, `tests/svd/chips/`, `tests/layout/` and the
+    snippets of `tests/rejected.rs` needed none. The bound rejected no program for
+    a missing number or a stack too small (the boards declare 1 MiB), and the
+    machine's calls of the 167 programs of `tests/e2e/` (524 builds, each on the
+    targets it runs on, at both levels) are all edges of the report's lines.
   - Marking the dereference of a raw pointer, since the language had no
     `unsafe` (ADR 0030): moved here from M5, as ADR 0117 says, whatever the
     counts. The question was whether what remains is rare and local enough to
@@ -1664,9 +1687,45 @@ Documentation owed:
   Consequences): the re-entry of the panic function, cycles through C and
   assembly, and a recursive function that compile time reaches and only C or
   `sym` calls. The rule is in `docs/reference.md`, "No recursion".
-- **Next: M5.11** (the stack bound; to be planned with `/plan-step`, see the
-  M5 steps), and then **M6** (types as values and
+- **M5.11 done: the stack bound.** Every `erebos build` computes the worst-case
+  depth of the program's stack and rejects the program when it is more than the
+  stack `memory` declares (ADR 0123). The frames are LLVM's, measured per function
+  from the `"warn-stack-size"` warnings the diagnostic handler keeps (`codegen`
+  records them; no dependency, no `.stack_sizes`); the graph is MIR's calls,
+  `critical`, checks and `sym` operands, plus the calls MIR does not show, assumed
+  from every function to each `#[export]` function of `core` (`Mir::inserted`);
+  the depth has two states, before a panic and while panicking; and the total is
+  the thread, the deepest maskable handler, every unmaskable one and the faults.
+  `analysis::stack-overflow` names the path that needs the most;
+  `analysis::missing-stack` asks for `#[stack(N)]` on what the compiler cannot
+  measure (a naked function, an `asm` without `nostack`, an `extern fn`; ADR 0122,
+  a plain attribute, not under `unsafe`); `analysis::stack-cycle` rejects a cycle
+  through `sym` or an inserted call. The pass is `src/analysis/stack.rs`, the one
+  analysis that also reads what code generation measured, as plain numbers the
+  driver passes it; `erebos build --emit=stack` prints its report. The panic
+  function starts with a guard (a flag in `.bss`), so a second panic spins and the
+  panic function's body runs once (ADR 0121). The oracles of ADR 0123 run in
+  `tests/stack.rs`: every call of the executables' machine code is an edge of the
+  report (at `-O0` direct, at `-O` through other lines, which inlining makes
+  sound), and a program on QEMU measures the stack it used, through a check and
+  through a fault, and it is at most the bound and at least 512 bytes. The
+  migration is counted under "After M5". `PANICS` rose in `src/codegen/mod.rs` (the
+  guard) and `src/analysis/stack.rs` (the check of the inserted closure), each with
+  its reason in the plan. The rule is in `docs/reference.md`, "The stack bound".
+  Left open: priorities and nested maskable handlers, which would make the sum of
+  the parts tighter (after M6); function pointers, which ADR 0123 says will be an
+  edge to every function of a compatible signature whose address is taken; the
+  program's word in `#[stack(N)]`, which no oracle of the program can see (a wrong
+  number, in `rt/`, a board or an `extern fn`, makes the bound wrong, as a wrong
+  declared size does) and which a later tool could measure better than `clang
+  -fstack-usage` by hand; a hook for what a second panic does other than spin;
+  a guard for a declared fault handler that faults, which leaves ADR 0078's model;
+  the machine's calls that default handlers make, which the oracle does not
+  compare as edges because they are in no line of the report (the fault programs
+  exercise that path at run time); and unsafe attributes (ADR 0119).
+- **Next: M6** (types as values and
   `comptime` parameters: generics in the Zig
   model, monomorphized, ADR 0027), after M5 (moves, ownership, references,
-  returned references, methods and `unsafe`), whose steps and model are above.
-  What M6 must settle is listed under "M6" in the pending decisions.
+  returned references, methods, `unsafe`, no recursion and the stack bound), whose
+  steps and model are above. What M6 must settle is listed under "M6" in the
+  pending decisions.
