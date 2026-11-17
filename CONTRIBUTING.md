@@ -80,7 +80,16 @@ instead of applying it; agents are held to it when they finish
   `expect-exit` must run forever. Any CPU exception fails the test, unless
   the program declares `// takes-exceptions: yes` (ADR 0088): it raises
   exceptions on purpose, needs `expect-exit` too, and only a QEMU guest
-  error fails it.
+  error fails it. `// measures-stack: yes` (ADR 0123) marks a program that
+  prints one line `stack <N>`, the stack it measured, instead of
+  `expect-output` lines; `tests/stack.rs` reads it.
+  The stack bound (ADR 0122, 0123) rejects a program that reaches an
+  `extern fn`, a naked function or an `asm` without `nostack` that has no
+  `#[stack(N)]`. `N` is the stack the function takes, counting what it calls:
+  for C, the larger of `clang -S -fstack-usage` at `-O0` and `-O2` with the
+  flags the harness compiles with, plus the frames of what it calls; for an
+  `asm`, the bytes its template pushes. `nostack` goes on an `asm` that pushes
+  nothing.
   A program reaches its machine through `mod board;` (ADR 0077): the
   harness copies it into a work directory with the target's board module,
   `tests/boards/<target>.ers`, as `board.ers`, which holds the `memory`
@@ -102,7 +111,7 @@ instead of applying it; agents are held to it when they finish
   undefined behavior, so a difference means the generated IR is wrong.
 - `erebos build <file> [-O] [--target <name>] --emit=<stage>` prints any
   stage (`tokens`, `ast`, `hir`, `typeck`, `mir`, `linker-script`,
-  `llvm-ir`), which is the quickest way to debug. Of these, only
+  `llvm-ir`, `stack`), which is the quickest way to debug. Of these, only
   `linker-script` needs a `memory` block, so a ui test needs one only at
   that stage.
 - **Layout against C** (`tests/c_layout.rs`) compiles the structs of
@@ -124,6 +133,14 @@ instead of applying it; agents are held to it when they finish
   `EREBOS_READELF`, or the one in the LLVM archive
   (`C:\llvm-22\bin\llvm-readelf.exe`). Its checks run for every target,
   with the target's stack alignment and reset entry.
+- **Stack bound** (`tests/stack.rs`, ADR 0123) checks the bound against the
+  machine, on both targets at both levels. One oracle reads `llvm-objdump -d`
+  of every program of `tests/e2e/`: each call and jump must be an edge of the
+  `--emit=stack` report or covered by a `#[stack(N)]`. The other runs the
+  `stack_measured*` programs on QEMU, which fill the stack with a pattern,
+  and requires the bytes they overwrote to be at most the bound. It needs
+  `llvm-objdump`, found like clang: `EREBOS_OBJDUMP`, or the one in the LLVM
+  archive, and QEMU.
 - **Reproducible builds** (`tests/reproducible.rs`) compile a program twice
   at each level, for every target, and require identical executables
   (ADR 0027).

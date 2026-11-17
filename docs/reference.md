@@ -7249,8 +7249,8 @@ _start: frame 0, stack 0, depth 752; calls core.arch.__erebos_trap, main
   assumes, `exception entry` for `E` and `default handler` for the largest frame
   of the default handlers. Among the targets of a function's edges with the
   largest depth, the path takes the first in the order of its edges (statements
-  in order, then the terminator, the inserted calls last); an edge to a function
-  that costs nothing is never taken, so a path ends at the last function that
+  in order, then the terminator, the inserted calls last); an edge whose
+  target has depth 0 is never taken, so a path ends at the last function that
   costs something. Every order comes from MIR, so a program gives the same report
   on every run.
 - A line of the `bodies:` list names the function by its symbol, with the dots of
