@@ -1,0 +1,99 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/stack_report.ers
+---
+--- stack ---
+worst case: 1120 bytes, 4096 declared
+thread context: 512 bytes: `_start` (0) → `main` (288) → `divide` (16) → `on_panic` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (112)
+maskable handler context: 272 bytes: exception entry (64) → `tick` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (112)
+unmaskable handler context: 0 bytes
+fault context: 336 bytes: exception entry (64) → default handler (0) → `on_panic` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (112) + exception entry (64) → default handler (0) → `on_panic` (0)
+bodies:
+tick: frame 0, depth 208; calls inserted calls
+leaf: frame 0, stack 8, depth 8
+outside: frame 0, stack 48, depth 48
+divide: frame 16, depth 224; calls on_panic, inserted calls
+consume: frame 0, depth 208; calls inserted calls
+never_called: frame 0, depth 208, not reached; calls inserted calls
+main: frame 288, depth 512; calls consume, divide, outside, leaf, inserted calls
+on_panic: frame 0, depth 208; calls inserted calls
+memcpy: frame 32, depth 32
+memmove: frame 32, depth 64; calls memcpy
+memset: frame 32, depth 32
+__aeabi_memcpy: frame 16, depth 48; calls memcpy
+__aeabi_memcpy4: frame 16, depth 48; calls memcpy
+__aeabi_memcpy8: frame 16, depth 48; calls memcpy
+__aeabi_memmove: frame 16, depth 80; calls memmove
+__aeabi_memmove4: frame 16, depth 80; calls memmove
+__aeabi_memmove8: frame 16, depth 80; calls memmove
+__aeabi_memset: frame 16, depth 48; calls memset
+__aeabi_memset4: frame 16, depth 48; calls memset
+__aeabi_memset8: frame 16, depth 48; calls memset
+__aeabi_memclr: frame 16, depth 48; calls memset
+__aeabi_memclr4: frame 16, depth 48; calls memset
+__aeabi_memclr8: frame 16, depth 48; calls memset
+core.builtins.__erebos_udivmoddi4: frame 112, depth 112
+core.builtins.__erebos_udivmod64: frame 48, depth 160; calls core.builtins.__erebos_udivmoddi4
+core.builtins.__erebos_magnitude64: frame 16, depth 16
+__udivdi3: frame 16, depth 176; calls core.builtins.__erebos_udivmod64
+__umoddi3: frame 16, depth 176; calls core.builtins.__erebos_udivmod64
+__divdi3: frame 48, depth 208; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+__moddi3: frame 48, depth 208; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+core.builtins.__erebos_divmoddi4: frame 80, depth 288, not reached; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmoddi4, inserted calls
+core.arch.compiler_fence: frame 0, depth 208, not reached; calls inserted calls
+core.arch.fence: frame 0, depth 208, not reached; calls inserted calls
+core.arch.enable_interrupts: frame 0, depth 208, not reached; calls inserted calls
+core.arch.wait_for_interrupt: frame 0, depth 208, not reached; calls inserted calls
+core.arch.interrupts_enabled: frame 0, depth 208, not reached; calls inserted calls
+core.arch.__critical_enter: frame 0, depth 208, not reached; calls inserted calls
+core.arch.__critical_exit: frame 0, depth 208, not reached; calls inserted calls
+core.arch.__erebos_trap: frame 0, stack 64, depth 64
+_start: frame 0, stack 0, depth 512; calls core.arch.__erebos_trap, main
+--- stack -O ---
+worst case: 496 bytes, 4096 declared
+thread context: 112 bytes: `_start` (0) → `main` (16) → `consume` (0) → `__divdi3` (32, inserted) → `core::builtins::__erebos_udivmod64` (32) → `core::builtins::__erebos_udivmoddi4` (32)
+maskable handler context: 160 bytes: exception entry (64) → `tick` (0) → `__divdi3` (32, inserted) → `core::builtins::__erebos_udivmod64` (32) → `core::builtins::__erebos_udivmoddi4` (32)
+unmaskable handler context: 0 bytes
+fault context: 224 bytes: exception entry (64) → default handler (0) → `on_panic` (0) → `__divdi3` (32, inserted) → `core::builtins::__erebos_udivmod64` (32) → `core::builtins::__erebos_udivmoddi4` (32) + exception entry (64) → default handler (0) → `on_panic` (0)
+bodies:
+tick: frame 0, depth 96; calls inserted calls
+leaf: frame 0, stack 8, depth 8
+outside: frame 0, stack 48, depth 48
+divide: frame 0, depth 96; calls on_panic, inserted calls
+consume: frame 0, depth 96; calls inserted calls
+never_called: frame 0, depth 96, not reached; calls inserted calls
+main: frame 16, depth 112; calls consume, divide, outside, leaf, inserted calls
+on_panic: frame 0, depth 96; calls inserted calls
+memcpy: frame 0, depth 0
+memmove: frame 0, depth 0; calls memcpy
+memset: frame 0, depth 0
+__aeabi_memcpy: frame 0, depth 0; calls memcpy
+__aeabi_memcpy4: frame 0, depth 0; calls memcpy
+__aeabi_memcpy8: frame 0, depth 0; calls memcpy
+__aeabi_memmove: frame 0, depth 0; calls memmove
+__aeabi_memmove4: frame 0, depth 0; calls memmove
+__aeabi_memmove8: frame 0, depth 0; calls memmove
+__aeabi_memset: frame 0, depth 0; calls memset
+__aeabi_memset4: frame 0, depth 0; calls memset
+__aeabi_memset8: frame 0, depth 0; calls memset
+__aeabi_memclr: frame 0, depth 0; calls memset
+__aeabi_memclr4: frame 0, depth 0; calls memset
+__aeabi_memclr8: frame 0, depth 0; calls memset
+core.builtins.__erebos_udivmoddi4: frame 32, depth 32
+core.builtins.__erebos_udivmod64: frame 32, depth 64; calls core.builtins.__erebos_udivmoddi4
+core.builtins.__erebos_magnitude64: frame 0, depth 0
+__udivdi3: frame 16, depth 80; calls core.builtins.__erebos_udivmod64
+__umoddi3: frame 0, depth 64; calls core.builtins.__erebos_udivmod64
+__divdi3: frame 32, depth 96; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+__moddi3: frame 0, depth 64; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+core.builtins.__erebos_divmoddi4: frame 32, depth 128, not reached; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmoddi4, inserted calls
+core.arch.compiler_fence: frame 0, depth 96, not reached; calls inserted calls
+core.arch.fence: frame 0, depth 96, not reached; calls inserted calls
+core.arch.enable_interrupts: frame 0, depth 96, not reached; calls inserted calls
+core.arch.wait_for_interrupt: frame 0, depth 96, not reached; calls inserted calls
+core.arch.interrupts_enabled: frame 0, depth 96, not reached; calls inserted calls
+core.arch.__critical_enter: frame 0, depth 96, not reached; calls inserted calls
+core.arch.__critical_exit: frame 0, depth 96, not reached; calls inserted calls
+core.arch.__erebos_trap: frame 0, stack 64, depth 64
+_start: frame 0, stack 0, depth 112; calls core.arch.__erebos_trap, main

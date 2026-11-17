@@ -1,0 +1,51 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/stack_report_overflow.ers
+---
+--- errors ---
+analysis::stack-overflow
+
+  × the stack may need 848 bytes, more than the 16 declared
+    ╭─[stack_report_overflow.ers:12:5]
+ 11 │     data in RAM;
+ 12 │     stack in RAM { size: 16 }
+    ·     ──────┬─────
+    ·           ╰── 16 bytes declared here
+ 13 │ }
+    ╰────
+  help: declare a stack of at least 848 bytes, or make the deepest path need less
+
+  the thread context needs 240 bytes: `_start` (0) → `main` (16) → `divide` (16) → `on_panic` (0)
+  → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) →
+  `core::builtins::__erebos_udivmoddi4` (112)
+  the maskable handler context needs 272 bytes: exception entry (64) → default handler (0) →
+  `on_panic` (0) → `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) →
+  `core::builtins::__erebos_udivmoddi4` (112)
+  the fault context needs 336 bytes: exception entry (64) → default handler (0) → `on_panic` (0) →
+  `__divdi3` (48, inserted) → `core::builtins::__erebos_udivmod64` (48) →
+  `core::builtins::__erebos_udivmoddi4` (112) + exception entry (64) → default handler (0) →
+  `on_panic` (0)
+--- errors -O ---
+analysis::stack-overflow
+
+  × the stack may need 480 bytes, more than the 16 declared
+    ╭─[stack_report_overflow.ers:12:5]
+ 11 │     data in RAM;
+ 12 │     stack in RAM { size: 16 }
+    ·     ──────┬─────
+    ·           ╰── 16 bytes declared here
+ 13 │ }
+    ╰────
+  help: declare a stack of at least 480 bytes, or make the deepest path need less
+
+  the thread context needs 96 bytes: `_start` (0) → `main` (0) → `divide` (0) → `on_panic` (0) →
+  `__divdi3` (32, inserted) → `core::builtins::__erebos_udivmod64` (32) →
+  `core::builtins::__erebos_udivmoddi4` (32)
+  the maskable handler context needs 160 bytes: exception entry (64) → default handler (0) →
+  `on_panic` (0) → `__divdi3` (32, inserted) → `core::builtins::__erebos_udivmod64` (32) →
+  `core::builtins::__erebos_udivmoddi4` (32)
+  the fault context needs 224 bytes: exception entry (64) → default handler (0) → `on_panic` (0) →
+  `__divdi3` (32, inserted) → `core::builtins::__erebos_udivmod64` (32) →
+  `core::builtins::__erebos_udivmoddi4` (32) + exception entry (64) → default handler (0) →
+  `on_panic` (0)

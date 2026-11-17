@@ -41,6 +41,7 @@ pub enum Stage {
     Mir,
     LinkerScript,
     LlvmIr,
+    Stack,
 }
 
 impl Stage {
@@ -52,6 +53,7 @@ impl Stage {
         Stage::Mir,
         Stage::LinkerScript,
         Stage::LlvmIr,
+        Stage::Stack,
     ];
 
     pub fn name(self) -> &'static str {
@@ -63,6 +65,7 @@ impl Stage {
             Stage::Mir => "mir",
             Stage::LinkerScript => "linker-script",
             Stage::LlvmIr => "llvm-ir",
+            Stage::Stack => "stack",
         }
     }
 }
@@ -141,6 +144,26 @@ pub fn dump(
                 None
             }
         },
+        // The report shows `core`, which the paths go through, and the frames
+        // are those of the object (ADR 0123).
+        FrontEnd::Mir(mir) if stage == Stage::Stack => {
+            match codegen::emit_frames(&mir, target, opt) {
+                Ok(frames) => {
+                    let report = analysis::bound(
+                        &mir,
+                        target,
+                        &frames.bodies,
+                        frames.default_handlers,
+                        &mut diags,
+                    );
+                    Some(report.render(&mir, &frames.bodies))
+                }
+                Err(failures) => {
+                    failures.into_iter().for_each(|diag| diags.push(diag));
+                    None
+                }
+            }
+        }
         FrontEnd::Mir(mir) => match codegen::emit_llvm_ir(&mir, target, opt) {
             Ok(ir) => Some(ir),
             Err(failures) => {
@@ -600,7 +623,8 @@ enum FrontEnd {
 /// stage. The `tokens` and `ast` stages show the root file alone: the
 /// files of its modules are read after it is parsed, and `core`'s after
 /// them (ADR 0049, 0052). Every later dump leaves `core` out, and so does
-/// the MIR returned with a `stop`, for the `llvm-ir` dump. Type checking
+/// the MIR returned with a `stop`, for the `llvm-ir` dump, except for the
+/// `stack` stage, whose report shows `core` (ADR 0123). Type checking
 /// checks the memory map against `target` (ADR 0073).
 fn front_end(
     program: &Program,
@@ -643,7 +667,7 @@ fn front_end(
     if diags.has_errors() {
         return FrontEnd::Failed;
     }
-    if stop.is_some() {
+    if stop.is_some() && stop != Some(Stage::Stack) {
         mir.leave_out(&core);
     }
     if stop == Some(Stage::Mir) {

@@ -2,7 +2,7 @@
 //!
 //! Each file is compiled up to a stage and the stage's dump (or the rendered
 //! diagnostics) is snapshotted. Header comments on the first lines pick the
-//! stage (`// emit: <stage>`; otherwise the last stage is used) and, with
+//! stage (`// emit: <stage>`; otherwise `llvm-ir` is used) and, with
 //! `// opt: both`, also snapshot the stage with optimizations (`-O`). The
 //! header `// target: <name>` picks the target (default: riscv32); an unknown
 //! name fails the test (ADR 0073).
@@ -44,7 +44,7 @@ fn compile(path: &Path) -> String {
         .iter()
         .find_map(|line| line.strip_prefix("// emit:"))
         .map(|name| name.trim().parse::<Stage>().unwrap())
-        .unwrap_or(*Stage::ALL.last().unwrap());
+        .unwrap_or(Stage::LlvmIr);
     let levels: &[OptLevel] = if headers.contains(&"// opt: both") {
         &[OptLevel::None, OptLevel::Speed]
     } else {

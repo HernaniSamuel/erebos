@@ -41,19 +41,20 @@ use board::{exit, print_u64, putc};
 
 // `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
 // from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
-// the C functions it calls. Where C calls an Erebos function, 256 more, until
-// `--emit=stack` gives that function's depth.
-#[stack(288)]
+// the C functions it calls. Where C calls an Erebos function, or one of `core`'s
+// such as `memcpy`, that function's depth from `--emit=stack`, the largest of the
+// four builds (the number stays the program's word, ADR 0122).
+#[stack(208)]
 extern fn c_udiv(a: u64, b: u64) -> u64;
-#[stack(288)]
+#[stack(208)]
 extern fn c_urem(a: u64, b: u64) -> u64;
-#[stack(288)]
+#[stack(240)]
 extern fn c_sdiv(a: i64, b: i64) -> i64;
-#[stack(288)]
+#[stack(240)]
 extern fn c_srem(a: i64, b: i64) -> i64;
-#[stack(288)]
+#[stack(208)]
 extern fn c_udivmod(a: u64, b: u64, rem: *mut u64) -> u64;
-#[stack(288)]
+#[stack(240)]
 extern fn c_sdivmod(a: i64, b: i64, rem: *mut i64) -> i64;
 
 fn print_i64(n: i64) {

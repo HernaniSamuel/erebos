@@ -1,0 +1,62 @@
+// emit: stack
+// opt: both
+// The report of the stack bound (ADR 0123): the worst case against the
+// declared stack, the four parts with their deepest paths, and a line for
+// every body, `core` included, in MIR's order. This program has a maskable
+// handler, a check (`divide` calls the panic function), a call that takes an
+// aggregate by value, the inserted calls every body may make (the deepest of
+// them ends each path), a naked function and an `extern fn`, both with
+// `#[stack(N)]`, a function nothing calls ("not reached") and the default
+// handlers of the faults. The frames differ with the level, so it is
+// snapshotted at both. The thumbv7m counterpart is
+// `stack_report_thumbv7m.ers`.
+use core::arch::Vector;
+
+memory {
+    region ROM { origin: 0x0800_0000, size: 0x1_0000 }
+    region RAM { origin: 0x2000_0000, size: 0x1_0000 }
+    code in ROM;
+    data in RAM;
+    stack in RAM { size: 4096 }
+}
+
+static mut TICKS: u32 = 0;
+
+struct Block {
+    words: [u32; 16],
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    TICKS += 1;
+}
+
+#[stack(8)]
+#[naked]
+fn leaf() {
+    asm("ret", options(noreturn))
+}
+
+// Calls back into Erebos, which the bound counts through the number.
+#[stack(48)]
+extern fn outside(x: u32) -> u32;
+
+fn divide(a: u32, b: u32) -> u32 {
+    a / b
+}
+
+fn consume(block: Block) -> u32 {
+    block.words[0]
+}
+
+fn never_called() -> u32 {
+    7
+}
+
+entry fn main() -> ! {
+    let block: Block = Block { words: [1; 16] };
+    let total: u32 = consume(block) + divide(10, 2) + unsafe { outside(3) };
+    unsafe { leaf(); }
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

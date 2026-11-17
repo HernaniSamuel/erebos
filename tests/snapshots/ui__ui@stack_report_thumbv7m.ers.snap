@@ -1,0 +1,113 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/stack_report_thumbv7m.ers
+---
+--- stack ---
+worst case: 1488 bytes, 4096 declared
+thread context: 720 bytes: `_start` (0) → `main` (328) → `consume` (184) → `__divdi3` (56, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (104)
+maskable handler context: 244 bytes: exception entry (36) → `tick` (0) → `__divdi3` (56, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (104)
+unmaskable handler context: 244 bytes: exception entry (36) → default handler (0) → `on_panic` (0) → `__divdi3` (56, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (104)
+fault context: 280 bytes: exception entry (36) → default handler (0) → `on_panic` (0) → `__divdi3` (56, inserted) → `core::builtins::__erebos_udivmod64` (48) → `core::builtins::__erebos_udivmoddi4` (104) + exception entry (36) → default handler (0) → `on_panic` (0)
+bodies:
+tick: frame 0, depth 208; calls inserted calls
+leaf: frame 0, stack 8, depth 8
+outside: frame 0, stack 48, depth 48
+divide: frame 8, depth 216; calls on_panic, inserted calls
+consume: frame 184, depth 392; calls inserted calls
+never_called: frame 0, depth 208, not reached; calls inserted calls
+main: frame 328, depth 720; calls consume, divide, outside, leaf, inserted calls
+on_panic: frame 0, depth 208; calls inserted calls
+memcpy: frame 20, depth 20
+memmove: frame 32, depth 52; calls memcpy
+memset: frame 20, depth 20
+__aeabi_memcpy: frame 8, depth 28; calls memcpy
+__aeabi_memcpy4: frame 8, depth 28; calls memcpy
+__aeabi_memcpy8: frame 8, depth 28; calls memcpy
+__aeabi_memmove: frame 8, depth 60; calls memmove
+__aeabi_memmove4: frame 8, depth 60; calls memmove
+__aeabi_memmove8: frame 8, depth 60; calls memmove
+__aeabi_memset: frame 16, depth 36; calls memset
+__aeabi_memset4: frame 16, depth 36; calls memset
+__aeabi_memset8: frame 16, depth 36; calls memset
+__aeabi_memclr: frame 8, depth 28; calls memset
+__aeabi_memclr4: frame 8, depth 28; calls memset
+__aeabi_memclr8: frame 8, depth 28; calls memset
+core.builtins.__erebos_udivmoddi4: frame 104, depth 104
+core.builtins.__erebos_udivmod64: frame 48, depth 152; calls core.builtins.__erebos_udivmoddi4
+core.builtins.__erebos_magnitude64: frame 16, depth 16
+__udivdi3: frame 16, depth 168; calls core.builtins.__erebos_udivmod64
+__umoddi3: frame 16, depth 168; calls core.builtins.__erebos_udivmod64
+__divdi3: frame 56, depth 208; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+__moddi3: frame 48, depth 200; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+core.builtins.__erebos_divmoddi4: frame 80, depth 184; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmoddi4
+core.arch.compiler_fence: frame 0, depth 208, not reached; calls inserted calls
+core.arch.fence: frame 0, depth 208, not reached; calls inserted calls
+core.arch.enable_interrupts: frame 0, depth 208, not reached; calls inserted calls
+core.arch.wait_for_interrupt: frame 0, depth 208, not reached; calls inserted calls
+core.arch.interrupts_enabled: frame 8, depth 216, not reached; calls inserted calls
+core.arch.nvic_address: frame 8, depth 216, not reached; calls on_panic, inserted calls
+core.arch.nvic_enable: frame 16, depth 232, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_disable: frame 16, depth 232, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_pend: frame 16, depth 232, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_unpend: frame 16, depth 232, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_is_pending: frame 16, depth 232, not reached; calls core.arch.nvic_address, inserted calls
+core.arch.__critical_enter: frame 0, depth 208, not reached; calls inserted calls
+core.arch.__critical_exit: frame 0, depth 208, not reached; calls inserted calls
+_start: frame 0, stack 0, depth 720; calls main
+__aeabi_uldivmod: frame 0, stack 24, depth 128; calls core.builtins.__erebos_udivmoddi4
+__aeabi_ldivmod: frame 0, stack 24, depth 208; calls core.builtins.__erebos_divmoddi4
+--- stack -O ---
+worst case: 608 bytes, 4096 declared
+thread context: 116 bytes: `_start` (0) → `main` (0) → `consume` (0) → `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) → `core::builtins::__erebos_udivmoddi4` (36)
+maskable handler context: 152 bytes: exception entry (36) → `tick` (0) → `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) → `core::builtins::__erebos_udivmoddi4` (36)
+unmaskable handler context: 152 bytes: exception entry (36) → default handler (0) → `on_panic` (0) → `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) → `core::builtins::__erebos_udivmoddi4` (36)
+fault context: 188 bytes: exception entry (36) → default handler (0) → `on_panic` (0) → `__divdi3` (44, inserted) → `core::builtins::__erebos_udivmod64` (36) → `core::builtins::__erebos_udivmoddi4` (36) + exception entry (36) → default handler (0) → `on_panic` (0)
+bodies:
+tick: frame 0, depth 116; calls inserted calls
+leaf: frame 0, stack 8, depth 8
+outside: frame 0, stack 48, depth 48
+divide: frame 0, depth 116; calls on_panic, inserted calls
+consume: frame 0, depth 116; calls inserted calls
+never_called: frame 0, depth 116, not reached; calls inserted calls
+main: frame 0, depth 116; calls consume, divide, outside, leaf, inserted calls
+on_panic: frame 0, depth 116; calls inserted calls
+memcpy: frame 20, depth 20
+memmove: frame 20, depth 40; calls memcpy
+memset: frame 16, depth 16
+__aeabi_memcpy: frame 20, depth 40; calls memcpy
+__aeabi_memcpy4: frame 20, depth 40; calls memcpy
+__aeabi_memcpy8: frame 20, depth 40; calls memcpy
+__aeabi_memmove: frame 20, depth 60; calls memmove
+__aeabi_memmove4: frame 20, depth 60; calls memmove
+__aeabi_memmove8: frame 20, depth 60; calls memmove
+__aeabi_memset: frame 16, depth 32; calls memset
+__aeabi_memset4: frame 16, depth 32; calls memset
+__aeabi_memset8: frame 16, depth 32; calls memset
+__aeabi_memclr: frame 16, depth 32; calls memset
+__aeabi_memclr4: frame 16, depth 32; calls memset
+__aeabi_memclr8: frame 16, depth 32; calls memset
+core.builtins.__erebos_udivmoddi4: frame 36, depth 36
+core.builtins.__erebos_udivmod64: frame 36, depth 72; calls core.builtins.__erebos_udivmoddi4
+core.builtins.__erebos_magnitude64: frame 0, depth 0
+__udivdi3: frame 32, depth 104; calls core.builtins.__erebos_udivmod64
+__umoddi3: frame 24, depth 96; calls core.builtins.__erebos_udivmod64
+__divdi3: frame 44, depth 116; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+__moddi3: frame 20, depth 92; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmod64
+core.builtins.__erebos_divmoddi4: frame 44, depth 80; calls core.builtins.__erebos_magnitude64, core.builtins.__erebos_udivmoddi4
+core.arch.compiler_fence: frame 0, depth 116, not reached; calls inserted calls
+core.arch.fence: frame 0, depth 116, not reached; calls inserted calls
+core.arch.enable_interrupts: frame 0, depth 116, not reached; calls inserted calls
+core.arch.wait_for_interrupt: frame 0, depth 116, not reached; calls inserted calls
+core.arch.interrupts_enabled: frame 0, depth 116, not reached; calls inserted calls
+core.arch.nvic_address: frame 0, depth 116, not reached; calls on_panic, inserted calls
+core.arch.nvic_enable: frame 0, depth 116, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_disable: frame 0, depth 116, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_pend: frame 0, depth 116, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_unpend: frame 0, depth 116, not reached; calls core.arch.nvic_address, core.arch.compiler_fence, inserted calls
+core.arch.nvic_is_pending: frame 0, depth 116, not reached; calls core.arch.nvic_address, inserted calls
+core.arch.__critical_enter: frame 0, depth 116, not reached; calls inserted calls
+core.arch.__critical_exit: frame 0, depth 116, not reached; calls inserted calls
+_start: frame 0, stack 0, depth 116; calls main
+__aeabi_uldivmod: frame 0, stack 24, depth 60; calls core.builtins.__erebos_udivmoddi4
+__aeabi_ldivmod: frame 0, stack 24, depth 104; calls core.builtins.__erebos_divmoddi4

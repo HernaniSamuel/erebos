@@ -25,7 +25,8 @@ build:
   --target <name>  machine to build for (default: riscv32imac-unknown-none-elf);
                    an unknown name lists the known ones
   --emit=<stage>   print a compiler stage instead of building:
-                   tokens, ast, hir, typeck, mir, linker-script, llvm-ir
+                   tokens, ast, hir, typeck, mir, linker-script, llvm-ir,
+                   stack
 
 svd:
   writes the Erebos module for an SVD file (ADR 0070)

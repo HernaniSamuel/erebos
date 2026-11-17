@@ -22,15 +22,16 @@ struct Pair {
 // C adds `p.a + p.b` to `*acc` and returns the new `*acc`.
 // `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
 // from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
-// the C functions it calls. Where C calls an Erebos function, 256 more, until
-// `--emit=stack` gives that function's depth.
+// the C functions it calls. Where C calls an Erebos function, or one of `core`'s
+// such as `memcpy`, that function's depth from `--emit=stack`, the largest of the
+// four builds (the number stays the program's word, ADR 0122).
 #[stack(16)]
 extern fn c_add_pair(acc: &mut u32, p: &Pair) -> u32;
 // C calls `erebos_scale` with the two references it is given.
-#[stack(272)]
+#[stack(240)]
 extern fn c_forward(out: &mut u32, input: &u32);
 // C calls `erebos_scale` with the addresses of two locals of its own.
-#[stack(288)]
+#[stack(256)]
 extern fn c_roundtrip(seed: u32) -> u32;
 
 // Called from C: `*out = 3 * *input`.

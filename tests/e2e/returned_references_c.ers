@@ -20,17 +20,18 @@ use board::{exit, print, print_u32, putc};
 
 // `#[stack(N)]` on each `extern fn` (ADR 0122): the depth of its C definition
 // from `clang -fstack-usage` at -O0 and -O2 on both targets (the largest), with
-// the C functions it calls. Where C calls an Erebos function, 256 more, until
-// `--emit=stack` gives that function's depth.
-#[stack(288)]
+// the C functions it calls. Where C calls an Erebos function, or one of `core`'s
+// such as `memcpy`, that function's depth from `--emit=stack`, the largest of the
+// four builds (the number stays the program's word, ADR 0122).
+#[stack(304)]
 extern fn c_tail_len() -> u32;
-#[stack(288)]
+#[stack(304)]
 extern fn c_tail_first() -> u32;
-#[stack(288)]
+#[stack(304)]
 extern fn c_tail_inside() -> u32;
-#[stack(288)]
+#[stack(304)]
 extern fn c_empty_len() -> u32;
-#[stack(288)]
+#[stack(304)]
 extern fn c_empty_inside() -> u32;
 
 static BYTES: [u8; 6] = [10, 20, 30, 40, 50, 60];

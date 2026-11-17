@@ -154,6 +154,23 @@ impl Scan {
         }
     }
 
+    /// The bodies the edges reach other than by an inserted call, in the
+    /// order of the edges, each once.
+    fn callees(&self) -> Vec<BodyId> {
+        let mut callees: Vec<BodyId> = Vec::new();
+        for (call, kind) in self.calls.iter().zip(&self.kinds) {
+            if *kind != Kind::Inserted && !callees.contains(&call.callee) {
+                callees.push(call.callee);
+            }
+        }
+        callees
+    }
+
+    /// Whether the body has the inserted calls.
+    fn inserts(&self) -> bool {
+        self.kinds.contains(&Kind::Inserted)
+    }
+
     /// The kind of an edge of this body, given by the reference to it.
     fn kind_of(&self, call: &Call) -> Kind {
         (self.calls.iter())
@@ -262,6 +279,73 @@ pub struct Report {
     /// Whether some part reaches the body, by body id (ADR 0123, "The
     /// report").
     pub reached: Vec<bool>,
+    /// The bodies each body's edges reach, by body id, in the order of its
+    /// edges and each once; the inserted functions are not here, but in
+    /// `inserted`.
+    pub calls: Vec<Vec<BodyId>>,
+    /// Whether the body has the inserted calls (ADR 0123, "The graph"), by
+    /// body id.
+    pub inserted: Vec<bool>,
+}
+
+impl Report {
+    /// The text of `--emit=stack` (ADR 0123, "The report"): the worst case
+    /// and the declared size, each part with its deepest path, and a line for
+    /// every body that is not `comptime`, in MIR's order, with its symbol, its
+    /// frame (from `frames`, by body id), its `N` if it has one, its depth
+    /// before a panic, `not reached` when no part reaches it, and the bodies
+    /// its edges reach (`inserted calls` for the inserted functions). The
+    /// symbols of the lines are written as the linker sees them, with their
+    /// dots, which the paths of the parts write `::`.
+    pub fn render(&self, mir: &Mir, frames: &[u64]) -> String {
+        let mut out = String::new();
+        match (self.total, self.declared) {
+            (Some(total), Some(declared)) => {
+                out += &format!("worst case: {total} bytes, {declared} declared");
+            }
+            (Some(total), None) => out += &format!("worst case: {total} bytes"),
+            (None, _) => out += "worst case: unknown",
+        }
+        out.push('\n');
+        for part in &self.parts {
+            out += &format!("{}: {} bytes", part.context.name(), part.bytes);
+            if !part.paths.is_empty() {
+                let paths: Vec<String> = part.paths.iter().map(|path| show_path(path)).collect();
+                out += &format!(": {}", paths.join(" + "));
+            }
+            out.push('\n');
+        }
+        out += "bodies:\n";
+        for (id, body) in mir.bodies() {
+            if body.comptime {
+                continue;
+            }
+            let at = id.0 as usize;
+            let frame = frames.get(at).copied().unwrap_or(0);
+            out += &format!("{}: frame {frame}", body.name);
+            if let Some(stack) = body.stack {
+                out += &format!(", stack {stack}");
+            }
+            match self.depths.get(at).copied().flatten() {
+                Some(depth) => out += &format!(", depth {depth}"),
+                None => out += ", depth unknown",
+            }
+            if !self.reached.get(at).copied().unwrap_or(false) {
+                out += ", not reached";
+            }
+            let mut calls: Vec<&str> = (self.calls.get(at).into_iter().flatten())
+                .map(|&callee| mir.body(callee).name.as_str())
+                .collect();
+            if self.inserted.get(at).copied().unwrap_or(false) {
+                calls.push("inserted calls");
+            }
+            if !calls.is_empty() {
+                out += &format!("; calls {}", calls.join(", "));
+            }
+            out.push('\n');
+        }
+        out
+    }
 }
 
 /// Computes the stack bound of `mir` on `target` and reports its errors:
@@ -287,6 +371,8 @@ pub fn bound(
         declared: mir.memory.as_ref().map(|map| map.stack_size),
         depths: vec![None; scans.len()],
         reached: vec![false; scans.len()],
+        calls: scans.iter().map(Scan::callees).collect(),
+        inserted: scans.iter().map(Scan::inserts).collect(),
         ..Report::default()
     };
     let nodes: Vec<bool> = mir.bodies().map(|(_, body)| !body.comptime).collect();
@@ -1443,6 +1529,117 @@ panic fn on_panic() -> ! { loop {} }
         let (report, diags) = run(&mir, &RISCV32IMAC, &named, 0);
         assert!(diags.is_empty(), "{diags:?}");
         assert_eq!(report.depths[id(&mir, "f0")], Some(2 * n as u64));
+    }
+
+    /// The line of `name` in the text of `--emit=stack`.
+    fn line<'a>(text: &'a str, name: &str) -> &'a str {
+        text.lines()
+            .find(|line| line.starts_with(&format!("{name}: ")))
+            .unwrap_or_else(|| panic!("no line for `{name}` in\n{text}"))
+    }
+
+    #[test]
+    fn the_report_lists_the_parts_and_a_line_for_each_body() {
+        let mir = mir_of(
+            &RISCV32IMAC,
+            with_stack(
+                4096,
+                "
+const LIMIT: u32 = 3;
+fn helper() {}
+fn lonely() {}
+#[stack(12)]
+extern fn outside(x: u32) -> u32;
+fn divide(a: u32, b: u32) -> u32 { a / b }
+entry fn main() -> ! { helper(); helper(); divide(1, 0); loop {} }
+panic fn on_panic() -> ! { loop {} }
+",
+            ),
+        );
+        let named = [
+            ("main", 100),
+            ("divide", 20),
+            ("helper", 5),
+            ("on_panic", 30),
+        ];
+        let sizes = frames(&mir, &named);
+        let mut diags = Diagnostics::default();
+        let report = bound(&mir, &RISCV32IMAC, &sizes, 0, &mut diags);
+        assert!(!diags.has_errors());
+        let text = report.render(&mir, &sizes);
+        let mut lines = text.lines();
+        assert_eq!(
+            lines.next(),
+            Some(format!("worst case: {} bytes, 4096 declared", report.total.unwrap()).as_str())
+        );
+        // The thread's part with its path, and the unmaskable one, which is 0
+        // on riscv32 without a handler, with none.
+        assert_eq!(
+            lines.next(),
+            Some(
+                "thread context: 150 bytes: `_start` (0) \u{2192} `main` (100) \u{2192} \
+                 `divide` (20) \u{2192} `on_panic` (30)"
+            )
+        );
+        assert!(text.contains("\nunmaskable handler context: 0 bytes\n"));
+        assert!(text.contains("\nbodies:\n"));
+        // The callees of a body once each, in the order of its edges, then the
+        // inserted calls; its frame; `not reached` for the body nothing calls,
+        // with its depth all the same.
+        assert_eq!(
+            line(&text, "main"),
+            "main: frame 100, depth 150; calls helper, divide, inserted calls"
+        );
+        assert_eq!(
+            line(&text, "lonely"),
+            "lonely: frame 0, depth 0, not reached; calls inserted calls"
+        );
+        // An `extern fn` has no edges, so no `calls`; its `N` is shown.
+        assert_eq!(
+            line(&text, "outside"),
+            "outside: frame 0, stack 12, depth 12, not reached"
+        );
+        // The panic function is a root of the search.
+        assert!(!line(&text, "on_panic").contains("not reached"));
+        // The symbols are the linker's, with their dots; a body run only at
+        // compile time has no line.
+        assert!(text.contains("\ncore.arch.__critical_enter: "));
+        assert!(!text.contains("LIMIT"));
+    }
+
+    #[test]
+    fn the_report_shows_an_unknown_depth_and_no_comparison_without_memory() {
+        let mir = mir_of(
+            &RISCV32IMAC,
+            "
+#[naked]
+fn bare() {
+    asm(\"ret\", options(noreturn))
+}
+entry fn main() -> ! { unsafe { bare(); } loop {} }
+panic fn on_panic() -> ! { loop {} }
+",
+        );
+        let sizes = frames(&mir, &[]);
+        let mut diags = Diagnostics::default();
+        let report = bound(&mir, &RISCV32IMAC, &sizes, 0, &mut diags);
+        assert_eq!(codes(&diags.into_vec()), ["analysis::missing-stack"]);
+        let text = report.render(&mir, &sizes);
+        assert!(text.starts_with("worst case: unknown\nbodies:\n"), "{text}");
+        assert_eq!(line(&text, "bare"), "bare: frame 0, depth unknown");
+        assert!(line(&text, "main").contains("depth unknown"));
+
+        // Without a `memory` block the worst case has no comparison.
+        let mir = mir_of(&RISCV32IMAC, STATES);
+        let sizes = frames(&mir, STATES_FRAMES);
+        let mut diags = Diagnostics::default();
+        let report = bound(&mir, &RISCV32IMAC, &sizes, 0, &mut diags);
+        let total = report.total.unwrap();
+        assert!(
+            report
+                .render(&mir, &sizes)
+                .starts_with(&format!("worst case: {total} bytes\n"))
+        );
     }
 
     /// The exception entry of riscv32 is what the trap entry saves, which

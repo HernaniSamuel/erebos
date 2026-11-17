@@ -258,6 +258,9 @@ without a comparison.
   when it reaches a function that needs `#[stack(N)]` and has none. The oracle
   of the machine's calls (below) reads these lines.
 
+When the bound reports an error (any code of "Diagnostics", the overflow
+included), `--emit=stack` fails with those diagnostics and prints no report.
+
 **Bodies no part reaches** are not in the total: an `#[export]` function only
 C calls, a function only C calls through its root-module symbol (ADR 0051), a
 function nothing calls. What runs of them at run time runs on the stack of

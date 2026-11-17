@@ -1890,9 +1890,9 @@ fn the_eabi_division_is_defined_on_thumbv7m_only() {
         &source,
         format!(
             "{VIRT_MAP}
-#[stack(288)]
+#[stack(208)]
 extern fn c_udivmod(a: u64, b: u64, rem: *mut u64) -> u64;
-#[stack(288)]
+#[stack(240)]
 extern fn c_sdivmod(a: i64, b: i64, rem: *mut i64) -> i64;
 
 static mut OUT: u64 = 0;

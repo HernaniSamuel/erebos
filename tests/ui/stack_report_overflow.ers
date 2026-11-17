@@ -1,0 +1,24 @@
+// emit: stack
+// opt: both
+// `--emit=stack` fails with the bound's diagnostics and prints no report when
+// the bound reports an error (ADR 0123, "The report"): here the stack of 16
+// bytes is too small, so the output is `analysis::stack-overflow` alone, with
+// the same message as a build, at both levels.
+memory {
+    region ROM { origin: 0x0800_0000, size: 0x1_0000 }
+    region RAM { origin: 0x2000_0000, size: 0x1_0000 }
+    code in ROM;
+    data in RAM;
+    stack in RAM { size: 16 }
+}
+
+fn divide(a: u32, b: u32) -> u32 {
+    a / b
+}
+
+entry fn main() -> ! {
+    let total: u32 = divide(10, 2);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
