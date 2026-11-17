@@ -18,6 +18,12 @@ pub fn readelf_path() -> PathBuf {
     llvm_tool("llvm-readelf", "EREBOS_READELF")
 }
 
+/// `llvm-objdump`, found like clang, with `EREBOS_OBJDUMP`.
+#[allow(dead_code, reason = "not every test uses every tool")]
+pub fn objdump_path() -> PathBuf {
+    llvm_tool("llvm-objdump", "EREBOS_OBJDUMP")
+}
+
 /// A tool of the LLVM we build against: the variable `var` wins, then
 /// `LLVM_SYS_221_PREFIX`, then `PATH`.
 fn llvm_tool(name: &str, var: &str) -> PathBuf {

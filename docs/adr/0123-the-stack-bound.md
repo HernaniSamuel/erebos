@@ -308,8 +308,12 @@ through it.
   - *the machine's calls*: for every e2e program, `llvm-objdump -d` of the
     executable; every call, and every jump to another function's symbol, is an
     edge of the bound's graph (inserted ones included), or comes from a function
-    whose `#[stack(N)]` covers it. This checks the assumption about inserted
-    calls, and that `Mir::inserted` is complete;
+    whose `#[stack(N)]` covers it. At `-O0` the edge is a direct one of the
+    caller's line; at `-O` it may be reached through other lines, since
+    inlining makes the calls of an inlined body appear in its caller, and the
+    bound's depth of the caller already holds the inlined body's depth (the
+    relaxation is sound for the bound). This checks the assumption about
+    inserted calls, and that `Mir::inserted` is complete;
   - *the measured stack*: a program on QEMU fills its stack's unused part with a
     pattern at entry, runs its deepest path while a timer's handler preempts
     it, and ends that path with a failed check; the panic function counts how

@@ -87,6 +87,7 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
         link_c: Vec::new(),
         c_flags: Vec::new(),
         takes_exceptions: false,
+        measures_stack: false,
     };
 
     let mut failures = Vec::new();

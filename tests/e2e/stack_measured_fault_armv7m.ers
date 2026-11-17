@@ -1,0 +1,154 @@
+// The measured stack (ADR 0123, "Tests"), for the "faults" part of the bound:
+// `stack_measured_armv7m.ers`'s path, with the same 512-byte array, but ended by
+// a fault (`udf`, which a Cortex-M3 raises as a HardFault) that reaches the
+// panic function through the vector table and a default handler, instead of
+// through a failed check. SysTick's handler preempts the path at its deepest
+// point as there. The panic function counts how many
+// bytes of the pattern were overwritten, before it prints anything, and prints
+// the count, which `tests/stack.rs` compares with the bound that `--emit=stack`
+// reports: at most that, and at least 512. `stack_measured_fault_riscv32.ers`
+// is this program on the other target.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// measures-stack: yes
+// expect-exit: 0
+
+mod board;
+use board::{exit, print, print_u32};
+use core::arch::Vector;
+
+// SysTick, as in `interrupt_systick.ers`: control and status (bit 0 enables the
+// counter, bit 1 the interrupt, bit 2 selects the processor clock), reload
+// value and current value, and the interrupt control and state register, whose
+// bit 25 clears a pending SysTick.
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+const ICSR: *mut volatile u32 = 0xE000_ED04 as *mut volatile u32;
+
+// What the stack holds before the path runs.
+const PATTERN: u32 = 0xA5A5_A5A5;
+
+// Counted by the handler and read in `critical` by the thread.
+static mut TICKS: u32 = 0;
+// The stack pointer of the entry function, once its frame is made, and the
+// first address of the stack. Written before the path runs, read by the panic
+// function, which a handler's check may also call: both in `critical`.
+static mut BASE: u32 = 0;
+static mut START: u32 = 0;
+// What the handler computed, so that its work is not removed.
+static mut HANDLER_SUM: u32 = 0;
+
+struct Block {
+    words: [u32; 32],
+}
+
+// A function of the handler with a frame of its own.
+fn handler_work(seed: u32) -> u32 {
+    let mut scratch: [u32; 24] = [seed; 24];
+    scratch[(seed & 15) as usize] = seed + 1;
+    scratch[((seed >> 2) & 15) as usize] + scratch[23]
+}
+
+// One tick, then nothing: SysTick is stopped and what it has pending cleared.
+interrupt fn tick() at Vector::SysTick {
+    TICKS += 1;
+    HANDLER_SUM = handler_work(TICKS);
+    unsafe { *SYST_CSR = 0; }
+    unsafe { *ICSR = 1 << 25; }
+}
+
+fn make(seed: u32) -> Block {
+    Block { words: [seed; 32] }
+}
+
+// The deepest function: it arms the timer and waits in `critical` blocks, so
+// the handler runs here, on top of every frame above, then faults.
+fn deepest(seed: u32) -> u32 {
+    unsafe { *SYST_RVR = 1000; }
+    unsafe { *SYST_CVR = 0; }
+    unsafe { *SYST_CSR = 7; }
+    loop {
+        let ticks: u32 = critical { TICKS };
+        if ticks != 0 {
+            break;
+        }
+    }
+    // An illegal instruction: the trap entry and a default handler call the panic
+    // function (ADR 0085), where the check of `stack_measured_armv7m.ers` calls it
+    // directly.
+    unsafe { asm("udf #0", options(nostack)); }
+    seed
+}
+
+// A call that copies an aggregate: `block` is a copy in this frame.
+fn with_block(block: Block, seed: u32) -> u32 {
+    block.words[(seed & 31) as usize] + deepest(seed)
+}
+
+// The local of 512 bytes, live across the call so that it stays in the frame.
+fn with_buffer(seed: u32) -> u32 {
+    let mut buffer: [u8; 512] = [0; 512];
+    buffer[(seed & 511) as usize] = seed as u8;
+    let total: u32 = with_block(make(seed), seed);
+    total + buffer[((seed >> 3) & 511) as usize] as u32
+}
+
+fn middle(seed: u32) -> u32 {
+    let mut small: [u32; 16] = [seed; 16];
+    small[(seed & 7) as usize] = seed + 3;
+    with_buffer(seed) + small[((seed >> 1) & 15) as usize]
+}
+
+// The bytes written from `BASE` down: the pattern is read from the start of
+// the stack up to the first word that is not it.
+fn used() -> u32 {
+    let start: u32 = critical { START };
+    let base: u32 = critical { BASE };
+    let mut at: usize = start as usize;
+    while at < base as usize && unsafe { *(at as *mut volatile u32) } == PATTERN {
+        at += 4;
+    }
+    base - at as u32
+}
+
+entry fn main() -> ! {
+    let mut sp: u32 = 0;
+    unsafe { asm("mov {}, sp", out(reg) sp, options(nomem, nostack)); }
+    // `__stack_start` is reserved to `core`, so the assembly names it.
+    let mut start: u32 = 0;
+    unsafe {
+        asm(
+            "movw {0}, :lower16:__stack_start",
+            "movt {0}, :upper16:__stack_start",
+            out(reg) start,
+            options(nomem, nostack)
+        );
+    }
+    critical {
+        BASE = sp;
+        START = start;
+    }
+    // Everything below the frame, with no call: a callee's frame would be in
+    // the area being filled.
+    let mut at: usize = start as usize;
+    while at < sp as usize {
+        unsafe { *(at as *mut volatile u32) = PATTERN; }
+        at += 4;
+    }
+    // In the entry function, outside every `critical` block (ADR 0119).
+    unsafe { core::arch::enable_interrupts(); }
+    let seed: u32 = unsafe { *SYST_CVR };
+    let result: u32 = middle(seed);
+    print(&b"not reached\n");
+    print_u32(result);
+    exit(2)
+}
+
+panic fn on_panic() -> ! {
+    let count: u32 = used();
+    print(&b"stack ");
+    print_u32(count);
+    print(&b"\n");
+    exit(0)
+}

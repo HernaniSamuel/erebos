@@ -22,6 +22,10 @@
 //! // c-flags: -O1 -DX         (extra clang flags for those C files)
 //! // takes-exceptions: yes    (the program raises exceptions on purpose, so
 //! //                           QEMU logs guest errors only, ADR 0088)
+//! // measures-stack: yes      (the program prints one line, `stack <N>`: the
+//! //                           bytes of stack it used; `tests/stack.rs` checks
+//! //                           the number against the bound, ADR 0123, and
+//! //                           here only the shape of the line is checked)
 //! ```
 //!
 //! With `expect-exit`, the program must stop QEMU through `board::exit`
@@ -42,7 +46,7 @@ mod common;
 
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use common::board;
 use common::qemu::{self, EXIT_TIMEOUT, Expectation, RUN_FOREVER_CHECK};
@@ -51,20 +55,7 @@ use erebos::target::{RISCV32IMAC, THUMBV7M, Target};
 
 #[test]
 fn e2e() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e");
-    let mut programs: Vec<PathBuf> = fs::read_dir(&dir)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter_map(|path| {
-            if path.is_dir() {
-                Some(path.join("main.ers")).filter(|main| main.is_file())
-            } else {
-                Some(path).filter(|path| path.extension().is_some_and(|ext| ext == "ers"))
-            }
-        })
-        .collect();
-    programs.sort();
-    assert!(!programs.is_empty(), "no programs in {}", dir.display());
+    let programs = board::e2e_programs();
 
     let mut failures = Vec::new();
     for program in &programs {
@@ -214,6 +205,36 @@ fn the_takes_exceptions_header_is_read() {
         error.contains("expect-exit") && error.contains("0088"),
         "{error}"
     );
+}
+
+/// `// measures-stack: yes` is read (ADR 0123): the program's output is the one
+/// line `stack <N>`, whatever `N`, and nothing else; any value but `yes` is an
+/// error that names it, and so is an `// expect-output:` beside it.
+#[test]
+fn the_measures_stack_header_is_read() {
+    let measures = |source: &str| qemu::expectation(source).unwrap().measures_stack;
+    assert!(measures("// measures-stack: yes\n// expect-exit: 0\n"));
+    assert!(!measures("// expect-exit: 0\n"));
+    let error = qemu::expectation("// measures-stack: no\n")
+        .err()
+        .expect("only `yes` is accepted");
+    assert!(error.contains("`no`") && error.contains("0123"), "{error}");
+    let error = qemu::expectation("// measures-stack: yes\n// expect-output: x\n")
+        .err()
+        .expect("the program prints its own line");
+    assert!(error.contains("expect-output"), "{error}");
+
+    assert_eq!(qemu::measured_stack("stack 944\n"), Some(944));
+    for bad in [
+        "stack \n",
+        "stack 9x\n",
+        "stack 944",
+        "stack -1\n",
+        "944\n",
+        "stack 9\nstack 9\n",
+    ] {
+        assert_eq!(qemu::measured_stack(bad), None, "{bad:?}");
+    }
 }
 
 /// A program that takes an exception on purpose (an `svc` served by a handler on

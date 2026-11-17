@@ -30,6 +30,11 @@ pub struct Expectation {
     /// `// takes-exceptions: yes` (ADR 0088): the program raises exceptions on
     /// purpose, so QEMU logs guest errors only.
     pub takes_exceptions: bool,
+    /// `// measures-stack: yes` (ADR 0123): the program prints one line,
+    /// `stack <N>`, the bytes of its stack that it used, which `tests/stack.rs`
+    /// checks against the bound. The value changes with the target and the
+    /// level, so `check` only checks the shape of the line.
+    pub measures_stack: bool,
 }
 
 pub fn expectation(source: &str) -> Result<Expectation, String> {
@@ -39,7 +44,18 @@ pub fn expectation(source: &str) -> Result<Expectation, String> {
     let mut link_c = Vec::new();
     let mut c_flags = Vec::new();
     let mut takes_exceptions = false;
+    let mut measures_stack = false;
     for line in source.lines() {
+        if let Some(value) = line.strip_prefix("// measures-stack:") {
+            match value.trim() {
+                "yes" => measures_stack = true,
+                other => {
+                    return Err(format!(
+                        "`// measures-stack:` takes `yes`, not `{other}` (ADR 0123)"
+                    ));
+                }
+            }
+        }
         if let Some(value) = line.strip_prefix("// takes-exceptions:") {
             match value.trim() {
                 "yes" => takes_exceptions = true,
@@ -73,6 +89,12 @@ pub fn expectation(source: &str) -> Result<Expectation, String> {
             "`// takes-exceptions: yes` needs an `// expect-exit:` too (ADR 0088)".to_owned(),
         );
     }
+    if measures_stack && !output.is_empty() {
+        return Err(
+            "`// measures-stack: yes` prints its own line; it takes no `// expect-output:` (ADR 0123)"
+                .to_owned(),
+        );
+    }
     if targets.is_empty() {
         targets = super::board::targets_named("")?;
     }
@@ -83,7 +105,18 @@ pub fn expectation(source: &str) -> Result<Expectation, String> {
         link_c,
         c_flags,
         takes_exceptions,
+        measures_stack,
     })
+}
+
+/// The bytes a program that `measures_stack` printed: its output is the one
+/// line `stack <N>`.
+pub fn measured_stack(output: &str) -> Option<u64> {
+    let digits = output.strip_prefix("stack ")?.strip_suffix('\n')?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// What came out of one boot of a program.
@@ -240,6 +273,14 @@ pub fn check(name: &str, expected: &Expectation, run: &Run) -> Result<(), String
         (Some(_), Some(_)) => {}
     }
 
+    if expected.measures_stack {
+        return match measured_stack(output) {
+            Some(_) => Ok(()),
+            None => Err(format!(
+                "{name}: wrong output, expected the line `stack <bytes>`\n--- got ---\n{output}"
+            )),
+        };
+    }
     if *output != expected.output {
         return Err(format!(
             "{name}: wrong output\n--- expected ---\n{}--- got ---\n{output}",

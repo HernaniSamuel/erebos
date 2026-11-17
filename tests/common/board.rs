@@ -15,6 +15,26 @@ const BOARD_FILE: &str = "board.ers";
 /// and a QEMU machine (ADR 0077). Every target of the compiler has them.
 pub const RUN_ON: &[&Target] = &[&target::RISCV32IMAC, &target::THUMBV7M];
 
+/// The root files of the programs of `tests/e2e`, sorted: every `*.ers` in it
+/// and every `*/main.ers` (ADR 0049).
+pub fn e2e_programs() -> Vec<PathBuf> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e");
+    let mut programs: Vec<PathBuf> = fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter_map(|path| {
+            if path.is_dir() {
+                Some(path.join("main.ers")).filter(|main| main.is_file())
+            } else {
+                Some(path).filter(|path| path.extension().is_some_and(|ext| ext == "ers"))
+            }
+        })
+        .collect();
+    programs.sort();
+    assert!(!programs.is_empty(), "no programs in {}", dir.display());
+    programs
+}
+
 /// The source of `target`'s board module.
 pub fn source(target: &Target) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
