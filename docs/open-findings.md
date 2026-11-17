@@ -317,6 +317,22 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   copy of `src/analysis/mod.rs` and of two `tests/ui/recursion_*.ers` files
   has CRLF line endings; Git normalizes them on commit
   (`.gitattributes`), so only the editor is at fault. (M5.10, step 3)
+- The doc comment of `Mir::inserted` (`src/mir/mod.rs`) says "on thumbv7m the
+  `__aeabi_` functions"; the `__aeabi_mem*` functions exist on both targets and
+  only `__aeabi_uldivmod` and `__aeabi_ldivmod` are thumbv7m's. (M5.11, step 3)
+- `codegen::diagnostics::handle` turns every warning's description into a
+  `String` before it asks whether it is a frame warning; testing `contains` on
+  the borrowed text first would keep the conversion for errors only. (M5.11,
+  step 5)
+- `analysis::bound`: `parts()` returns `None` through `depths.of(..).value?`,
+  and `bound` then returns no total and no diagnostic. It cannot happen today
+  (`Depths` and `Reach` follow the same edges from the same roots), but if they
+  ever diverge a build would be accepted with no bound; a diagnostic or an
+  `expect` (which raises `PANICS`) would close it. (M5.11, step 6)
+- `Report::render` reads `frames`, `depths`, `reached`, `calls` and `inserted`
+  with `get(at).copied().unwrap_or(0)`, so a slice of the wrong length would
+  print frame 0 instead of failing; `bound` indexes the same slices.
+  (M5.11, step 7)
 
 ## Tests
 
@@ -534,6 +550,49 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - The snapshot of `call_borrows_accepted.ers` lost its `assertion_line:`
   header (insta metadata) when it was updated by hand in step 2; the next
   `cargo insta` run will put it back. (M5.10, step 2)
+- No test covers `Mir::leave_out` clearing `Body::stack` (nor `align` or
+  `naked`). (M5.11, step 2)
+- `mir_lists_the_inserted_functions` (`src/driver.rs`) checks membership, not
+  the exact list, so a non-`#[export]` function of `core` without a `.` in its
+  name would not fail it; an exact count per target would tighten it.
+  (M5.11, step 3)
+- The arm of `codegen::diagnostics::handle` that turns an unreadable frame
+  warning into a `codegen::llvm` error (the guard against a silently low
+  bound) has no test; `frame_of` returning `None` is tested, the arm is not.
+  The two new `codegen::llvm` messages ("LLVM made the function `x`..." and
+  "cannot read the frame size in ...") have no rendered snapshot either, since
+  no program triggers them. (M5.11, step 5)
+- The default handlers' frame is 0 in every real build (`call panic;
+  unreachable`), so `frames_of` for them and `D_def`'s frame term are only
+  exercised with synthetic numbers; a later LLVM change that gives them a
+  frame would be counted correctly but not seen by a real test. (M5.11, steps
+  5 and final review)
+- `tests/e2e.rs`: the comment that `analysis::missing-stack` would be reported
+  "when it gets to run" sits next to one assertion and the other three
+  assembler-failure tests repeat the bare assertion; it belongs in the tests'
+  doc comment. (M5.11, step 6)
+- `tests/ui/stack_report.ers` does not show the aggregate copy at `-O0` as a
+  cost of its own: it appears only as `inserted calls` on `main`, because
+  `__divdi3` is deeper and ends every path. (M5.11, step 7)
+- `--emit=stack` is snapshotted for `analysis::stack-overflow` only; the "no
+  report on a bound error" path of `analysis::missing-stack` and
+  `analysis::stack-cycle` is covered through `build` in `tests/elf.rs`.
+  (M5.11, final review)
+- The measured-stack oracle is slack: its lower check (512) passes with
+  counts of 844 to 1988, so it would pass if the 512-byte local left the
+  frame, and its count excludes the entry function's frame, so a bound too
+  small by up to about 40% still passes (count/bound 1988/3232, 944/1600,
+  872/1776, 1980/3644). Comparing `count + frame(main)` with the bound would
+  close part of it; ADR 0123 calls it "slightly slack". (M5.11, steps 8 and
+  final review)
+- `MIN_TRANSFERS = 3` in `tests/stack.rs` is the observed minimum
+  (`peripherals` on riscv32 at `-O`); the `_start` check already catches a
+  format change, so 1 would catch the same breakage without the fragility.
+  (M5.11, step 8)
+- The program `tests/elf.rs` rejects with a too-small stack (`stack_program`)
+  is not the measured program that runs on QEMU, although the plan's header
+  says "the same program"; rejecting `stack_measured_*` with a stack just
+  below its reported bound would tie the two. (M5.11, final review)
 
 ## Docs
 
