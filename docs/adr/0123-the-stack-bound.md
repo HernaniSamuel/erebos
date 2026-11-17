@@ -312,8 +312,15 @@ through it.
     caller's line; at `-O` it may be reached through other lines, since
     inlining makes the calls of an inlined body appear in its caller, and the
     bound's depth of the caller already holds the inlined body's depth (the
-    relaxation is sound for the bound). This checks the assumption about
-    inserted calls, and that `Mir::inserted` is complete;
+    relaxation is sound for the bound). Three kinds of transfer are not
+    compared: the calls made by the code of an `extern fn` (the functions of the
+    linked C objects), which the `extern fn`'s `N` counts (ADR 0122); a jump to
+    `_start`, which is a restart that sets the stack pointer again, so what runs
+    next is not a callee; and the calls of the compiler's default handlers to
+    the panic function, since the default handlers are in no line of the report
+    (the fault programs of the next oracle exercise that path at run time). This
+    checks the assumption about inserted calls, and that `Mir::inserted` is
+    complete;
   - *the measured stack*: a program on QEMU fills its stack's unused part with a
     pattern at entry, runs its deepest path while a timer's handler preempts
     it, and ends that path with a failed check; the panic function counts how
